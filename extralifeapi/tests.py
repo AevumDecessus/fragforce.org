@@ -5,6 +5,9 @@ from unittest.mock import MagicMock, call, patch
 from django.test import TestCase, override_settings
 
 from .base import DonorDriveBase, FetchResponse, JSONError, NotModifiedResponse, RateLimitError
+from .donors import Donations
+from .participants import Participants
+from .teams import Teams
 
 
 def _make_client(max_retries=2):
@@ -250,3 +253,242 @@ class FetchConditionalGetTest(TestCase):
         results = list(self.client.fetch('teams'))
 
         self.assertEqual(len(results), 2)
+
+
+class ParseLinkHeaderTest(TestCase):
+    def test_returns_empty_dict_for_none(self):
+        self.assertEqual(DonorDriveBase._parse_link_header(None), {})
+
+    def test_parses_single_next_relation(self):
+        link = '<https://www.extra-life.org/api/teams?offset=100>;rel="next"'
+        result = DonorDriveBase._parse_link_header(link)
+        self.assertEqual(result, {'next': 'https://www.extra-life.org/api/teams?offset=100'})
+
+    def test_parses_multiple_relations(self):
+        link = '<https://www.extra-life.org/api/teams?offset=100>;rel="next",<https://www.extra-life.org/api/teams?offset=0>;rel="first"'
+        result = DonorDriveBase._parse_link_header(link)
+        self.assertEqual(result['next'], 'https://www.extra-life.org/api/teams?offset=100')
+        self.assertEqual(result['first'], 'https://www.extra-life.org/api/teams?offset=0')
+
+    def test_relation_names_are_lowercased(self):
+        link = '<https://www.extra-life.org/api/teams?offset=100>;rel="Next"'
+        result = DonorDriveBase._parse_link_header(link)
+        self.assertIn('next', result)
+
+    def test_returns_empty_dict_for_malformed_entry(self):
+        # Standard RFC 5988 uses spaces around the semicolon - the regex does not support this
+        link = '<https://www.extra-life.org/api/teams?offset=100>; rel="next"'
+        result = DonorDriveBase._parse_link_header(link)
+        self.assertEqual(result, {})
+
+
+class FetchJsonResponseHeadersTest(TestCase):
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_returns_response_headers_in_fetch_response(self):
+        ok_response = _mock_response(json_data={}, headers={'ETag': '"abc123"', 'API-Version': '1.4'})
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(result.headers.get('ETag'), '"abc123"')
+        self.assertEqual(result.headers.get('API-Version'), '1.4')
+
+    def test_parses_link_header_into_urls(self):
+        ok_response = _mock_response(
+            json_data=[],
+            headers={'Link': '<https://www.extra-life.org/api/teams?offset=100>;rel="next"'}
+        )
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertIn('next', result.urls)
+        self.assertEqual(result.urls['next'], 'https://www.extra-life.org/api/teams?offset=100')
+
+    def test_urls_is_empty_dict_when_no_link_header(self):
+        ok_response = _mock_response(json_data={}, headers={})
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(result.urls, {})
+
+
+class FetchPaginationTest(TestCase):
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_yields_all_items_from_a_list_response(self):
+        ok_response = _mock_response(json_data=[{'id': 1}, {'id': 2}])
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        results = list(self.client.fetch('teams'))
+
+        self.assertEqual(results, [{'id': 1}, {'id': 2}])
+
+    def test_wraps_single_object_response_in_a_list(self):
+        # /api/teams/{teamID} returns an object, not an array - fetch should still yield it
+        ok_response = _mock_response(json_data={'teamID': 42, 'name': 'Test Team'})
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        results = list(self.client.fetch('teams/42'))
+
+        self.assertEqual(results, [{'teamID': 42, 'name': 'Test Team'}])
+
+    def test_follows_next_link_header_to_fetch_subsequent_pages(self):
+        page1 = _mock_response(
+            json_data=[{'id': 1}],
+            headers={'Link': '<https://www.extra-life.org/api/teams?offset=1>;rel="next"'}
+        )
+        page2 = _mock_response(json_data=[{'id': 2}])
+        self.client.session.get = MagicMock(side_effect=[page1, page2])
+
+        results = list(self.client.fetch('teams'))
+
+        self.assertEqual(results, [{'id': 1}, {'id': 2}])
+        self.assertEqual(self.client.session.get.call_count, 2)
+
+    def test_builds_correct_url_from_base_url_and_sub_url(self):
+        ok_response = _mock_response(json_data=[])
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        list(self.client.fetch('teams/42'))
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertEqual(called_url, 'https://www.extra-life.org/api/teams/42')
+
+
+class DoSleepTest(TestCase):
+    def test_returns_none_when_no_sleeper_configured(self):
+        client = _make_client()
+        result = client._do_sleep('https://example.com/api', {})
+        self.assertIsNone(result)
+
+    def test_calls_sleeper_with_url_data_and_parsed_url(self):
+        mock_sleeper = MagicMock(return_value='slept')
+        client = DonorDriveBase(request_sleeper=mock_sleeper, max_retries=0)
+
+        result = client._do_sleep('https://example.com/api', {'key': 'val'})
+
+        mock_sleeper.assert_called_once()
+        kwargs = mock_sleeper.call_args.kwargs
+        self.assertEqual(kwargs['url'], 'https://example.com/api')
+        self.assertEqual(kwargs['data'], {'key': 'val'})
+        self.assertEqual(kwargs['parsed'].netloc, 'example.com')
+        self.assertEqual(result, 'slept')
+
+
+class TeamMappingTest(TestCase):
+    def test_maps_all_api_fields_to_namedtuple(self):
+        data = {
+            'teamID': 8775,
+            'name': 'The Bonhams',
+            'avatarImageURL': 'https://example.com/avatar.gif',
+            'createdDateUTC': '2019-11-02T15:02:38.93+0000',
+            'eventID': 508,
+            'eventName': 'Test Participant Event',
+            'fundraisingGoal': 20000.0,
+            'numDonations': 97,
+            'sumDonations': 9349.5,
+        }
+        team = Teams._team_to_team(data)
+
+        self.assertEqual(team.teamID, 8775)
+        self.assertEqual(team.name, 'The Bonhams')
+        self.assertEqual(team.eventID, 508)
+        self.assertEqual(team.sumDonations, 9349.5)
+        self.assertEqual(team.numDonations, 97)
+        self.assertIs(team.raw, data)
+
+    def test_missing_optional_fields_default_to_none(self):
+        # Only teamID is provided - all other fields should be None
+        team = Teams._team_to_team({'teamID': 1})
+
+        self.assertEqual(team.teamID, 1)
+        self.assertIsNone(team.name)
+        self.assertIsNone(team.fundraisingGoal)
+        self.assertIsNone(team.eventID)
+
+    def test_sub_team_by_tid_builds_correct_url(self):
+        client = Teams(max_retries=0)
+        self.assertEqual(client.sub_team_by_tid(8775), 'teams/8775')
+
+    def test_sub_team_by_eid_builds_correct_url(self):
+        client = Teams(max_retries=0)
+        self.assertEqual(client.sub_team_by_eid(508), 'events/508/teams')
+
+
+class ParticipantMappingTest(TestCase):
+    def test_maps_all_api_fields_to_namedtuple(self):
+        data = {
+            'participantID': 19265,
+            'displayName': 'Liam Bonham',
+            'fundraisingGoal': 8000.0,
+            'eventID': 508,
+            'eventName': 'Test Participant Event',
+            'teamID': 8775,
+            'teamName': 'The Bonhams',
+            'isTeamCaptain': True,
+            'sumDonations': 4661.0,
+            'numDonations': 51,
+            'avatarImageURL': 'https://example.com/avatar.gif',
+            'createdDateUTC': '2019-11-02T15:02:38.93+0000',
+        }
+        p = Participants._p_to_p(data)
+
+        self.assertEqual(p.participantID, 19265)
+        self.assertEqual(p.displayName, 'Liam Bonham')
+        self.assertTrue(p.isTeamCaptain)
+        self.assertEqual(p.teamID, 8775)
+        self.assertIs(p.raw, data)
+
+    def test_missing_optional_fields_default_to_none(self):
+        # teamID and teamName are only present for team participants per the API docs
+        p = Participants._p_to_p({'participantID': 1})
+
+        self.assertIsNone(p.teamID)
+        self.assertIsNone(p.teamName)
+        self.assertIsNone(p.isTeamCaptain)
+
+    def test_sub_url_methods_build_correct_paths(self):
+        client = Participants(max_retries=0)
+        self.assertEqual(client.sub_by_pid(19265), 'participants/19265')
+        self.assertEqual(client.sub_by_tid(8775), 'teams/8775/participants')
+        self.assertEqual(client.sub_by_eid(508), 'events/508/participants')
+
+
+class DonationMappingTest(TestCase):
+    def test_maps_all_api_fields_to_namedtuple(self):
+        data = {
+            'donationID': 'DF4E676D0828A8D5',
+            'amount': 10.0,
+            'displayName': 'Friendly Donor',
+            'donorID': 'EB8610A3FC435D58',
+            'participantID': 4024,
+            'teamID': 5074,
+            'message': 'Great job!',
+            'createdDateUTC': '2019-10-30T18:01:18.513+0000',
+            'avatarImageURL': 'https://example.com/avatar.gif',
+        }
+        d = Donations._d_to_d(data)
+
+        self.assertEqual(d.donationID, 'DF4E676D0828A8D5')
+        self.assertEqual(d.amount, 10.0)
+        self.assertEqual(d.displayName, 'Friendly Donor')
+        self.assertEqual(d.message, 'Great job!')
+        self.assertIs(d.raw, data)
+
+    def test_missing_optional_fields_default_to_none(self):
+        # displayName and message are not guaranteed - privacy settings may hide them per the API docs
+        d = Donations._d_to_d({'donationID': 'ABC123', 'amount': 5.0})
+
+        self.assertIsNone(d.message)
+        self.assertIsNone(d.displayName)
+        self.assertIsNone(d.participantID)
+
+    def test_sub_url_methods_build_correct_paths(self):
+        client = Donations(max_retries=0)
+        self.assertEqual(client.sub_by_pid(4024), 'participants/4024/donations')
+        self.assertEqual(client.sub_by_tid(5074), 'teams/5074/donations')
