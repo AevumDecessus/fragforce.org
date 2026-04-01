@@ -26,18 +26,23 @@ class RateLimitError(FetchError):
     """ API rate limit hit and retries exhausted """
 
 
+class NotModifiedResponse:
+    """ Sentinel returned by fetch_json when the API responds 304 Not Modified """
+
+
 class DonorDriveBase(object):
     DEFAULT_BASE_URL = 'https://www.extra-life.org/api/'
     RE_MATCH_LINK = re.compile(r'^\<(.*)\>;rel="(.*)"')
 
     def __init__(self, base_url=DEFAULT_BASE_URL, log_parent=mod_logger, request_sleeper=None,
-                 max_retries=None):
+                 max_retries=None, http_cache=None):
         """
         :param base_url: Base EL API URL
         :param log_parent: Parent logger to base our logger off of
         :param request_sleeper: Function. Should take any kwargs. No positional args.
         Will get at a min url (string), data (query data), and parsed (urlparse obj).
         :param max_retries: Number of times to retry on a 429 rate limit response.
+        :param http_cache: HttpCacheDB instance for ETag/Last-Modified conditional GET support.
         """
         self.base_url = base_url
         self.log_parent = log_parent
@@ -46,6 +51,7 @@ class DonorDriveBase(object):
         self.session.headers.update({"User-Agent": "fragforce.org"})
         self.request_sleeper = request_sleeper
         self.max_retries = max_retries if max_retries is not None else settings.EL_MAX_RETRIES
+        self.http_cache = http_cache
 
     def _do_sleep(self, url, data):
         """ Sleep or do whatever between requests to ensure they don't happen too often """
@@ -98,15 +104,25 @@ class DonorDriveBase(object):
             raise JSONError(f"Failed to decode JSON with {er} for {url} | Data: {rd}")
 
     def fetch_json(self, url, **kwargs):
-        """ Fetch the given URL with the given data. Returns data structure from JSON or raises an error. """
+        """ Fetch the given URL with the given data. Returns data structure from JSON or raises an error.
+        Returns NotModifiedResponse if the API responds 304 Not Modified. """
         e = dict(url=url, data=kwargs)
         try:
+            # Add conditional GET headers if we have cached ETag/Last-Modified for this URL
+            req_headers = {}
+            if self.http_cache:
+                req_headers.update(self.http_cache.get_conditional_headers(url))
+
             for attempt in range(self.max_retries + 1):
                 self._do_sleep(url=url, data=kwargs)
                 self.log.debug(f'Going to fetch {url}', extra=e)
-                r = self.session.get(url, data=kwargs)
+                r = self.session.get(url, data=kwargs, headers=req_headers)
                 e['result'] = r
                 self.log.log(5, f'Got result from {url}', extra=e)
+
+                if r.status_code == 304:
+                    self.log.debug(f"Not modified: {url}", extra=e)
+                    return NotModifiedResponse()
 
                 if r.status_code == 429:
                     if attempt >= self.max_retries:
@@ -118,6 +134,10 @@ class DonorDriveBase(object):
 
                 r.raise_for_status()
                 self.log.log(5, f"Status of {url} is ok", extra=e)
+
+                if self.http_cache:
+                    self.http_cache.store(url, r.headers)
+
                 j = self._parse_response_json(url, r, e)
                 e['data_len'] = len(j)
                 e['data'] = j
@@ -127,11 +147,13 @@ class DonorDriveBase(object):
             self.log.log(5, f"Done fetching {url}", extra=e)
 
     def fetch(self, sub_url, **kwargs):
-        """ Fetch all records """
-        url = "%s/%s" % (self.base_url, sub_url)
-        e = dict(url=url, data=kwargs)
+        """ Fetch all records. Yields nothing if the API returns 304 Not Modified. """
+        url = "%s/%s" % (self.base_url.rstrip('/'), sub_url)
 
         fresp = self.fetch_json(url=url, **kwargs)
+        if isinstance(fresp, NotModifiedResponse):
+            return
+
         if isinstance(fresp.data, list):
             for row in fresp.data:
                 yield row
@@ -140,5 +162,7 @@ class DonorDriveBase(object):
 
         while 'next' in fresp.urls:
             fresp = self.fetch_json(url=fresp.urls['next'])
+            if isinstance(fresp, NotModifiedResponse):
+                return
             for row in fresp.data:
                 yield row
