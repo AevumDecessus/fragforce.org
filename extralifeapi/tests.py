@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, call, patch
 
 from django.test import TestCase, override_settings
 
-from .base import DonorDriveBase, FetchResponse, JSONError, RateLimitError
+from .base import DonorDriveBase, FetchResponse, JSONError, NotModifiedResponse, RateLimitError
 
 
 def _make_client(max_retries=2):
@@ -145,3 +145,108 @@ class FetchJsonRetryTest(TestCase):
         self.client.fetch_json('https://example.com/api')
 
         mock_time.sleep.assert_called_once_with(60)
+
+
+class FetchJsonConditionalGetTest(TestCase):
+    def setUp(self):
+        self.mock_cache = MagicMock()
+        self.client = DonorDriveBase(request_sleeper=None, max_retries=0, http_cache=self.mock_cache)
+
+    @patch('extralifeapi.base.time')
+    def test_sends_if_none_match_header_when_etag_is_cached(self, mock_time):
+        # Cache returns an ETag for the URL
+        self.mock_cache.get_conditional_headers.return_value = {'If-None-Match': '"abc123"'}
+        ok_response = _mock_response(json_data={'id': 1})
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        self.client.fetch_json('https://example.com/api')
+
+        self.client.session.get.assert_called_once_with(
+            'https://example.com/api',
+            data={},
+            headers={'If-None-Match': '"abc123"'},
+        )
+
+    @patch('extralifeapi.base.time')
+    def test_returns_not_modified_response_on_304(self, mock_time):
+        self.mock_cache.get_conditional_headers.return_value = {}
+        not_modified = _mock_response(status_code=304)
+        self.client.session.get = MagicMock(return_value=not_modified)
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertIsInstance(result, NotModifiedResponse)
+
+    @patch('extralifeapi.base.time')
+    def test_stores_response_headers_in_cache_after_200(self, mock_time):
+        self.mock_cache.get_conditional_headers.return_value = {}
+        ok_response = _mock_response(
+            json_data={'id': 1},
+            headers={'ETag': '"newetag"', 'Cache-Control': 'max-age=60'},
+        )
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        self.client.fetch_json('https://example.com/api')
+
+        self.mock_cache.store.assert_called_once_with(
+            'https://example.com/api',
+            ok_response.headers,
+        )
+
+    @patch('extralifeapi.base.time')
+    def test_does_not_store_headers_on_304(self, mock_time):
+        self.mock_cache.get_conditional_headers.return_value = {}
+        not_modified = _mock_response(status_code=304)
+        self.client.session.get = MagicMock(return_value=not_modified)
+
+        self.client.fetch_json('https://example.com/api')
+
+        self.mock_cache.store.assert_not_called()
+
+    @patch('extralifeapi.base.time')
+    def test_no_conditional_headers_sent_when_cache_is_none(self, mock_time):
+        # Client with no http_cache should not send conditional headers
+        client = DonorDriveBase(request_sleeper=None, max_retries=0, http_cache=None)
+        ok_response = _mock_response(json_data={})
+        client.session.get = MagicMock(return_value=ok_response)
+
+        client.fetch_json('https://example.com/api')
+
+        # Called with empty headers dict since there's no cache
+        client.session.get.assert_called_once_with(
+            'https://example.com/api',
+            data={},
+            headers={},
+        )
+
+
+class FetchConditionalGetTest(TestCase):
+    def setUp(self):
+        self.mock_cache = MagicMock()
+        self.client = DonorDriveBase(
+            base_url='https://example.com/api/',
+            request_sleeper=None,
+            max_retries=0,
+            http_cache=self.mock_cache,
+        )
+
+    @patch('extralifeapi.base.time')
+    def test_yields_nothing_on_304(self, mock_time):
+        # When fetch_json returns NotModifiedResponse, fetch should yield nothing
+        self.mock_cache.get_conditional_headers.return_value = {}
+        not_modified = _mock_response(status_code=304)
+        self.client.session.get = MagicMock(return_value=not_modified)
+
+        results = list(self.client.fetch('teams/1234'))
+
+        self.assertEqual(results, [])
+
+    @patch('extralifeapi.base.time')
+    def test_yields_items_on_200(self, mock_time):
+        self.mock_cache.get_conditional_headers.return_value = {}
+        ok_response = _mock_response(json_data=[{'teamID': 1}, {'teamID': 2}])
+        self.client.session.get = MagicMock(return_value=ok_response)
+
+        results = list(self.client.fetch('teams'))
+
+        self.assertEqual(len(results), 2)

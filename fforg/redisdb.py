@@ -57,3 +57,40 @@ class TimersDB(RedisDB):
         """ Mark a timer as triggered right now, gating subsequent callers for delta. """
         now = time.time()
         self.db.set(key, str(now), ex=delta)
+
+
+class HttpCacheDB(RedisDB):
+    DEFAULT_TTL = timedelta(hours=1)
+
+    def store(self, url, headers):
+        """ Store ETag and Last-Modified from response headers, using Cache-Control max-age as TTL. """
+        ttl = self._parse_max_age(headers.get('Cache-Control', '')) or self.DEFAULT_TTL
+        etag = headers.get('ETag', None)
+        if etag:
+            self.db.set(self.make_key('etag', url=url), etag, ex=ttl)
+        last_modified = headers.get('Last-Modified', None)
+        if last_modified:
+            self.db.set(self.make_key('lm', url=url), last_modified, ex=ttl)
+
+    def get_conditional_headers(self, url):
+        """ Return If-None-Match and/or If-Modified-Since headers for a URL if we have cached values. """
+        headers = {}
+        etag = self.db.get(self.make_key('etag', url=url))
+        if etag:
+            headers['If-None-Match'] = etag.decode('utf-8') if isinstance(etag, bytes) else etag
+        last_modified = self.db.get(self.make_key('lm', url=url))
+        if last_modified:
+            headers['If-Modified-Since'] = last_modified.decode('utf-8') if isinstance(last_modified, bytes) else last_modified
+        return headers
+
+    @staticmethod
+    def _parse_max_age(cache_control):
+        """ Extract max-age from a Cache-Control header string and return it as a timedelta, or None. """
+        for part in cache_control.split(','):
+            part = part.strip()
+            if part.startswith('max-age='):
+                try:
+                    return timedelta(seconds=int(part.split('=', 1)[1]))
+                except (ValueError, IndexError):
+                    pass
+        return None

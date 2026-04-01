@@ -18,7 +18,9 @@ log = logging.getLogger("donations")
 def _make_d(*args, **kwargs):
     """ Make a safe Donations object """
     from ..helpers import el_request_sleeper
+    from fforg.rdbs import r_http_cache
     kwargs.setdefault('request_sleeper', el_request_sleeper)
+    kwargs.setdefault('http_cache', r_http_cache)
     return Donations(*args, **kwargs)
 
 
