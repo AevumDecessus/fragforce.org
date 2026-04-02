@@ -65,7 +65,7 @@ class Participants(DonorDriveBase):
     def participant(self, participantID):
         """ Get a single EL participant
         """
-        fresp = self.fetch(sub_url=self.sub_by_pid(participantID))
+        fresp = list(self.fetch(sub_url=self.sub_by_pid(participantID)))[0]
         return self._p_to_p(fresp)
 
     def participants_for_event(self, eventID):

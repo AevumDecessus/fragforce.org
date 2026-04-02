@@ -12,7 +12,9 @@ from ..models import *
 def _make_p(*args, **kwargs):
     """ Make a safe participant object """
     from ..helpers import el_request_sleeper
+    from fforg.rdbs import r_http_cache
     kwargs.setdefault('request_sleeper', el_request_sleeper)
+    kwargs.setdefault('http_cache', r_http_cache)
     return Participants(*args, **kwargs)
 
 
