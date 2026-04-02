@@ -309,6 +309,10 @@ EL_REQUEST_MIN_TIME = timedelta(seconds=int(os.environ.get('EL_REQUEST_MIN_TIME_
 EL_RETRY_AFTER_SECONDS = int(os.environ.get('EL_RETRY_AFTER_SECONDS', 60))
 # Number of times to retry a request after a 429
 EL_MAX_RETRIES = int(os.environ.get('EL_MAX_RETRIES', 3))
+# Seconds to wait between retries on 5xx or network errors
+EL_SERVER_RETRY_AFTER_SECONDS = int(os.environ.get('EL_SERVER_RETRY_AFTER_SECONDS', 600))
+# Number of times to retry a request on 5xx or network errors (7 total attempts)
+EL_SERVER_MAX_RETRIES = int(os.environ.get('EL_SERVER_MAX_RETRIES', 6))
 # Min time between EL REST requests for any given URL
 EL_REQUEST_MIN_TIME_URL = timedelta(seconds=int(os.environ.get('EL_REQUEST_MIN_TIME_URL_SECONDS', 15)))
 # Min time between request for any given remote host
