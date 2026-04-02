@@ -519,3 +519,235 @@ class DonationMappingTest(TestCase):
         client = Donations(max_retries=0)
         self.assertEqual(client.sub_by_pid(4024), 'participants/4024/donations')
         self.assertEqual(client.sub_by_tid(5074), 'teams/5074/donations')
+
+
+# Shared fixture data matching the DonorDrive API docs examples
+
+_TEAM_DATA = {
+    'teamID': 8775,
+    'name': 'The Bonhams',
+    'avatarImageURL': 'https://static.donordrive.com/clients/testdrive/img/avatar-team-default.gif',
+    'createdDateUTC': '2019-11-02T15:02:38.93+0000',
+    'eventID': 508,
+    'eventName': 'Test Participant Event',
+    'fundraisingGoal': 20000.0,
+    'numDonations': 97,
+    'sumDonations': 9349.5,
+}
+
+_PARTICIPANT_DATA = {
+    'participantID': 19265,
+    'displayName': 'Liam Bonham',
+    'fundraisingGoal': 8000.0,
+    'eventID': 508,
+    'eventName': 'Test Participant Event',
+    'teamID': 8775,
+    'teamName': 'The Bonhams',
+    'isTeamCaptain': True,
+    'sumDonations': 4661.0,
+    'numDonations': 51,
+    'avatarImageURL': 'https://static.donordrive.com/clients/testdrive/img/avatar-constituent-default.gif',
+    'createdDateUTC': '2019-11-02T15:02:38.93+0000',
+}
+
+_DONATION_DATA = {
+    'donationID': 'DF4E676D0828A8D5',
+    'amount': 10.0,
+    'displayName': 'Friendly Donor',
+    'donorID': 'EB8610A3FC435D58',
+    'participantID': 4024,
+    'teamID': 5074,
+    'message': 'Great job!',
+    'createdDateUTC': '2019-10-30T18:01:18.513+0000',
+    'avatarImageURL': 'https://static.donordrive.com/clients/testdrive/img/avatar-constituent-default.gif',
+}
+
+
+class TeamsFetchTest(TestCase):
+    def setUp(self):
+        self.client = Teams(request_sleeper=None, max_retries=0)
+
+    @patch('extralifeapi.base.time')
+    def test_team_returns_single_team_namedtuple(self, mock_time):
+        # /teams/{teamID} returns a single object - team() must unwrap it and map to namedtuple
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=_TEAM_DATA))
+
+        result = self.client.team(8775)
+
+        self.assertEqual(result.teamID, 8775)
+        self.assertEqual(result.name, 'The Bonhams')
+        self.assertEqual(result.eventID, 508)
+        self.assertEqual(result.sumDonations, 9349.5)
+
+    @patch('extralifeapi.base.time')
+    def test_team_requests_correct_url(self, mock_time):
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=_TEAM_DATA))
+
+        self.client.team(8775)
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('teams/8775', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_teams_yields_team_namedtuples(self, mock_time):
+        # /teams returns an array - teams() should yield one namedtuple per item
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_TEAM_DATA, {**_TEAM_DATA, 'teamID': 9000}])
+        )
+
+        results = list(self.client.teams())
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].teamID, 8775)
+        self.assertEqual(results[1].teamID, 9000)
+
+    @patch('extralifeapi.base.time')
+    def test_event_teams_requests_correct_url(self, mock_time):
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=[_TEAM_DATA]))
+
+        list(self.client.event_teams(508))
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('events/508/teams', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_event_teams_yields_team_namedtuples(self, mock_time):
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=[_TEAM_DATA]))
+
+        results = list(self.client.event_teams(508))
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].teamID, 8775)
+        self.assertEqual(results[0].name, 'The Bonhams')
+
+
+class ParticipantsFetchTest(TestCase):
+    def setUp(self):
+        self.client = Participants(request_sleeper=None, max_retries=0)
+
+    @patch('extralifeapi.base.time')
+    def test_participants_for_team_yields_participant_namedtuples(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_PARTICIPANT_DATA])
+        )
+
+        results = list(self.client.participants_for_team(8775))
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].participantID, 19265)
+        self.assertEqual(results[0].displayName, 'Liam Bonham')
+
+    @patch('extralifeapi.base.time')
+    def test_participants_for_team_requests_correct_url(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_PARTICIPANT_DATA])
+        )
+
+        list(self.client.participants_for_team(8775))
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('teams/8775/participants', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_participants_for_event_requests_correct_url(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_PARTICIPANT_DATA])
+        )
+
+        list(self.client.participants_for_event(508))
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('events/508/participants', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_participants_for_event_yields_participant_namedtuples(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_PARTICIPANT_DATA])
+        )
+
+        results = list(self.client.participants_for_event(508))
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].participantID, 19265)
+        self.assertTrue(results[0].isTeamCaptain)
+
+    @patch('extralifeapi.base.time')
+    def test_participants_for_team_yields_empty_on_empty_response(self, mock_time):
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=[]))
+
+        results = list(self.client.participants_for_team(8775))
+
+        self.assertEqual(results, [])
+
+
+class DonationsFetchTest(TestCase):
+    def setUp(self):
+        self.client = Donations(request_sleeper=None, max_retries=0)
+
+    @patch('extralifeapi.base.time')
+    def test_donations_for_team_yields_donation_namedtuples(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_DONATION_DATA])
+        )
+
+        results = list(self.client.donations_for_team(5074))
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].donationID, 'DF4E676D0828A8D5')
+        self.assertEqual(results[0].amount, 10.0)
+        self.assertEqual(results[0].displayName, 'Friendly Donor')
+
+    @patch('extralifeapi.base.time')
+    def test_donations_for_team_requests_correct_url(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_DONATION_DATA])
+        )
+
+        list(self.client.donations_for_team(5074))
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('teams/5074/donations', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_donations_for_participants_yields_donation_namedtuples(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_DONATION_DATA])
+        )
+
+        results = list(self.client.donations_for_participants(4024))
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].donationID, 'DF4E676D0828A8D5')
+        self.assertEqual(results[0].participantID, 4024)
+
+    @patch('extralifeapi.base.time')
+    def test_donations_for_participants_requests_correct_url(self, mock_time):
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_DONATION_DATA])
+        )
+
+        list(self.client.donations_for_participants(4024))
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('participants/4024/donations', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_donations_for_team_yields_empty_on_empty_response(self, mock_time):
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=[]))
+
+        results = list(self.client.donations_for_team(5074))
+
+        self.assertEqual(results, [])
+
+    @patch('extralifeapi.base.time')
+    def test_donations_for_team_yields_multiple_donations(self, mock_time):
+        second = {**_DONATION_DATA, 'donationID': 'AABBCCDD', 'amount': 25.0}
+        self.client.session.get = MagicMock(
+            return_value=_mock_response(json_data=[_DONATION_DATA, second])
+        )
+
+        results = list(self.client.donations_for_team(5074))
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[1].donationID, 'AABBCCDD')
+        self.assertEqual(results[1].amount, 25.0)
