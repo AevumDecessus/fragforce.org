@@ -21,14 +21,14 @@ RAN_LINE=$(echo "$SUMMARY" | grep '^Ran ')
 STATUS_LINE=$(echo "$SUMMARY" | grep -E '^(OK|FAILED)')
 
 # Extract failure details if any
-if [ $EXIT_CODE -ne 0 ]; then
+if [[ $EXIT_CODE -ne 0 ]]; then
     FAILURES=$(echo "$OUTPUT" | grep -E '^(FAIL|ERROR): ' | sed 's/^/- /')
 fi
 
 # Build markdown
 echo "## Test Run - \`${1:-all}\` @ \`$COMMIT\`"
 echo ""
-if [ $EXIT_CODE -eq 0 ]; then
+if [[ $EXIT_CODE -eq 0 ]]; then
     echo "**:white_check_mark: $RAN_LINE** - $DATE"
 else
     echo "**:x: $RAN_LINE** - $DATE"
@@ -40,7 +40,7 @@ echo ""
 echo "$STATUS_LINE"
 echo "\`\`\`"
 
-if [ $EXIT_CODE -ne 0 ] && [ -n "$FAILURES" ]; then
+if [[ $EXIT_CODE -ne 0 && -n "$FAILURES" ]]; then
     echo ""
     echo "### Failures"
     echo "$FAILURES"

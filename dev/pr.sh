@@ -8,14 +8,14 @@
 cd "$(git rev-parse --show-toplevel)"
 
 TITLE="${1}"
-if [ -z "$TITLE" ]; then
+if [[ -z "$TITLE" ]]; then
     echo "Usage: dev/pr.sh \"PR title\" [--base <branch>]"
     exit 1
 fi
 shift
 
 BASE="dev"
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
     case "$1" in
         --base) BASE="$2"; shift 2 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;

@@ -11,7 +11,7 @@ cd "$(git rev-parse --show-toplevel)"
 TARGET="${1:-.}"
 FILES=$(find "$TARGET" -name "*.py" | grep -v '\.git' | grep -v migrations | tr '\n' ' ')
 
-if [ -z "$FILES" ]; then
+if [[ -z "$FILES" ]]; then
     echo "No Python files found in: $TARGET"
     exit 0
 fi

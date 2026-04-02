@@ -6,11 +6,11 @@
 cd "$(git rev-parse --show-toplevel)"
 
 FIRST_RUN=false
-if ! docker image inspect fragforceorg-web >/dev/null 2>&1; then
+if ! docker image inspect fragforceorg-web &>/dev/null; then
     FIRST_RUN=true
 fi
 
-if [ "$FIRST_RUN" = true ]; then
+if [[ "$FIRST_RUN" = true ]]; then
     echo "First run detected — building containers (this will take a few minutes)..."
     docker compose up --build -d
     echo ""
