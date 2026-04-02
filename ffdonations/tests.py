@@ -1071,3 +1071,131 @@ class UpdateParticipantsHappyPathTest(TestCase):
 
         mock_api.participant.assert_called_once_with(19265)
         mock_api.participants_for_team.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# note_new_donation / note_new_donations sender tests
+# ---------------------------------------------------------------------------
+
+_sender_tasks = importlib.import_module('ffdonations.tasks.sender')
+
+from .tasks.sender import note_new_donation, note_new_donations
+
+
+@override_settings(
+    FRAG_BOT_KEY='testkey',
+    FRAG_BOT_API='https://bot.example.com/dbquery',
+    FRAG_BOT_BOT='testbot',
+)
+class NoteNewDonationTest(TestCase):
+    def setUp(self):
+        self.donation = DonationModel.objects.create(
+            id='SEND001',
+            amount=25.00,
+            displayName='Alice',
+            message='Keep it up!',
+        )
+
+    def _run(self, donation_id=None):
+        did = donation_id if donation_id is not None else self.donation.id
+        with patch.object(_sender_tasks, 'requests') as mock_requests:
+            mock_requests.put.return_value = MagicMock()
+            note_new_donation.apply(args=[did], throw=True)
+        return mock_requests
+
+    @override_settings(FRAG_BOT_KEY='')
+    def test_marks_tracked_without_sending_when_no_bot_key(self):
+        with patch.object(_sender_tasks, 'requests') as mock_requests:
+            note_new_donation.apply(args=[self.donation.id], throw=True)
+
+        mock_requests.put.assert_not_called()
+        self.donation.refresh_from_db()
+        self.assertEqual(self.donation.tracking.get('TRACKING_BOT'), '1')
+
+    def test_skips_already_tracked_donation(self):
+        self.donation.tracking['TRACKING_BOT'] = '1'
+        self.donation.tracking = self.donation.tracking.copy()
+        self.donation.save()
+
+        mock_requests = self._run()
+
+        mock_requests.put.assert_not_called()
+
+    def test_makes_two_put_requests(self):
+        mock_requests = self._run()
+
+        self.assertEqual(mock_requests.put.call_count, 2)
+
+    def test_first_put_message_includes_amount(self):
+        mock_requests = self._run()
+
+        first_payload = mock_requests.put.call_args_list[0][1]['headers']
+        self.assertIn(b'$25.0', first_payload['message'])
+
+    def test_first_put_message_includes_named_donor(self):
+        mock_requests = self._run()
+
+        first_payload = mock_requests.put.call_args_list[0][1]['headers']
+        self.assertIn(b'Alice', first_payload['message'])
+
+    def test_first_put_message_uses_anonymous_coward_when_no_display_name(self):
+        self.donation.displayName = ''
+        self.donation.save()
+
+        mock_requests = self._run()
+
+        first_payload = mock_requests.put.call_args_list[0][1]['headers']
+        self.assertIn(b'Anonymous Coward', first_payload['message'])
+
+    def test_first_put_message_includes_donor_message(self):
+        mock_requests = self._run()
+
+        first_payload = mock_requests.put.call_args_list[0][1]['headers']
+        self.assertIn(b'Keep it up!', first_payload['message'])
+
+    def test_first_put_message_omits_message_section_when_no_message(self):
+        self.donation.message = ''
+        self.donation.save()
+
+        mock_requests = self._run()
+
+        first_payload = mock_requests.put.call_args_list[0][1]['headers']
+        self.assertNotIn(b'with the message', first_payload['message'])
+
+    def test_second_put_sends_bot_donate_command(self):
+        mock_requests = self._run()
+
+        second_payload = mock_requests.put.call_args_list[1][1]['headers']
+        self.assertEqual(second_payload['message'], '!bot_donate')
+
+    def test_marks_tracking_after_successful_send(self):
+        self._run()
+
+        self.donation.refresh_from_db()
+        self.assertEqual(self.donation.tracking.get('TRACKING_BOT'), '1')
+
+    def test_both_puts_use_configured_api_url(self):
+        mock_requests = self._run()
+
+        for call_args in mock_requests.put.call_args_list:
+            self.assertEqual(call_args[0][0], 'https://bot.example.com/dbquery')
+
+
+class NoteNewDonationsTest(TestCase):
+    def test_queues_note_for_each_untracked_donation(self):
+        DonationModel.objects.create(id='UNSENT1', amount=10.0)
+        DonationModel.objects.create(id='UNSENT2', amount=20.0)
+
+        with patch.object(_sender_tasks, 'note_new_donation') as mock_task:
+            note_new_donations.apply(throw=True)
+
+        self.assertEqual(mock_task.delay.call_count, 2)
+
+    def test_skips_already_tracked_donations(self):
+        DonationModel.objects.create(id='SENT1', amount=10.0, tracking={'TRACKING_BOT': '1'})
+        DonationModel.objects.create(id='UNSENT3', amount=20.0)
+
+        with patch.object(_sender_tasks, 'note_new_donation') as mock_task:
+            note_new_donations.apply(throw=True)
+
+        mock_task.delay.assert_called_once_with('UNSENT3')
