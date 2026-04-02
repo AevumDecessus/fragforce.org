@@ -10,6 +10,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 COMMIT=$(git rev-parse --short HEAD)
 DATE=$(date +%Y-%m-%d)
+FENCE='```'
 
 # Run tests, capturing all output (Django test runner writes to stderr)
 OUTPUT=$(docker compose exec -T web pipenv run python manage.py test "$@" 2>&1)
@@ -34,11 +35,11 @@ else
     echo "**:x: $RAN_LINE** - $DATE"
 fi
 echo ""
-echo "\`\`\`"
+echo "$FENCE"
 echo "$RAN_LINE"
 echo ""
 echo "$STATUS_LINE"
-echo "\`\`\`"
+echo "$FENCE"
 
 if [[ $EXIT_CODE -ne 0 && -n "$FAILURES" ]]; then
     echo ""
@@ -47,9 +48,9 @@ if [[ $EXIT_CODE -ne 0 && -n "$FAILURES" ]]; then
     echo ""
     echo "<details><summary>Full output</summary>"
     echo ""
-    echo "\`\`\`"
+    echo "$FENCE"
     echo "$OUTPUT" | grep -v '^Loading .env'
-    echo "\`\`\`"
+    echo "$FENCE"
     echo ""
     echo "</details>"
 fi
