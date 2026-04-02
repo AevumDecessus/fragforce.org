@@ -886,7 +886,7 @@ class UpdateTeamsHappyPathTest(TestCase):
 
     def test_team_fields_saved_to_db(self):
         team = _make_team_namedtuple()
-        result, _, _ = self._run([8775], [team])
+        self._run([8775], [team])
 
         saved = TeamModel.objects.get(id=8775)
         self.assertEqual(saved.name, 'The Bonhams')
@@ -1068,7 +1068,7 @@ class UpdateParticipantsHappyPathTest(TestCase):
 
     def test_fetches_individual_participants_when_ids_provided(self):
         p = _make_participant_namedtuple()
-        result, mock_api, _, _ = self._run([19265], [p])
+        _, mock_api, _, _ = self._run([19265], [p])
 
         mock_api.participant.assert_called_once_with(19265)
         mock_api.participants_for_team.assert_not_called()
