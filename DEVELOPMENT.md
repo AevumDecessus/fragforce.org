@@ -4,6 +4,7 @@
 
 - [Docker](https://docker.com)
 - [Docker Compose](https://docs.docker.com/compose/)
+- [GitHub CLI (`gh`)](https://cli.github.com/) — required for `dev/pr.sh`
 
 ## Initial Setup
 
@@ -30,6 +31,7 @@ All developer scripts live in `dev/` and can be run from the repo root.
 | `dev/lint.sh [dir]` | Run pyflakes across all Python files (or a specific app directory). |
 | `dev/logs.sh [service]` | Tail logs for a service. Defaults to `web`. |
 | `dev/runtests.sh [target]` | Run tests and format output as a GitHub-ready markdown comment. |
+| `dev/pr.sh "Title" [--base branch]` | Push branch, run tests, and open a PR with test results embedded in the body. Requires `gh`. Defaults to `dev` as the base branch. |
 
 ## Running Tests
 
