@@ -445,6 +445,8 @@ LOGGING = {
     }
 }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+TEST_RUNNER = 'fforg.test_runner.GitHashTestRunner'
 DJANGO_WORKFLOWS = {
     "simple_workflow": "eventer.workflows.simple_workflow",
 }
