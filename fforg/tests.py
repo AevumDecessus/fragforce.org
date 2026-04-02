@@ -175,7 +175,6 @@ class HttpCacheDBGetConditionalHeadersTest(TestCase):
 
     def test_returns_both_headers_when_both_are_cached(self):
         etag_key = self.cache.make_key('etag', url='https://example.com/api')
-        lm_key = self.cache.make_key('lm', url='https://example.com/api')
         self.mock_db.get.side_effect = lambda key: (
             b'"v2"' if key == etag_key else b'Wed, 15 Mar 2028 12:00:00 GMT'
         )

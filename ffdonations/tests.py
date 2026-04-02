@@ -14,7 +14,6 @@ from .admin import ParticipantModelAdmin, TeamModelAdmin
 from .helpers import el_request_sleeper
 from .models import DonationModel, EventModel, ParticipantModel, TeamModel
 from .tasks.donations import (
-    update_donations_if_needed,
     update_donations_if_needed_participant,
     update_donations_if_needed_team,
     update_donations_participant,
@@ -51,8 +50,8 @@ class TeamAdminSyncDonationsTest(TestCase):
         self.factory = RequestFactory()
 
     def test_queues_task_for_each_selected_team(self):
-        team1 = TeamModel.objects.create(id=1001)
-        team2 = TeamModel.objects.create(id=1002)
+        TeamModel.objects.create(id=1001)
+        TeamModel.objects.create(id=1002)
         queryset = TeamModel.objects.filter(id__in=[1001, 1002])
 
         with patch('ffdonations.admin.update_donations_if_needed_team') as mock_task:
@@ -80,8 +79,8 @@ class ParticipantAdminSyncDonationsTest(TestCase):
         self.factory = RequestFactory()
 
     def test_queues_task_for_each_selected_participant(self):
-        p1 = ParticipantModel.objects.create(id=2001)
-        p2 = ParticipantModel.objects.create(id=2002)
+        ParticipantModel.objects.create(id=2001)
+        ParticipantModel.objects.create(id=2002)
         queryset = ParticipantModel.objects.filter(id__in=[2001, 2002])
 
         with patch('ffdonations.admin.update_donations_if_needed_participant') as mock_task:
@@ -458,7 +457,7 @@ class UpdateDonationsIfNeededTeamTest(TestCase):
         mock_update.assert_called_once_with(teamID=self.team.id)
 
     def test_skips_update_when_donations_recently_updated(self):
-        donation = DonationModel.objects.create(id='RECENT01', team=self.team, amount=10)
+        DonationModel.objects.create(id='RECENT01', team=self.team, amount=10)
         _stamp_recent(DonationModel.objects.filter(id='RECENT01'))
 
         result, mock_update = self._run()
@@ -470,7 +469,7 @@ class UpdateDonationsIfNeededTeamTest(TestCase):
         # numDonations=None means we haven't synced team data yet - don't thrash
         self.team.numDonations = None
         self.team.save()
-        donation = DonationModel.objects.create(id='STALE01', team=self.team, amount=10)
+        DonationModel.objects.create(id='STALE01', team=self.team, amount=10)
         _stamp_stale(DonationModel.objects.filter(id='STALE01'))
 
         result, mock_update = self._run()
@@ -568,7 +567,7 @@ class UpdateDonationsIfNeededParticipantTest(TestCase):
         mock_update.assert_called_once_with(participant_id=self.participant.id)
 
     def test_skips_update_when_donations_recently_updated(self):
-        donation = DonationModel.objects.create(id='PRECENT02', participant=self.participant, amount=5)
+        DonationModel.objects.create(id='PRECENT02', participant=self.participant, amount=5)
         _stamp_recent(DonationModel.objects.filter(id='PRECENT02'))
 
         result, mock_update = self._run()
@@ -1021,7 +1020,7 @@ class UpdateParticipantsHappyPathTest(TestCase):
 
     def test_stays_untracked_when_neither_event_nor_team_is_tracked(self):
         untracked_event = EventModel.objects.create(id=999, tracked=False)
-        untracked_team = TeamModel.objects.create(id=9999, tracked=False, event=untracked_event)
+        TeamModel.objects.create(id=9999, tracked=False, event=untracked_event)
         p = _make_participant_namedtuple(event_id=999, team_id=9999, team_name='Untracked')
         self._run(None, [p])
 
@@ -1036,7 +1035,7 @@ class UpdateParticipantsHappyPathTest(TestCase):
 
     def test_does_not_queue_donation_updates_for_untracked_participant(self):
         untracked_event = EventModel.objects.create(id=999, tracked=False)
-        untracked_team = TeamModel.objects.create(id=9999, tracked=False, event=untracked_event)
+        TeamModel.objects.create(id=9999, tracked=False, event=untracked_event)
         p = _make_participant_namedtuple(event_id=999, team_id=9999, team_name='Untracked')
         _, _, mock_dp, mock_dt = self._run(None, [p])
 
