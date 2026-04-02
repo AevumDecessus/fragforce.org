@@ -595,3 +595,241 @@ class UpdateDonationsIfNeededParticipantTest(TestCase):
         result, mock_update = self._run()
 
         mock_update.assert_called_once_with(participant_id=self.participant.id)
+
+
+# ---------------------------------------------------------------------------
+# update_donations_team happy-path tests
+# ---------------------------------------------------------------------------
+
+from extralifeapi.donors import Donation as _Donation
+
+
+def _make_donation(donation_id='DON001', amount=10.0, participant_id=None, team_id=None,
+                   display_name='Donor Name', message='Great!'):
+    """ Build a Donation namedtuple matching the extralifeapi structure. """
+    return _Donation(
+        donationID=donation_id,
+        amount=amount,
+        displayName=display_name,
+        donorID='DONOR01',
+        participantID=participant_id,
+        teamID=team_id,
+        message=message,
+        createdDateUTC='2026-01-01T00:00:00.000+0000',
+        avatarImageURL='https://example.com/avatar.gif',
+        raw={'donationID': donation_id, 'amount': amount},
+    )
+
+
+class UpdateDonationsTeamHappyPathTest(TestCase):
+    def setUp(self):
+        self.event = EventModel.objects.create(id=2026, tracked=True)
+        self.team = TeamModel.objects.create(id=11001, tracked=True, event=self.event)
+
+    def _run(self, donations, team_id=None):
+        tid = team_id if team_id is not None else self.team.id
+        mock_api = MagicMock()
+        mock_api.donations_for_team.return_value = donations
+        note_sig = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api), \
+                patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]), \
+                patch.object(_donations_tasks, 'note_new_donation') as mock_note:
+            mock_note.s.return_value = note_sig
+            update_donations_team.apply(kwargs={'teamID': tid}, throw=True)
+        return mock_note, note_sig
+
+    def test_donation_is_saved_to_db_with_correct_fields(self):
+        donation = _make_donation(donation_id='DON001', amount=25.0, display_name='Alice', message='Go team!')
+        self._run([donation])
+
+        saved = DonationModel.objects.get(id='DON001')
+        self.assertEqual(saved.amount, 25.0)
+        self.assertEqual(saved.displayName, 'Alice')
+        self.assertEqual(saved.message, 'Go team!')
+        self.assertEqual(saved.team, self.team)
+
+    def test_note_new_donation_called_per_donation(self):
+        donations = [_make_donation('D1'), _make_donation('D2')]
+        mock_note, note_sig = self._run(donations)
+
+        self.assertEqual(mock_note.s.call_count, 2)
+        self.assertEqual(note_sig.call_count, 2)
+
+    def test_null_display_name_saved_as_empty_string(self):
+        donation = _make_donation('DON002', display_name=None)
+        self._run([donation])
+
+        self.assertEqual(DonationModel.objects.get(id='DON002').displayName, '')
+
+    def test_null_message_saved_as_empty_string(self):
+        donation = _make_donation('DON003', message=None)
+        self._run([donation])
+
+        self.assertEqual(DonationModel.objects.get(id='DON003').message, '')
+
+    def test_unknown_participant_stub_is_auto_created(self):
+        # Donation references a participant not in DB - a tracked=False stub should be created
+        donation = _make_donation('DON004', participant_id=55555)
+        self._run([donation])
+
+        participant = ParticipantModel.objects.get(id=55555)
+        self.assertFalse(participant.tracked)
+
+    def test_known_participant_is_linked_without_creating_stub(self):
+        existing = ParticipantModel.objects.create(id=55556, tracked=True, event=self.event)
+        donation = _make_donation('DON005', participant_id=55556)
+        self._run([donation])
+
+        self.assertEqual(ParticipantModel.objects.filter(id=55556).count(), 1)
+        self.assertEqual(DonationModel.objects.get(id='DON005').participant, existing)
+
+    def test_existing_donation_is_updated_not_duplicated(self):
+        DonationModel.objects.create(id='DON006', team=self.team, amount=5.0)
+        donation = _make_donation('DON006', amount=99.0)
+        self._run([donation])
+
+        self.assertEqual(DonationModel.objects.filter(id='DON006').count(), 1)
+        self.assertEqual(DonationModel.objects.get(id='DON006').amount, 99.0)
+
+    def test_returns_empty_list_when_team_id_is_none(self):
+        mock_api = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api):
+            result = update_donations_team.apply(kwargs={'teamID': None}, throw=True).result
+        self.assertEqual(result, [])
+        mock_api.donations_for_team.assert_not_called()
+
+    def test_returns_none_when_team_not_tracked(self):
+        self.team.tracked = False
+        self.team.save()
+        mock_api = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api), \
+                patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]):
+            result = update_donations_team.apply(kwargs={'teamID': self.team.id}, throw=True).result
+        self.assertIsNone(result)
+        mock_api.donations_for_team.assert_not_called()
+
+    def test_creates_untracked_team_stub_when_team_not_in_db(self):
+        mock_api = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api), \
+                patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]):
+            update_donations_team.apply(kwargs={'teamID': 99998}, throw=True)
+
+        stub = TeamModel.objects.get(id=99998)
+        self.assertFalse(stub.tracked)
+        mock_api.donations_for_team.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# update_donations_participant happy-path tests
+# ---------------------------------------------------------------------------
+
+class UpdateDonationsParticipantHappyPathTest(TestCase):
+    def setUp(self):
+        self.event = EventModel.objects.create(id=2026, tracked=True)
+        self.participant = ParticipantModel.objects.create(
+            id=12001, tracked=True, event=self.event
+        )
+
+    def _run(self, donations, participant_id=None):
+        pid = participant_id if participant_id is not None else self.participant.id
+        mock_api = MagicMock()
+        mock_api.donations_for_participants.return_value = donations
+        note_sig = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api), \
+                patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]), \
+                patch.object(_donations_tasks, 'note_new_donation') as mock_note:
+            mock_note.s.return_value = note_sig
+            result = update_donations_participant.apply(
+                kwargs={'participant_id': pid}, throw=True
+            ).result
+        return result, mock_note, note_sig
+
+    def test_donation_is_saved_to_db_with_correct_fields(self):
+        donation = _make_donation('PDON001', amount=15.0, display_name='Bob', message='Nice work!')
+        self._run([donation])
+
+        saved = DonationModel.objects.get(id='PDON001')
+        self.assertEqual(saved.amount, 15.0)
+        self.assertEqual(saved.displayName, 'Bob')
+        self.assertEqual(saved.message, 'Nice work!')
+        self.assertEqual(saved.participant, self.participant)
+
+    def test_returns_list_of_guids(self):
+        donation = _make_donation('PDON002')
+        result, _, _ = self._run([donation])
+
+        saved = DonationModel.objects.get(id='PDON002')
+        self.assertEqual(result, [saved.guid])
+
+    def test_note_new_donation_called_per_donation(self):
+        donations = [_make_donation('PD1'), _make_donation('PD2')]
+        result, mock_note, note_sig = self._run(donations)
+
+        self.assertEqual(mock_note.s.call_count, 2)
+        self.assertEqual(note_sig.call_count, 2)
+
+    def test_null_display_name_saved_as_empty_string(self):
+        donation = _make_donation('PDON003', display_name=None)
+        self._run([donation])
+
+        self.assertEqual(DonationModel.objects.get(id='PDON003').displayName, '')
+
+    def test_null_message_saved_as_empty_string(self):
+        donation = _make_donation('PDON004', message=None)
+        self._run([donation])
+
+        self.assertEqual(DonationModel.objects.get(id='PDON004').message, '')
+
+    def test_unknown_team_stub_is_auto_created(self):
+        donation = _make_donation('PDON005', team_id=66666)
+        self._run([donation])
+
+        team = TeamModel.objects.get(id=66666)
+        self.assertFalse(team.tracked)
+
+    def test_known_team_is_linked_without_creating_stub(self):
+        existing_team = TeamModel.objects.create(id=66667, tracked=True, event=self.event)
+        donation = _make_donation('PDON006', team_id=66667)
+        self._run([donation])
+
+        self.assertEqual(TeamModel.objects.filter(id=66667).count(), 1)
+        self.assertEqual(DonationModel.objects.get(id='PDON006').team, existing_team)
+
+    def test_existing_donation_is_updated_not_duplicated(self):
+        DonationModel.objects.create(id='PDON007', participant=self.participant, amount=1.0)
+        donation = _make_donation('PDON007', amount=50.0)
+        self._run([donation])
+
+        self.assertEqual(DonationModel.objects.filter(id='PDON007').count(), 1)
+        self.assertEqual(DonationModel.objects.get(id='PDON007').amount, 50.0)
+
+    def test_returns_empty_list_when_participant_id_is_none(self):
+        mock_api = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api):
+            result = update_donations_participant.apply(
+                kwargs={'participant_id': None}, throw=True
+            ).result
+        self.assertEqual(result, [])
+        mock_api.donations_for_participants.assert_not_called()
+
+    def test_returns_empty_list_when_participant_not_tracked(self):
+        self.participant.tracked = False
+        self.participant.save()
+        mock_api = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api), \
+                patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]):
+            result = update_donations_participant.apply(
+                kwargs={'participant_id': self.participant.id}, throw=True
+            ).result
+        self.assertEqual(result, [])
+        mock_api.donations_for_participants.assert_not_called()
+
+    def test_creates_untracked_participant_stub_when_not_in_db(self):
+        mock_api = MagicMock()
+        with patch.object(_donations_tasks, '_make_d', return_value=mock_api), \
+                patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]):
+            update_donations_participant.apply(kwargs={'participant_id': 99997}, throw=True)
+
+        stub = ParticipantModel.objects.get(id=99997)
+        self.assertFalse(stub.tracked)
+        mock_api.donations_for_participants.assert_not_called()
