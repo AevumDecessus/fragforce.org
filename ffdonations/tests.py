@@ -454,7 +454,7 @@ class UpdateDonationsIfNeededTeamTest(TestCase):
         self.assertFalse(old_team.tracked)
 
     def test_forces_update_when_no_donations_in_db(self):
-        result, mock_update = self._run()
+        _, mock_update = self._run()
         mock_update.assert_called_once_with(teamID=self.team.id)
 
     def test_skips_update_when_donations_recently_updated(self):
@@ -485,7 +485,7 @@ class UpdateDonationsIfNeededTeamTest(TestCase):
         DonationModel.objects.create(id='GAP01', team=self.team, amount=10)
         _stamp_stale(DonationModel.objects.filter(id='GAP01'))
 
-        result, mock_update = self._run()
+        _, mock_update = self._run()
 
         mock_update.assert_called_once_with(teamID=self.team.id)
 
@@ -495,7 +495,7 @@ class UpdateDonationsIfNeededTeamTest(TestCase):
         DonationModel.objects.create(id='STALE02', team=self.team, amount=10)
         _stamp_stale(DonationModel.objects.filter(id='STALE02'))
 
-        result, mock_update = self._run()
+        _, mock_update = self._run()
 
         mock_update.assert_called_once_with(teamID=self.team.id)
 
@@ -564,7 +564,7 @@ class UpdateDonationsIfNeededParticipantTest(TestCase):
         self.assertIsNone(result)
 
     def test_forces_update_when_no_donations_in_db(self):
-        result, mock_update = self._run()
+        _, mock_update = self._run()
         mock_update.assert_called_once_with(participant_id=self.participant.id)
 
     def test_skips_update_when_donations_recently_updated(self):
@@ -582,7 +582,7 @@ class UpdateDonationsIfNeededParticipantTest(TestCase):
         DonationModel.objects.create(id='PGAP01', participant=self.participant, amount=5)
         _stamp_stale(DonationModel.objects.filter(id='PGAP01'))
 
-        result, mock_update = self._run()
+        _, mock_update = self._run()
 
         mock_update.assert_called_once_with(participant_id=self.participant.id)
 
@@ -592,7 +592,7 @@ class UpdateDonationsIfNeededParticipantTest(TestCase):
         DonationModel.objects.create(id='PSTALE01', participant=self.participant, amount=5)
         _stamp_stale(DonationModel.objects.filter(id='PSTALE01'))
 
-        result, mock_update = self._run()
+        _, mock_update = self._run()
 
         mock_update.assert_called_once_with(participant_id=self.participant.id)
 
@@ -763,7 +763,7 @@ class UpdateDonationsParticipantHappyPathTest(TestCase):
 
     def test_note_new_donation_called_per_donation(self):
         donations = [_make_donation('PD1'), _make_donation('PD2')]
-        result, mock_note, note_sig = self._run(donations)
+        _, mock_note, note_sig = self._run(donations)
 
         self.assertEqual(mock_note.s.call_count, 2)
         self.assertEqual(note_sig.call_count, 2)
@@ -1029,7 +1029,7 @@ class UpdateParticipantsHappyPathTest(TestCase):
 
     def test_queues_donation_updates_for_tracked_participant(self):
         p = _make_participant_namedtuple()
-        result, _, mock_dp, mock_dt = self._run(None, [p])
+        _, _, mock_dp, mock_dt = self._run(None, [p])
 
         mock_dp.delay.assert_called_once_with(participantID=19265)
         mock_dt.delay.assert_called_once_with(teamID=8775)
@@ -1038,7 +1038,7 @@ class UpdateParticipantsHappyPathTest(TestCase):
         untracked_event = EventModel.objects.create(id=999, tracked=False)
         untracked_team = TeamModel.objects.create(id=9999, tracked=False, event=untracked_event)
         p = _make_participant_namedtuple(event_id=999, team_id=9999, team_name='Untracked')
-        result, _, mock_dp, mock_dt = self._run(None, [p])
+        _, _, mock_dp, mock_dt = self._run(None, [p])
 
         mock_dp.delay.assert_not_called()
         mock_dt.delay.assert_not_called()
