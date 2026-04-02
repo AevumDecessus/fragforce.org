@@ -6,15 +6,22 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 from requests.exceptions import HTTPError
 
 from .admin import ParticipantModelAdmin, TeamModelAdmin
 from .helpers import el_request_sleeper
-from .models import EventModel, ParticipantModel, TeamModel
-from .tasks.donations import update_donations_participant, update_donations_team
-from .tasks.participants import update_participants
-from .tasks.teams import update_teams
+from .models import DonationModel, EventModel, ParticipantModel, TeamModel
+from .tasks.donations import (
+    update_donations_if_needed,
+    update_donations_if_needed_participant,
+    update_donations_if_needed_team,
+    update_donations_participant,
+    update_donations_team,
+)
+from .tasks.participants import update_participants, update_participants_if_needed
+from .tasks.teams import update_teams, update_teams_if_needed
 
 # tasks/__init__.py does `from .tiltify import *` which overwrites the `teams`
 # and `donations` attributes on the package with the tiltify submodules. Use
@@ -289,3 +296,302 @@ class UpdateDonationsParticipant404Test(TestCase):
                 update_donations_participant.apply(
                     kwargs={'participant_id': self.participant.id}, throw=True
                 )
+
+
+# ---------------------------------------------------------------------------
+# Frequency gating helpers
+# ---------------------------------------------------------------------------
+
+# Short frequency windows used by all gating tests so we don't need real delays
+_FREQ_MIN = timedelta(minutes=5)
+_FREQ_MAX = timedelta(minutes=15)
+
+
+def _make_event(event_id=2026, tracked=True):
+    return EventModel.objects.create(id=event_id, tracked=tracked)
+
+
+def _stamp_recent(qs):
+    """ Set last_updated to 1 minute ago - within the MIN window, so updates should be skipped. """
+    qs.update(last_updated=timezone.now() - timedelta(minutes=1))
+
+
+def _stamp_stale(qs):
+    """ Set last_updated to 1 hour ago - beyond the MAX window, so updates should be forced. """
+    qs.update(last_updated=timezone.now() - timedelta(hours=1))
+
+
+# ---------------------------------------------------------------------------
+# update_teams_if_needed gating tests
+# ---------------------------------------------------------------------------
+
+@override_settings(EL_TEAM_UPDATE_FREQUENCY_MIN=_FREQ_MIN, EL_TEAM_UPDATE_FREQUENCY_MAX=_FREQ_MAX)
+class UpdateTeamsIfNeededTest(TestCase):
+    def setUp(self):
+        self.event = _make_event()
+
+    def test_calls_update_when_no_teams_exist(self):
+        with patch.object(_teams_tasks, 'update_teams') as mock_update:
+            update_teams_if_needed.apply(throw=True)
+        mock_update.assert_called_once()
+
+    def test_skips_update_when_tracked_team_recently_updated(self):
+        team = TeamModel.objects.create(id=7001, tracked=True, event=self.event)
+        _stamp_recent(TeamModel.objects.filter(id=team.id))
+
+        with patch.object(_teams_tasks, 'update_teams') as mock_update:
+            result = update_teams_if_needed.apply(throw=True).result
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_forces_update_when_tracked_team_is_stale(self):
+        team = TeamModel.objects.create(id=7002, tracked=True, event=self.event)
+        _stamp_stale(TeamModel.objects.filter(id=team.id))
+
+        with patch.object(_teams_tasks, 'update_teams') as mock_update:
+            update_teams_if_needed.apply(throw=True)
+
+        mock_update.assert_called_once()
+
+    def test_calls_update_when_no_tracked_teams_exist(self):
+        # Untracked teams exist but none are tracked - falls through to update
+        TeamModel.objects.create(id=7003, tracked=False, event=self.event)
+
+        with patch.object(_teams_tasks, 'update_teams') as mock_update:
+            update_teams_if_needed.apply(throw=True)
+
+        mock_update.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# update_participants_if_needed gating tests
+# ---------------------------------------------------------------------------
+
+@override_settings(EL_PTCP_UPDATE_FREQUENCY_MIN=_FREQ_MIN, EL_PTCP_UPDATE_FREQUENCY_MAX=_FREQ_MAX)
+class UpdateParticipantsIfNeededTest(TestCase):
+    def setUp(self):
+        self.event = _make_event()
+
+    def test_calls_update_when_no_participants_exist(self):
+        with patch.object(_participants_tasks, 'update_participants') as mock_update:
+            update_participants_if_needed.apply(throw=True)
+        mock_update.assert_called_once()
+
+    def test_forces_update_when_tracked_participant_is_stale(self):
+        p = ParticipantModel.objects.create(id=8001, tracked=True, event=self.event)
+        _stamp_stale(ParticipantModel.objects.filter(id=p.id))
+
+        with patch.object(_participants_tasks, 'update_participants') as mock_update:
+            update_participants_if_needed.apply(throw=True)
+
+        mock_update.assert_called_once()
+
+    def test_skips_update_when_tracked_participant_recently_updated(self):
+        p = ParticipantModel.objects.create(id=8002, tracked=True, event=self.event)
+        _stamp_recent(ParticipantModel.objects.filter(id=p.id))
+
+        with patch.object(_participants_tasks, 'update_participants') as mock_update:
+            result = update_participants_if_needed.apply(throw=True).result
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_calls_update_when_no_tracked_participants_exist(self):
+        ParticipantModel.objects.create(id=8003, tracked=False, event=self.event)
+
+        with patch.object(_participants_tasks, 'update_participants') as mock_update:
+            update_participants_if_needed.apply(throw=True)
+
+        mock_update.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# update_donations_if_needed_team gating tests
+# ---------------------------------------------------------------------------
+
+@override_settings(
+    EL_DON_TEAM_UPDATE_FREQUENCY_MIN=_FREQ_MIN,
+    EL_DON_TEAM_UPDATE_FREQUENCY_MAX=_FREQ_MAX,
+    MIN_EL_TEAMID=1000,
+)
+class UpdateDonationsIfNeededTeamTest(TestCase):
+    def setUp(self):
+        self.event = _make_event()
+        self.team = TeamModel.objects.create(id=9001, tracked=True, event=self.event, numDonations=0)
+
+    def _run(self, team_id=None):
+        tid = team_id if team_id is not None else self.team.id
+        with patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]), \
+                patch.object(_donations_tasks, 'update_donations_team') as mock_update:
+            result = update_donations_if_needed_team.apply(kwargs={'teamID': tid}, throw=True).result
+        return result, mock_update
+
+    def test_returns_none_when_team_does_not_exist(self):
+        result, mock_update = self._run(team_id=99999)
+        self.assertIsNone(result)
+        mock_update.assert_not_called()
+
+    def test_returns_none_when_team_not_in_current_events(self):
+        other_event = EventModel.objects.create(id=3000, tracked=True)
+        team = TeamModel.objects.create(id=9010, tracked=True, event=other_event, numDonations=0)
+
+        with patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]), \
+                patch.object(_donations_tasks, 'update_donations_team') as mock_update:
+            result = update_donations_if_needed_team.apply(kwargs={'teamID': team.id}, throw=True).result
+
+        self.assertIsNone(result)
+        mock_update.assert_not_called()
+
+    def test_untracks_and_returns_none_when_team_id_below_minimum(self):
+        # teamID below MIN_EL_TEAMID means it's from a prior year - should be untracked silently
+        old_team = TeamModel.objects.create(id=500, tracked=True, event=self.event)
+
+        with patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]):
+            update_donations_if_needed_team.apply(kwargs={'teamID': old_team.id}, throw=True)
+
+        old_team.refresh_from_db()
+        self.assertFalse(old_team.tracked)
+
+    def test_forces_update_when_no_donations_in_db(self):
+        result, mock_update = self._run()
+        mock_update.assert_called_once_with(teamID=self.team.id)
+
+    def test_skips_update_when_donations_recently_updated(self):
+        donation = DonationModel.objects.create(id='RECENT01', team=self.team, amount=10)
+        _stamp_recent(DonationModel.objects.filter(id='RECENT01'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_returns_none_when_num_donations_is_none(self):
+        # numDonations=None means we haven't synced team data yet - don't thrash
+        self.team.numDonations = None
+        self.team.save()
+        donation = DonationModel.objects.create(id='STALE01', team=self.team, amount=10)
+        _stamp_stale(DonationModel.objects.filter(id='STALE01'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_forces_update_when_db_has_fewer_donations_than_expected(self):
+        # numDonations=5 but only 1 in DB - known gap, force update
+        self.team.numDonations = 5
+        self.team.save()
+        DonationModel.objects.create(id='GAP01', team=self.team, amount=10)
+        _stamp_stale(DonationModel.objects.filter(id='GAP01'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_called_once_with(teamID=self.team.id)
+
+    def test_forces_update_when_donations_are_stale(self):
+        self.team.numDonations = 1
+        self.team.save()
+        DonationModel.objects.create(id='STALE02', team=self.team, amount=10)
+        _stamp_stale(DonationModel.objects.filter(id='STALE02'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_called_once_with(teamID=self.team.id)
+
+
+# ---------------------------------------------------------------------------
+# update_donations_if_needed_participant gating tests
+# ---------------------------------------------------------------------------
+
+@override_settings(
+    EL_DON_PTCP_UPDATE_FREQUENCY_MIN=_FREQ_MIN,
+    EL_DON_PTCP_UPDATE_FREQUENCY_MAX=_FREQ_MAX,
+    MIN_EL_PARTICIPANTID=1000,
+)
+class UpdateDonationsIfNeededParticipantTest(TestCase):
+    def setUp(self):
+        self.event = _make_event()
+        self.participant = ParticipantModel.objects.create(
+            id=10001, tracked=True, event=self.event, numDonations=0
+        )
+
+    def _run(self, participant_id=None):
+        pid = participant_id if participant_id is not None else self.participant.id
+        with patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]), \
+                patch.object(_donations_tasks, 'update_donations_participant') as mock_update:
+            result = update_donations_if_needed_participant.apply(
+                kwargs={'participantID': pid}, throw=True
+            ).result
+        return result, mock_update
+
+    def test_returns_none_when_participant_does_not_exist(self):
+        result, mock_update = self._run(participant_id=99999)
+        self.assertIsNone(result)
+        mock_update.assert_not_called()
+
+    def test_untracks_and_returns_none_when_participant_id_below_minimum(self):
+        old_p = ParticipantModel.objects.create(id=500, tracked=True, event=self.event)
+
+        with patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]):
+            update_donations_if_needed_participant.apply(
+                kwargs={'participantID': old_p.id}, throw=True
+            )
+
+        old_p.refresh_from_db()
+        self.assertFalse(old_p.tracked)
+
+    def test_returns_none_when_participant_not_tracked(self):
+        self.participant.tracked = False
+        self.participant.save()
+
+        result, mock_update = self._run()
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_returns_none_when_participant_not_in_current_events(self):
+        other_event = EventModel.objects.create(id=4000, tracked=True)
+        p = ParticipantModel.objects.create(id=10010, tracked=True, event=other_event)
+
+        with patch.object(_donations_tasks, 'current_el_events', return_value=[self.event.id]), \
+                patch.object(_donations_tasks, 'update_donations_participant') as mock_update:
+            result = update_donations_if_needed_participant.apply(
+                kwargs={'participantID': p.id}, throw=True
+            ).result
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_forces_update_when_no_donations_in_db(self):
+        result, mock_update = self._run()
+        mock_update.assert_called_once_with(participant_id=self.participant.id)
+
+    def test_skips_update_when_donations_recently_updated(self):
+        donation = DonationModel.objects.create(id='PRECENT02', participant=self.participant, amount=5)
+        _stamp_recent(DonationModel.objects.filter(id='PRECENT02'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_not_called()
+        self.assertIsNone(result)
+
+    def test_forces_update_when_db_has_fewer_donations_than_expected(self):
+        self.participant.numDonations = 5
+        self.participant.save()
+        DonationModel.objects.create(id='PGAP01', participant=self.participant, amount=5)
+        _stamp_stale(DonationModel.objects.filter(id='PGAP01'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_called_once_with(participant_id=self.participant.id)
+
+    def test_forces_update_when_donations_are_stale(self):
+        self.participant.numDonations = 1
+        self.participant.save()
+        DonationModel.objects.create(id='PSTALE01', participant=self.participant, amount=5)
+        _stamp_stale(DonationModel.objects.filter(id='PSTALE01'))
+
+        result, mock_update = self._run()
+
+        mock_update.assert_called_once_with(participant_id=self.participant.id)
