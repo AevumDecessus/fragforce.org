@@ -459,6 +459,33 @@ class ParticipantMappingTest(TestCase):
         self.assertEqual(client.sub_by_eid(508), 'events/508/participants')
 
 
+class ParticipantFetchTest(TestCase):
+    def setUp(self):
+        self.client = Participants(request_sleeper=None, max_retries=0)
+
+    @patch('extralifeapi.base.time')
+    def test_participant_returns_namedtuple_for_single_object_response(self, mock_time):
+        # /participants/{id} returns a single object, not an array - participant() must unwrap it correctly
+        data = {
+            'participantID': 19265,
+            'displayName': 'Liam Bonham',
+            'fundraisingGoal': 8000.0,
+            'eventID': 508,
+            'teamID': 8775,
+            'isTeamCaptain': True,
+            'sumDonations': 4661.0,
+            'numDonations': 51,
+        }
+        response = _mock_response(json_data=data)
+        self.client.session.get = MagicMock(return_value=response)
+
+        result = self.client.participant(19265)
+
+        self.assertEqual(result.participantID, 19265)
+        self.assertEqual(result.displayName, 'Liam Bonham')
+        self.assertEqual(result.teamID, 8775)
+
+
 class DonationMappingTest(TestCase):
     def test_maps_all_api_fields_to_namedtuple(self):
         data = {
