@@ -27,6 +27,10 @@ else
 fi
 
 echo ""
+echo "Installing dev dependencies (pyflakes, etc.)..."
+docker compose exec -T web pipenv install --dev
+
+echo ""
 echo "Waiting for web server at http://localhost:8000/ ..."
 for i in $(seq 1 30); do
     if curl -sf http://localhost:8000/ >/dev/null 2>&1; then
