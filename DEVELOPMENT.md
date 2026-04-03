@@ -30,6 +30,8 @@ All developer scripts live in `dev/` and can be run from the repo root.
 | `dev/shell.sh [bash\|django\|db]` | Open a shell in the web container: bash (default), Django shell, or dbshell. |
 | `dev/lint.sh [dir]` | Run pyflakes across all Python files (or a specific app directory). |
 | `dev/logs.sh [service]` | Tail logs for a service. Defaults to `web`. |
+| `dev/migrate.sh [app]` | Run pending migrations (all apps, or a specific one). |
+| `dev/makemigrations.sh [app]` | Create migrations for model changes (all apps, or a specific one). |
 | `dev/runtests.sh [target]` | Run tests and format output as a GitHub-ready markdown comment. |
 | `dev/pr.sh "Title" [--base branch]` | Push branch, run tests, and open a PR with test results embedded in the body. Requires `gh`. Defaults to `dev` as the base branch. |
 
