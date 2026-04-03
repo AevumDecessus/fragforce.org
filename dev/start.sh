@@ -5,6 +5,12 @@
 
 cd "$(git rev-parse --show-toplevel)"
 
+if [[ ! -f .env ]]; then
+    echo "Error: .env file not found."
+    echo "Run: cp env.sample .env"
+    exit 1
+fi
+
 FIRST_RUN=false
 if ! docker image inspect fragforceorg-web &>/dev/null; then
     FIRST_RUN=true
@@ -25,6 +31,10 @@ if [[ "$FIRST_RUN" = true ]]; then
 else
     docker compose up -d
 fi
+
+echo ""
+echo "Installing dev dependencies (pyflakes, etc.)..."
+docker compose exec -T web pipenv install --dev
 
 echo ""
 echo "Waiting for web server at http://localhost:8000/ ..."

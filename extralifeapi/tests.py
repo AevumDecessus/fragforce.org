@@ -4,7 +4,9 @@ from unittest.mock import MagicMock, call, patch
 
 from django.test import TestCase, override_settings
 
-from .base import DonorDriveBase, FetchResponse, JSONError, NotModifiedResponse, RateLimitError
+import requests.exceptions
+
+from .base import DonorDriveBase, FetchResponse, JSONError, NetworkError, NotModifiedResponse, RateLimitError, ServerError
 from .donors import Donations
 from .participants import Participants
 from .teams import Teams
@@ -148,6 +150,121 @@ class FetchJsonRetryTest(TestCase):
         self.client.fetch_json('https://example.com/api')
 
         mock_time.sleep.assert_called_once_with(60)
+
+
+def _make_client_with_server_retries(server_max_retries=2):
+    """ Build a DonorDriveBase with server_max_retries set and rate-limit retries disabled. """
+    return DonorDriveBase(request_sleeper=None, max_retries=0, server_max_retries=server_max_retries)
+
+
+class FetchJsonServerErrorRetryTest(TestCase):
+    def setUp(self):
+        self.client = _make_client_with_server_retries(server_max_retries=2)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_retries_on_500_then_succeeds(self, mock_time):
+        server_error = _mock_response(status_code=500)
+        ok_response = _mock_response(json_data={'ok': True})
+        self.client.session.get = MagicMock(side_effect=[server_error, ok_response])
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(result.data, {'ok': True})
+        self.assertEqual(self.client.session.get.call_count, 2)
+        mock_time.sleep.assert_called_once_with(5)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_retries_on_503_then_succeeds(self, mock_time):
+        server_error = _mock_response(status_code=503)
+        ok_response = _mock_response(json_data={'ok': True})
+        self.client.session.get = MagicMock(side_effect=[server_error, ok_response])
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(result.data, {'ok': True})
+        self.assertEqual(self.client.session.get.call_count, 2)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_raises_server_error_when_retries_exhausted(self, mock_time):
+        server_error = _mock_response(status_code=500)
+        # Return 500 on every attempt (server_max_retries=2 means 3 total attempts)
+        self.client.session.get = MagicMock(return_value=server_error)
+
+        with self.assertRaises(ServerError):
+            self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(self.client.session.get.call_count, 3)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=7)
+    @patch('extralifeapi.base.time')
+    def test_sleeps_el_server_retry_after_seconds_between_5xx_retries(self, mock_time):
+        server_error = _mock_response(status_code=500)
+        ok_response = _mock_response(json_data={})
+        self.client.session.get = MagicMock(side_effect=[server_error, server_error, ok_response])
+
+        self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(mock_time.sleep.call_count, 2)
+        mock_time.sleep.assert_has_calls([call(7), call(7)])
+
+
+class FetchJsonNetworkErrorRetryTest(TestCase):
+    def setUp(self):
+        self.client = _make_client_with_server_retries(server_max_retries=2)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_retries_on_connection_error_then_succeeds(self, mock_time):
+        ok_response = _mock_response(json_data={'ok': True})
+        self.client.session.get = MagicMock(
+            side_effect=[requests.exceptions.ConnectionError('refused'), ok_response]
+        )
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(result.data, {'ok': True})
+        self.assertEqual(self.client.session.get.call_count, 2)
+        mock_time.sleep.assert_called_once_with(5)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_retries_on_timeout_then_succeeds(self, mock_time):
+        ok_response = _mock_response(json_data={'ok': True})
+        self.client.session.get = MagicMock(
+            side_effect=[requests.exceptions.Timeout('timed out'), ok_response]
+        )
+
+        result = self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(result.data, {'ok': True})
+        self.assertEqual(self.client.session.get.call_count, 2)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_raises_network_error_when_retries_exhausted(self, mock_time):
+        self.client.session.get = MagicMock(
+            side_effect=requests.exceptions.ConnectionError('refused')
+        )
+
+        with self.assertRaises(NetworkError):
+            self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(self.client.session.get.call_count, 3)
+
+    @override_settings(EL_SERVER_RETRY_AFTER_SECONDS=5)
+    @patch('extralifeapi.base.time')
+    def test_raises_network_error_on_repeated_timeouts(self, mock_time):
+        self.client.session.get = MagicMock(
+            side_effect=requests.exceptions.Timeout('timed out')
+        )
+
+        with self.assertRaises(NetworkError):
+            self.client.fetch_json('https://example.com/api')
+
+        self.assertEqual(self.client.session.get.call_count, 3)
 
 
 class FetchJsonConditionalGetTest(TestCase):

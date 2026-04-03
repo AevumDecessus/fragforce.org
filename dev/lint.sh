@@ -8,6 +8,12 @@
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Ensure containers are running
+if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
+    echo "Containers not running - starting dev stack..."
+    dev/start.sh
+fi
+
 TARGET="${1:-.}"
 FILES=$(find "$TARGET" -name "*.py" | grep -v '\.git' | grep -v migrations | tr '\n' ' ')
 
