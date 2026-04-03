@@ -114,60 +114,66 @@ class DonorDriveBase(object):
             self.log.exception(f"Failed to decode JSON with {er} for {url} | Data: {rd}", extra=e)
             raise JSONError(f"Failed to decode JSON with {er} for {url} | Data: {rd}")
 
+    def _fetch_attempt(self, url, attempt, req_headers, kwargs, e):
+        """ Make one fetch attempt. Returns FetchResponse or NotModifiedResponse on success, None to retry. """
+        self._do_sleep(url=url, data=kwargs)
+        self.log.debug(f'Going to fetch {url}', extra=e)
+        try:
+            r = self.session.get(url, data=kwargs, headers=req_headers)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as err:
+            if attempt >= self.server_max_retries:
+                raise NetworkError(f"Network error fetching {url} after {self.server_max_retries} retries: {err}")
+            self.log.warning(f"Network error fetching {url}, retrying (attempt {attempt + 1}/{self.server_max_retries}): {err}", extra=e)
+            time.sleep(settings.EL_SERVER_RETRY_AFTER_SECONDS)
+            return None
+
+        e['result'] = r
+        self.log.log(5, f'Got result from {url}', extra=e)
+
+        if r.status_code == 304:
+            self.log.debug(f"Not modified: {url}", extra=e)
+            return NotModifiedResponse()
+
+        if r.status_code == 429:
+            if attempt >= self.max_retries:
+                raise RateLimitError(f"Rate limit hit for {url} and retries exhausted")
+            sleep_secs = self._get_retry_sleep(r)
+            self.log.warning(f"Rate limited by {url}, sleeping {sleep_secs}s (attempt {attempt + 1}/{self.max_retries})", extra=e)
+            time.sleep(sleep_secs)
+            return None
+
+        if r.status_code >= 500:
+            if attempt >= self.server_max_retries:
+                raise ServerError(f"Server error {r.status_code} from {url} and retries exhausted")
+            self.log.warning(f"Server error {r.status_code} from {url}, retrying (attempt {attempt + 1}/{self.server_max_retries})", extra=e)
+            time.sleep(settings.EL_SERVER_RETRY_AFTER_SECONDS)
+            return None
+
+        r.raise_for_status()
+        self.log.log(5, f"Status of {url} is ok", extra=e)
+
+        if self.http_cache:
+            self.http_cache.store(url, r.headers)
+
+        j = self._parse_response_json(url, r, e)
+        e['data_len'] = len(j)
+        e['data'] = j
+        self.log.debug(f"Got JSON data from {url}", extra=e)
+        return FetchResponse(j, r.headers, self._parse_link_header(r.headers.get('Link', None)))
+
     def fetch_json(self, url, **kwargs):
         """ Fetch the given URL with the given data. Returns data structure from JSON or raises an error.
         Returns NotModifiedResponse if the API responds 304 Not Modified. """
         e = dict(url=url, data=kwargs)
         try:
-            # Add conditional GET headers if we have cached ETag/Last-Modified for this URL
             req_headers = {}
             if self.http_cache:
                 req_headers.update(self.http_cache.get_conditional_headers(url))
 
             for attempt in range(max(self.max_retries, self.server_max_retries) + 1):
-                self._do_sleep(url=url, data=kwargs)
-                self.log.debug(f'Going to fetch {url}', extra=e)
-                try:
-                    r = self.session.get(url, data=kwargs, headers=req_headers)
-                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as err:
-                    if attempt >= self.server_max_retries:
-                        raise NetworkError(f"Network error fetching {url} after {self.server_max_retries} retries: {err}")
-                    self.log.warning(f"Network error fetching {url}, retrying (attempt {attempt + 1}/{self.server_max_retries}): {err}", extra=e)
-                    time.sleep(settings.EL_SERVER_RETRY_AFTER_SECONDS)
-                    continue
-                e['result'] = r
-                self.log.log(5, f'Got result from {url}', extra=e)
-
-                if r.status_code == 304:
-                    self.log.debug(f"Not modified: {url}", extra=e)
-                    return NotModifiedResponse()
-
-                if r.status_code == 429:
-                    if attempt >= self.max_retries:
-                        raise RateLimitError(f"Rate limit hit for {url} and retries exhausted")
-                    sleep_secs = self._get_retry_sleep(r)
-                    self.log.warning(f"Rate limited by {url}, sleeping {sleep_secs}s (attempt {attempt + 1}/{self.max_retries})", extra=e)
-                    time.sleep(sleep_secs)
-                    continue
-
-                if r.status_code >= 500:
-                    if attempt >= self.server_max_retries:
-                        raise ServerError(f"Server error {r.status_code} from {url} and retries exhausted")
-                    self.log.warning(f"Server error {r.status_code} from {url}, retrying (attempt {attempt + 1}/{self.server_max_retries})", extra=e)
-                    time.sleep(settings.EL_SERVER_RETRY_AFTER_SECONDS)
-                    continue
-
-                r.raise_for_status()
-                self.log.log(5, f"Status of {url} is ok", extra=e)
-
-                if self.http_cache:
-                    self.http_cache.store(url, r.headers)
-
-                j = self._parse_response_json(url, r, e)
-                e['data_len'] = len(j)
-                e['data'] = j
-                self.log.debug(f"Got JSON data from {url}", extra=e)
-                return FetchResponse(j, r.headers, self._parse_link_header(r.headers.get('Link', None)))
+                result = self._fetch_attempt(url, attempt, req_headers, kwargs, e)
+                if result is not None:
+                    return result
         finally:
             self.log.log(5, f"Done fetching {url}", extra=e)
 
