@@ -8,6 +8,12 @@
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Ensure containers are running
+if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
+    echo "Containers not running - starting dev stack..."
+    dev/start.sh
+fi
+
 case "${1:-bash}" in
     django)
         docker compose exec web pipenv run python manage.py shell
