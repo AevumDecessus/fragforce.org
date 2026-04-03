@@ -5,6 +5,7 @@
 #   dev/shell.sh            # bash shell with pipenv activated
 #   dev/shell.sh django     # Django manage.py shell
 #   dev/shell.sh db         # Django dbshell (postgres)
+#   dev/shell.sh hc         # Django dbshell for the HC database
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -21,11 +22,14 @@ case "${1:-bash}" in
     db)
         docker compose exec web pipenv run python manage.py dbshell
         ;;
+    hc)
+        docker compose exec web pipenv run python manage.py dbshell --database hc
+        ;;
     bash|"")
         docker compose exec web pipenv shell
         ;;
     *)
-        echo "Usage: dev/shell.sh [bash|django|db]"
+        echo "Usage: dev/shell.sh [bash|django|db|hc]"
         exit 1
         ;;
 esac
