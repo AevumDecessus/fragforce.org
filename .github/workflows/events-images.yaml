@@ -53,10 +53,3 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
 
-      - name: Trigger Watchtower deploy
-        if: ${{ secrets.WATCHTOWER_URL != '' }}
-        uses: darnfish/watchtower-update@v3.3
-        with:
-          url: "${{ secrets.WATCHTOWER_URL }}"
-          api_token: "${{ secrets.WATCHTOWER_API_TOKEN }}"
-          images: "ghcr.io/${{ github.repository_owner }}/${{ env.IMG_NAME }}-${{ matrix.dockerfile }}"
