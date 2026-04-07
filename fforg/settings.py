@@ -477,7 +477,7 @@ SOCIAL_AUTH_PIPELINE = (
     'evtsignup.pipeline.save_discord_id',
 )
 
-LOGIN_URL = '/auth/login/discord-oauth2/'
+LOGIN_URL = '/auth/login/discord/'
 LOGIN_REDIRECT_URL = '/'
 
 TEST_RUNNER = 'fforg.test_runner.GitHashTestRunner'
