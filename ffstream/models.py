@@ -5,16 +5,16 @@ from django.db import models
 
 
 class Key(models.Model):
-    id = models.CharField(max_length=255, primary_key=True, blank=True)
-    name = models.SlugField(max_length=256, unique=True)
-    # owner = models.ForeignKey('ffsfdc.Contact', on_delete=models.CASCADE, null=False, blank=False)
+    id = models.CharField(max_length=255, primary_key=True, blank=True, verbose_name="Stream Key")
+    name = models.SlugField(max_length=256, unique=True, verbose_name="Display Name")
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Owner")
     created = models.DateTimeField(verbose_name="Created At", null=True, blank=True, auto_now_add=True)
     modified = models.DateTimeField(null=False, auto_now=True, blank=True, verbose_name="Modified At")
     is_live = models.BooleanField(null=False, default=False, blank=True, verbose_name="Is Live")
     livestream = models.BooleanField(null=False, default=False, blank=True,
                                      verbose_name="Can be used to live stream via reflector directly")
-    active = models.BooleanField(default=True, blank=True, verbose_name="Can be used for streaming")
-    pull = models.BooleanField(default=False, blank=True, verbose_name="Can be used for pulling streaming")
+    active = models.BooleanField(default=True, blank=True, verbose_name="Can be used for Super Stream events")
+    pull = models.BooleanField(default=False, blank=True, verbose_name="Can be used as a viewer key to watch streams")
 
     def __str__(self):
         return self.name

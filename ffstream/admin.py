@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 
-from .models import *
+from .models import Key, Stream
 
 
 class ActiveBooleanDefault(SimpleListFilter):
@@ -44,8 +44,9 @@ class KeyAdmin(admin.ModelAdmin):
     )
     ordering = ("-modified",)
     sortable_by = (
-        "name",
-        "id",
+        "display_name",
+        "stream_key",
+        "owner",
         "created",
         "modified",
         "is_live",
@@ -54,8 +55,9 @@ class KeyAdmin(admin.ModelAdmin):
         "pull",
     )
     list_display = (
-        "name",
-        "id",
+        "display_name",
+        "stream_key",
+        "owner",
         "created",
         "modified",
         "is_live",
@@ -66,7 +68,16 @@ class KeyAdmin(admin.ModelAdmin):
     search_fields = (
         "name",
         "id",
+        "owner__username",
     )
+
+    @admin.display(description="Display Name")
+    def display_name(self, obj):
+        return obj.name
+
+    @admin.display(description="Stream Key")
+    def stream_key(self, obj):
+        return obj.id
 
 
 # Register your models here.

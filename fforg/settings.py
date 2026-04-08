@@ -443,11 +443,11 @@ LOGGING = {
         },
         'root': {
             'handlers': ['console'],
-            # 'level': 'INFO'
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
         '': {
             'handlers': ['console'],
-            # 'level': 'INFO'
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
     }
 }
@@ -461,6 +461,7 @@ AUTHENTICATION_BACKENDS = [
 SOCIAL_AUTH_DISCORD_KEY = os.environ.get('DISCORD_CLIENT_ID', '')
 SOCIAL_AUTH_DISCORD_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
 SOCIAL_AUTH_DISCORD_SCOPE = ['identify', 'email', 'guilds']
+SOCIAL_AUTH_DISCORD_AUTH_EXTRA_ARGUMENTS = {'prompt': 'consent'}
 DISCORD_REQUIRED_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '164136635762606081')
 
 SOCIAL_AUTH_PIPELINE = (
@@ -478,7 +479,8 @@ SOCIAL_AUTH_PIPELINE = (
 )
 
 LOGIN_URL = '/auth/login/discord/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/stream/my-keys'
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/login-error'
 
 TEST_RUNNER = 'fforg.test_runner.GitHashTestRunner'
 DJANGO_WORKFLOWS = {

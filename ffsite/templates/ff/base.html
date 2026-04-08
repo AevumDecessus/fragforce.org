@@ -63,12 +63,23 @@
                     <a class="nav-link" href="{% url 'contact' %}">Contact</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://fragforce.lightning.force.com" rel="noopener noreferrer"
-                       target="_blank">Fragforce Org Login</a>
+                    <a class="nav-link" href="https://discord.gg/fragforce" rel="noopener noreferrer" target="_blank">Discord</a>
+                </li>
+                {% if user.is_authenticated %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'my-keys' %}">My Stream Keys</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="https://discord.gg/fragforce"rel="noopener noreferrer" target="_blank">Discord</a>
+                    <form method="post" action="{% url 'logout' %}" class="d-inline m-0 p-0">
+                        {% csrf_token %}
+                        <button type="submit" class="nav-link btn btn-link p-0">Logout</button>
+                    </form>
                 </li>
+                {% else %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'social:begin' 'discord' %}">Login</a>
+                </li>
+                {% endif %}
             </ul>
             <ul class="navbar-nav navbar-right">
                 <!-- Left -->
