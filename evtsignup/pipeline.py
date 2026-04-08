@@ -4,9 +4,9 @@ import requests
 from django.conf import settings
 from social_core.exceptions import AuthForbidden
 
-log = logging.getLogger(__name__)
-
 from evtsignup.models import DiscordEventUser
+
+log = logging.getLogger(__name__)
 
 
 def require_discord_guild(backend, response, *args, **kwargs):
@@ -17,7 +17,6 @@ def require_discord_guild(backend, response, *args, **kwargs):
     if not required_guild_id:
         return
     access_token = kwargs.get('access_token') or (response or {}).get('access_token', '')
-    log.info("require_discord_guild: access_token present=%s length=%d", bool(access_token), len(access_token))
     guilds = requests.get(
         'https://discord.com/api/users/@me/guilds',
         headers={'Authorization': f'Bearer {access_token}'},
@@ -27,9 +26,8 @@ def require_discord_guild(backend, response, *args, **kwargs):
         log.warning("Discord guilds API returned unexpected response: %r", guilds)
         raise AuthForbidden(backend)
     guild_ids = {str(g['id']) for g in guilds}
-    log.info("Discord guild IDs for user: %s", guild_ids)
     if str(required_guild_id) not in guild_ids:
-        log.warning("User not in required guild %s, found: %s", required_guild_id, guild_ids)
+        log.warning("User not in required guild %s", required_guild_id)
         raise AuthForbidden(backend)
 
 
