@@ -15,11 +15,13 @@ Including another URLconf
 """
 
 from django.contrib import admin
+from django.contrib.auth.views import LogoutView
 from django.urls import path, include
 from django_workflow_engine import workflow_urls
 
 urlpatterns = [
     path('auth/', include('social_django.urls', namespace='social')),
+    path('auth/logout/', LogoutView.as_view(next_page='/'), name='logout'),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
     path('admin/', admin.site.urls),
     path('d/', include('ffdonations.urls')),
