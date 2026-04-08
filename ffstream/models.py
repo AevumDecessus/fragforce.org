@@ -16,11 +16,6 @@ class Key(models.Model):
     active = models.BooleanField(default=True, blank=True, verbose_name="Can be used for streaming")
     pull = models.BooleanField(default=False, blank=True, verbose_name="Can be used for pulling streaming")
 
-    class Meta:
-        permissions = [
-            ("view_own_stream_key", "Can view their own stream key"),
-        ]
-
     def __str__(self):
         return self.name
 
