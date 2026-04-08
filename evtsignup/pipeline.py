@@ -24,14 +24,13 @@ def require_discord_guild(backend, response, *args, **kwargs):
 
 
 def save_discord_id(backend, user, response, *args, **kwargs):
-    """Populate DiscordEventUser with the Discord user ID and display name after login."""
+    """Populate DiscordEventUser with the Discord user ID after login."""
     if backend.name != 'discord-oauth2':
         return
     discord_id = str(response.get('id', ''))
     if not discord_id:
         return
-    display_name = response.get('global_name') or response.get('username', '')
     DiscordEventUser.objects.update_or_create(
         user=user,
-        defaults={'discord_id': discord_id, 'discord_display_name': display_name},
+        defaults={'discord_id': discord_id},
     )
