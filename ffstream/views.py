@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, Http404
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
@@ -5,7 +6,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import *
+from .models import Key, Stream
 
 
 @csrf_exempt
@@ -129,6 +130,12 @@ def view(request, key=None):
         streams=Stream.objects.filter(is_live=True).order_by("-created").all(),
         liveKeys=Key.objects.filter(is_live=True, active=True).order_by("-created").all(),
     ))
+
+
+@login_required
+def my_keys(request):
+    keys = Key.objects.filter(owner=request.user).order_by("name")
+    return render(request, 'ffstream/my_keys.html', {'keys': keys})
 
 
 def goto(request, key, name):

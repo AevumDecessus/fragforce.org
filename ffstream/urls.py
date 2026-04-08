@@ -16,7 +16,7 @@ Including another URLconf
 
 from django.urls import path
 
-from .views import *
+from .views import goto, my_keys, play, start, start_livestream, start_srt, stop, view
 
 urlpatterns = [
     path('pub/start', start, name='pub-start'),
@@ -26,4 +26,5 @@ urlpatterns = [
     path('play/<str:key>/<str:name>', goto, name='goto'),
     path('view/<str:key>', view, name='view'),
     path('pub/stop', stop, name='pub-stop'),
+    path('my-keys', my_keys, name='my-keys'),
 ]

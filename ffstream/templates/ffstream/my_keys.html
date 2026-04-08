@@ -1,0 +1,35 @@
+{% extends "ff/base.html" %}
+
+{% block title %}My Stream Keys{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+    <div class="col">
+        <h2>My Stream Keys</h2>
+        {% if keys %}
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Display Name</th>
+                        <th>Stream Key</th>
+                        <th>Super Stream Events</th>
+                        <th>Direct Livestream</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key in keys %}
+                    <tr>
+                        <td>{{ key.name }}</td>
+                        <td><code>{{ key.id }}</code></td>
+                        <td>{% if key.active %}Yes{% else %}No{% endif %}</td>
+                        <td>{% if key.livestream %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>You don't have any stream keys assigned to your account. Contact an admin to get one set up.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
