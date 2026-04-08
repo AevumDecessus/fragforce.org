@@ -34,3 +34,20 @@ class MyKeysViewTest(TestCase):
         response = self.client.get(reverse('my-keys'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "don't have any stream keys")
+
+
+class LogoutViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='streamer', password='pass')
+
+    def test_logout_redirects_to_home(self):
+        self.client.login(username='streamer', password='pass')
+        response = self.client.get(reverse('logout'))
+        self.assertRedirects(response, '/')
+
+    def test_logout_ends_session(self):
+        self.client.login(username='streamer', password='pass')
+        self.client.get(reverse('logout'))
+        response = self.client.get(reverse('my-keys'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/auth/login/discord/', response['Location'])
