@@ -5,7 +5,7 @@
 {% block body %}
 <div class="row mt-4">
     <div class="col">
-        <h2>My Stream Keys</h2>
+        <h2>Stream Keys for {% if user.discordeventuser.discord_display_name %}{{ user.discordeventuser.discord_display_name }}{% else %}{{ user.username }}{% endif %}</h2>
         {% if keys %}
             <table class="table table-dark">
                 <thead>

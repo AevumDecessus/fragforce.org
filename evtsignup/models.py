@@ -7,6 +7,7 @@ class DiscordEventUser(models.Model):
     """ Created if a User maps to a discord ID """
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     discord_id = models.CharField(max_length=255, blank=False, db_index=True, null=False, unique=True)
+    discord_display_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Discord Display Name")
 
 
 class SalesforceEventUser(models.Model):
