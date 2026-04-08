@@ -478,7 +478,8 @@ SOCIAL_AUTH_PIPELINE = (
 )
 
 LOGIN_URL = '/auth/login/discord/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/stream/my-keys'
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/login-error'
 
 TEST_RUNNER = 'fforg.test_runner.GitHashTestRunner'
 DJANGO_WORKFLOWS = {

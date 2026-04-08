@@ -41,3 +41,8 @@ def stream(request):
     return render(request, 'ff/root/stream.html', {
         "stream_url": settings.STREAM_URL,
     })
+
+
+def login_error(request):
+    """ Shown when a user fails OAuth login - typically not a Fragforce guild member """
+    return render(request, 'ff/root/login_error.html', {})
