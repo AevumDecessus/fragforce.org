@@ -7,7 +7,7 @@ from evtsignup.models import DiscordEventUser
 
 def require_discord_guild(backend, response, *args, **kwargs):
     """Deny login if the user is not a member of the required Discord guild."""
-    if backend.name != 'discord-oauth2':
+    if backend.name != 'discord':
         return
     required_guild_id = settings.DISCORD_REQUIRED_GUILD_ID
     if not required_guild_id:
@@ -25,7 +25,7 @@ def require_discord_guild(backend, response, *args, **kwargs):
 
 def save_discord_id(backend, user, response, *args, **kwargs):
     """Populate DiscordEventUser with the Discord user ID after login."""
-    if backend.name != 'discord-oauth2':
+    if backend.name != 'discord':
         return
     discord_id = str(response.get('id', ''))
     if not discord_id:
