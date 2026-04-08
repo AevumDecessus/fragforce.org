@@ -22,7 +22,7 @@ class RequireDiscordGuildTest(TestCase):
         guilds = [{'id': '164136635762606081'}, {'id': '999'}]
         with patch('evtsignup.pipeline.requests.get') as mock_get:
             mock_get.return_value.json.return_value = guilds
-            result = require_discord_guild(backend, {}, access_token='token')
+            result = require_discord_guild(backend, {'access_token': 'token'})
         self.assertIsNone(result)
 
     @override_settings(DISCORD_REQUIRED_GUILD_ID='164136635762606081')
@@ -32,17 +32,17 @@ class RequireDiscordGuildTest(TestCase):
         with patch('evtsignup.pipeline.requests.get') as mock_get:
             mock_get.return_value.json.return_value = guilds
             with self.assertRaises(AuthForbidden):
-                require_discord_guild(backend, {}, access_token='token')
+                require_discord_guild(backend, {'access_token': 'token'})
 
     def test_passes_when_no_guild_id_configured(self):
         backend = _make_backend()
         with self.settings(DISCORD_REQUIRED_GUILD_ID=''):
-            result = require_discord_guild(backend, {}, access_token='token')
+            result = require_discord_guild(backend, {'access_token': 'token'})
         self.assertIsNone(result)
 
     def test_skips_non_discord_backends(self):
         backend = _make_backend(name='google-oauth2')
-        result = require_discord_guild(backend, {}, access_token='token')
+        result = require_discord_guild(backend, {'access_token': 'token'})
         self.assertIsNone(result)
 
     @override_settings(DISCORD_REQUIRED_GUILD_ID='164136635762606081')
@@ -51,7 +51,7 @@ class RequireDiscordGuildTest(TestCase):
         with patch('evtsignup.pipeline.requests.get') as mock_get:
             mock_get.return_value.json.return_value = {'error': 'unauthorized'}
             with self.assertRaises(AuthForbidden):
-                require_discord_guild(backend, {}, access_token='token')
+                require_discord_guild(backend, {'access_token': 'token'})
 
 
 class SaveDiscordIdTest(TestCase):
