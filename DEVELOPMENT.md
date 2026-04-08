@@ -10,7 +10,12 @@
 
 ```bash
 cp env.sample .env
-# Optionally generate a secret key and set SECRET_KEY in .env
+```
+
+Generate a secret key and add it to `.env`:
+
+```bash
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(50))" >> .env
 ```
 
 Then start the dev stack - on first run this will build the containers, run migrations, load the HC schema, and collect static files:
