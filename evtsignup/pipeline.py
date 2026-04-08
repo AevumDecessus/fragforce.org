@@ -17,6 +17,7 @@ def require_discord_guild(backend, response, *args, **kwargs):
     if not required_guild_id:
         return
     access_token = kwargs.get('access_token', '')
+    log.info("require_discord_guild: access_token present=%s length=%d", bool(access_token), len(access_token))
     guilds = requests.get(
         'https://discord.com/api/users/@me/guilds',
         headers={'Authorization': f'Bearer {access_token}'},
