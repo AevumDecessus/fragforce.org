@@ -70,7 +70,10 @@
                     <a class="nav-link" href="{% url 'my-keys' %}">My Stream Keys</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{% url 'logout' %}">Logout</a>
+                    <form method="post" action="{% url 'logout' %}" class="d-inline m-0 p-0">
+                        {% csrf_token %}
+                        <button type="submit" class="nav-link btn btn-link p-0">Logout</button>
+                    </form>
                 </li>
                 {% else %}
                 <li class="nav-item">

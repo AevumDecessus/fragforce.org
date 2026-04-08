@@ -1,9 +1,11 @@
 from django.conf import settings
 from django.shortcuts import render
 from django.views.decorators.cache import cache_page
+from django.views.decorators.http import require_safe
 from django.views.decorators.vary import vary_on_cookie
 
 
+@require_safe
 @cache_page(settings.VIEW_SITE_STATIC_CACHE)
 @vary_on_cookie
 def home(request):
@@ -12,6 +14,7 @@ def home(request):
 
 
 # @cache_page(settings.VIEW_SITE_STATIC_CACHE)
+@require_safe
 def donate(request):
     """ How to donate page """
     from ..utils import random_contact
@@ -20,6 +23,7 @@ def donate(request):
     })
 
 
+@require_safe
 @cache_page(settings.VIEW_SITE_STATIC_CACHE)
 @vary_on_cookie
 def join(request):
@@ -27,6 +31,7 @@ def join(request):
     return render(request, 'ff/root/join.html', {})
 
 
+@require_safe
 @cache_page(settings.VIEW_SITE_STATIC_CACHE)
 @vary_on_cookie
 def contact(request):
@@ -34,6 +39,7 @@ def contact(request):
     return render(request, 'ff/root/contact.html', {})
 
 
+@require_safe
 @cache_page(settings.VIEW_SITE_STATIC_CACHE)
 @vary_on_cookie
 def stream(request):
@@ -43,6 +49,7 @@ def stream(request):
     })
 
 
+@require_safe
 def login_error(request):
     """ Shown when a user fails OAuth login - typically not a Fragforce guild member """
     return render(request, 'ff/root/login_error.html', {})

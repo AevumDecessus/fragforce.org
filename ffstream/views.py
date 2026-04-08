@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_safe
 
 from .models import Key, Stream
 
@@ -120,6 +120,7 @@ def play(request):
     return HttpResponseForbidden("inactive stream")
 
 
+@require_safe
 def view(request, key=None):
     pullKey = get_object_or_404(Key, id=key)
     if not pullKey.pull:
@@ -132,12 +133,14 @@ def view(request, key=None):
     ))
 
 
+@require_safe
 @login_required
 def my_keys(request):
     keys = Key.objects.filter(owner=request.user).order_by("name")
     return render(request, 'ffstream/my_keys.html', {'keys': keys})
 
 
+@require_safe
 def goto(request, key, name):
     pullKey = get_object_or_404(Key, id=key)
     if not pullKey.pull:
