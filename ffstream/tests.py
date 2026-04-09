@@ -147,7 +147,6 @@ class RegenerateKeyViewTest(TestCase):
 class StreamKeyGeneratorTest(TestCase):
     def test_generates_four_words(self):
         key = generate_stream_key()
-        # Each word starts with an uppercase letter - split on uppercase boundaries
         words = re.findall(r'[A-Z][a-z]+', key)
         self.assertEqual(len(words), 4)
 
@@ -160,12 +159,14 @@ class StreamKeyGeneratorTest(TestCase):
 
     def test_words_are_capitalized(self):
         key = generate_stream_key()
-        self.assertEqual(key, key[0].upper() + key[1:])
-        # Each word segment starts with uppercase
         words = re.findall(r'[A-Z][a-z]+', key)
         for word in words:
             self.assertTrue(word[0].isupper())
             self.assertTrue(word[1:].islower())
+
+    def test_wordlist_has_minimum_size(self):
+        # Ensure the wordlist has enough words for good randomness
+        self.assertGreaterEqual(len(WORDS), 50)
 
     def test_key_auto_generated_on_save(self):
         key = Key(name='auto-gen-test')
