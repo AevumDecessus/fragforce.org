@@ -4,22 +4,25 @@
 # Usage:
 #   dev/pr.sh "PR title"
 #   dev/pr.sh "PR title" --base some-branch   # default base is dev
+#   dev/pr.sh "PR title" --body "Description" # add a description above test results
 #   dev/pr.sh "PR title" --skip-tests         # push and open PR without running tests
 
 cd "$(git rev-parse --show-toplevel)"
 
 TITLE="${1}"
 if [[ -z "$TITLE" ]]; then
-    echo "Usage: dev/pr.sh \"PR title\" [--base <branch>] [--skip-tests]"
+    echo "Usage: dev/pr.sh \"PR title\" [--base <branch>] [--body \"description\"] [--skip-tests]"
     exit 1
 fi
 shift
 
 BASE="dev"
 SKIP_TESTS=false
+BODY=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base) BASE="$2"; shift 2 ;;
+        --body) BODY="$2"; shift 2 ;;
         --skip-tests) SKIP_TESTS=true; shift ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
@@ -51,7 +54,11 @@ gh pr create \
     --title "$TITLE" \
     --base "$BASE" \
     --body "$(cat <<EOF
-## Test Results
+${BODY:+${BODY}
+
+---
+
+}## Test Results
 
 ${TEST_OUTPUT:-"Tests skipped."}
 EOF

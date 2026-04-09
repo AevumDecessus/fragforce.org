@@ -2,11 +2,12 @@ from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 
 from .models import Key, Stream
+from .wordlist import generate_stream_key
 
 
 class ActiveBooleanDefault(SimpleListFilter):
-    title = "Can be used for streaming"
-    parameter_name = 'active'
+    title = "Can be used for Super Stream events"
+    parameter_name = 'superstream'
 
     def lookups(self, request, model_admin):
         return (
@@ -37,7 +38,7 @@ class KeyAdmin(admin.ModelAdmin):
     date_hierarchy = "modified"
     list_filter = (
         "is_live",
-        # "active",
+        # "superstream",
         ActiveBooleanDefault,
         "livestream",
         "pull",
@@ -50,7 +51,7 @@ class KeyAdmin(admin.ModelAdmin):
         "created",
         "modified",
         "is_live",
-        "active",
+        "superstream",
         "livestream",
         "pull",
     )
@@ -61,7 +62,7 @@ class KeyAdmin(admin.ModelAdmin):
         "created",
         "modified",
         "is_live",
-        "active",
+        "superstream",
         "livestream",
         "pull",
     )
@@ -70,6 +71,26 @@ class KeyAdmin(admin.ModelAdmin):
         "id",
         "owner__username",
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ('id',)
+        return ()
+
+    def get_exclude(self, request, obj=None):
+        if not obj:
+            return ('id',)
+        return ()
+
+    @admin.action(description="Regenerate stream key")
+    def regenerate_key(self, request, queryset):
+        for key in queryset:
+            candidate = generate_stream_key()
+            while Key.objects.filter(id=candidate).exists():
+                candidate = generate_stream_key()
+            Key.objects.filter(pk=key.pk).update(id=candidate)
+
+    actions = ['regenerate_key']
 
     @admin.display(description="Display Name")
     def display_name(self, obj):

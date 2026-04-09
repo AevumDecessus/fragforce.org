@@ -40,9 +40,16 @@ h3 {
     color: #46a4e8;
 }
 
-a.nav-link {
+a.nav-link, button.nav-link {
     font-family: 'oswald', sans-serif;
     font-size: 115%;
+}
+
+button.nav-link {
+    background: none;
+    border: none;
+    color: #46a4e8 !important;
+    cursor: pointer;
 }
 
 .nav-item {

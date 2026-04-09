@@ -5,30 +5,80 @@
 {% block body %}
 <div class="row mt-4">
     <div class="col">
-        <h2>Stream Keys for {{ user.username }}</h2>
-        {% if keys %}
+        <h2>My Stream Key</h2>
+        {% if key %}
             <table class="table table-dark">
                 <thead>
                     <tr>
                         <th>Display Name</th>
                         <th>Stream Key</th>
-                        <th>Super Stream Events</th>
+                        <th>Super Stream</th>
                         <th>Direct Livestream</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for key in keys %}
                     <tr>
                         <td>{{ key.name }}</td>
                         <td><code>{{ key.id }}</code></td>
-                        <td>{% if key.active %}Yes{% else %}No{% endif %}</td>
+                        <td>{% if key.superstream %}Yes{% else %}No{% endif %}</td>
                         <td>{% if key.livestream %}Yes{% else %}No{% endif %}</td>
                     </tr>
-                    {% endfor %}
                 </tbody>
             </table>
+            <form method="post" action="{% url 'regenerate-key' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-warning">Regenerate Stream Key</button>
+            </form>
+            {% if key.superstream %}
+            <div class="mt-4">
+                <h3>OBS Setup - Super Stream</h3>
+                <p>In OBS, go to <strong>Settings &rarr; Stream</strong> and configure:</p>
+                <table class="table table-dark">
+                    <tbody>
+                        <tr>
+                            <th>Service</th>
+                            <td>Custom</td>
+                        </tr>
+                        <tr>
+                            <th>Server</th>
+                            <td><code>srt://stream.fragforce.org:1935?streamid=publish/{{ key.id }}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Stream Key</th>
+                            <td><em>Leave blank</em></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% if key.livestream %}
+            <div class="mt-4">
+                <h3>OBS Setup - Direct Livestream</h3>
+                <p>In OBS, go to <strong>Settings &rarr; Stream</strong> and configure:</p>
+                <table class="table table-dark">
+                    <tbody>
+                        <tr>
+                            <th>Service</th>
+                            <td>Custom</td>
+                        </tr>
+                        <tr>
+                            <th>Server</th>
+                            <td><code>rtmp://twitch_live.fragforce.org/fraglive/</code></td>
+                        </tr>
+                        <tr>
+                            <th>Stream Key</th>
+                            <td><code>{{ key.id }}</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
         {% else %}
-            <p>You don't have any stream keys assigned to your account. Contact an admin to get one set up.</p>
+            <p>You don't have a stream key yet.</p>
+            <form method="post" action="{% url 'generate-key' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Generate Stream Key</button>
+            </form>
         {% endif %}
     </div>
 </div>

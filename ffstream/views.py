@@ -1,12 +1,13 @@
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, Http404
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_safe
 
 from .models import Key, Stream
+from .wordlist import generate_stream_key
 
 
 @csrf_exempt
@@ -14,8 +15,10 @@ from .models import Key, Stream
 def start_srt(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, id=skey)
-    if not key.active:
-        return HttpResponseForbidden("inactive key")
+    if not key.owner:
+        return HttpResponseForbidden("no owner assigned")
+    if not key.superstream:
+        return HttpResponseForbidden("key not enabled for Super Stream events")
     # if key.is_live:
     # What to do if already live?
 
@@ -35,8 +38,8 @@ def start_srt(request):
 def start_livestream(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, id=skey)
-    if not key.active:
-        return HttpResponseForbidden("inactive key")
+    if not key.owner:
+        return HttpResponseForbidden("no owner assigned")
     if not key.livestream:
         return HttpResponseForbidden("Key not allowed to livestream")
     key.is_live = True
@@ -54,8 +57,10 @@ def start_livestream(request):
 def start(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, id=skey)
-    if not key.active:
-        return HttpResponseForbidden("inactive key")
+    if not key.owner:
+        return HttpResponseForbidden("no owner assigned")
+    if not key.superstream:
+        return HttpResponseForbidden("key not enabled for Super Stream events")
     # if key.is_live:
     # What to do if already live?
 
@@ -104,7 +109,7 @@ def play(request):
     streamKey = get_object_or_404(Key, name=request.POST['name'])
 
     # Allow users to pull their own stream if they want
-    if pullKey.pk == streamKey.pk and streamKey.active:
+    if pullKey.pk == streamKey.pk and streamKey.superstream:
         for stream in streamKey.stream_set.filter(is_live=True, ended=None).order_by("-started"):
             return HttpResponseRedirect(stream.stream_key())
 
@@ -136,8 +141,31 @@ def view(request, key=None):
 @require_safe
 @login_required
 def my_keys(request):
-    keys = Key.objects.filter(owner=request.user).order_by("name")
-    return render(request, 'ffstream/my_keys.html', {'keys': keys})
+    key = Key.objects.filter(owner=request.user).first()
+    return render(request, 'ffstream/my_keys.html', {'key': key})
+
+
+@require_POST
+@login_required
+def generate_key(request):
+    if not Key.objects.filter(owner=request.user).exists():
+        Key.objects.create(
+            name=request.user.username,
+            owner=request.user,
+            superstream=False,
+            livestream=False,
+        )
+    return redirect('my-keys')
+
+
+@require_POST
+@login_required
+def regenerate_key(request):
+    candidate = generate_stream_key()
+    while Key.objects.filter(id=candidate).exists():
+        candidate = generate_stream_key()
+    Key.objects.filter(owner=request.user).update(id=candidate)
+    return redirect('my-keys')
 
 
 @require_safe
