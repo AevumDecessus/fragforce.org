@@ -40,7 +40,7 @@ class MyKeysViewTest(TestCase):
         self.client.login(username='nokeys', password=TEST_PASSWORD)
         response = self.client.get(reverse('my-keys'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "don't have any stream keys")
+        self.assertContains(response, "don't have a stream key yet")
 
 
 class LogoutViewTest(TestCase):
@@ -63,6 +63,85 @@ class LogoutViewTest(TestCase):
         self.client.login(username='streamer', password=TEST_PASSWORD)
         response = self.client.get(reverse('logout'))
         self.assertEqual(response.status_code, 405)
+
+
+class GenerateKeyViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='streamer', password=TEST_PASSWORD)
+
+    def test_generates_key_for_user(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=self.user)
+        self.assertIsNotNone(key)
+
+    def test_generated_key_has_superstream_false(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=self.user)
+        self.assertFalse(key.superstream)
+
+    def test_generated_key_has_livestream_false(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=self.user)
+        self.assertFalse(key.livestream)
+
+    def test_does_not_generate_second_key(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        self.client.post(reverse('generate-key'))
+        self.assertEqual(Key.objects.filter(owner=self.user).count(), 1)
+
+    def test_redirects_to_my_keys(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        response = self.client.post(reverse('generate-key'))
+        self.assertRedirects(response, reverse('my-keys'))
+
+    def test_rejects_get(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        response = self.client.get(reverse('generate-key'))
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_login(self):
+        response = self.client.post(reverse('generate-key'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/auth/login/discord/', response['Location'])
+
+
+class RegenerateKeyViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='streamer', password=TEST_PASSWORD)
+        self.key = Key.objects.create(name='streamer', owner=self.user, superstream=False, livestream=False)
+
+    def test_regenerates_key(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        old_id = self.key.id
+        self.client.post(reverse('regenerate-key'))
+        new_key = Key.objects.get(owner=self.user)
+        self.assertNotEqual(new_key.id, old_id)
+
+    def test_does_not_change_superstream_or_livestream(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('regenerate-key'))
+        new_key = Key.objects.get(owner=self.user)
+        self.assertFalse(new_key.superstream)
+        self.assertFalse(new_key.livestream)
+
+    def test_redirects_to_my_keys(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        response = self.client.post(reverse('regenerate-key'))
+        self.assertRedirects(response, reverse('my-keys'))
+
+    def test_rejects_get(self):
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        response = self.client.get(reverse('regenerate-key'))
+        self.assertEqual(response.status_code, 405)
+
+    def test_requires_login(self):
+        response = self.client.post(reverse('regenerate-key'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/auth/login/discord/', response['Location'])
 
 
 class StreamKeyGeneratorTest(TestCase):

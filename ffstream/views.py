@@ -1,12 +1,13 @@
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, Http404
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_safe
 
 from .models import Key, Stream
+from .wordlist import generate_stream_key
 
 
 @csrf_exempt
@@ -140,8 +141,28 @@ def view(request, key=None):
 @require_safe
 @login_required
 def my_keys(request):
-    keys = Key.objects.filter(owner=request.user).order_by("name")
-    return render(request, 'ffstream/my_keys.html', {'keys': keys})
+    key = Key.objects.filter(owner=request.user).first()
+    return render(request, 'ffstream/my_keys.html', {'key': key})
+
+
+@require_POST
+@login_required
+def generate_key(request):
+    if not Key.objects.filter(owner=request.user).exists():
+        Key.objects.create(
+            name=request.user.username,
+            owner=request.user,
+            superstream=False,
+            livestream=False,
+        )
+    return redirect('my-keys')
+
+
+@require_POST
+@login_required
+def regenerate_key(request):
+    Key.objects.filter(owner=request.user).update(id=generate_stream_key())
+    return redirect('my-keys')
 
 
 @require_safe
