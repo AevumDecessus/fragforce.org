@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.db import connection, transaction
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.shortcuts import render
@@ -164,7 +165,14 @@ def regenerate_key(request):
     candidate = generate_stream_key()
     while Key.objects.filter(id=candidate).exists():
         candidate = generate_stream_key()
-    Key.objects.filter(owner=request.user).update(id=candidate)
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL DEFERRED")
+        old_key = Key.objects.filter(owner=request.user).first()
+        if old_key:
+            old_id = old_key.pk
+            Key.objects.filter(pk=old_id).update(id=candidate)
+            Stream.objects.filter(key_id=old_id).update(key_id=candidate)
     return redirect('my-keys')
 
 

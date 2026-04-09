@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
+from django.db import connection, transaction
 
 from .models import Key, Stream
 from .wordlist import generate_stream_key
@@ -88,7 +89,12 @@ class KeyAdmin(admin.ModelAdmin):
             candidate = generate_stream_key()
             while Key.objects.filter(id=candidate).exists():
                 candidate = generate_stream_key()
-            Key.objects.filter(pk=key.pk).update(id=candidate)
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET CONSTRAINTS ALL DEFERRED")
+                old_id = key.pk
+                Key.objects.filter(pk=old_id).update(id=candidate)
+                Stream.objects.filter(key_id=old_id).update(key_id=candidate)
 
     actions = ['regenerate_key']
 
