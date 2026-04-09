@@ -17,7 +17,7 @@ def start_srt(request):
     if not key.owner:
         return HttpResponseForbidden("no owner assigned")
     if not key.superstream:
-        return HttpResponseForbidden("inactive key")
+        return HttpResponseForbidden("key not enabled for Super Stream events")
     # if key.is_live:
     # What to do if already live?
 
@@ -39,8 +39,6 @@ def start_livestream(request):
     key = get_object_or_404(Key, id=skey)
     if not key.owner:
         return HttpResponseForbidden("no owner assigned")
-    if not key.superstream:
-        return HttpResponseForbidden("inactive key")
     if not key.livestream:
         return HttpResponseForbidden("Key not allowed to livestream")
     key.is_live = True
@@ -61,7 +59,7 @@ def start(request):
     if not key.owner:
         return HttpResponseForbidden("no owner assigned")
     if not key.superstream:
-        return HttpResponseForbidden("inactive key")
+        return HttpResponseForbidden("key not enabled for Super Stream events")
     # if key.is_live:
     # What to do if already live?
 
