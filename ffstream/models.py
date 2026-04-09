@@ -15,7 +15,7 @@ class Key(models.Model):
     is_live = models.BooleanField(null=False, default=False, blank=True, verbose_name="Is Live")
     livestream = models.BooleanField(null=False, default=False, blank=True,
                                      verbose_name="Can be used to live stream via reflector directly")
-    superstream = models.BooleanField(default=True, blank=True, verbose_name="Can be used for Super Stream events")
+    superstream = models.BooleanField(null=False, default=False, blank=True, verbose_name="Can be used for Super Stream events")
     pull = models.BooleanField(default=False, blank=True, verbose_name="Can be used as a viewer key to watch streams")
 
     def save(self, *args, **kwargs):
