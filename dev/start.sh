@@ -23,9 +23,6 @@ if [[ "$FIRST_RUN" = true ]]; then
     echo "Waiting for migrations to finish..."
     docker compose wait init
     echo ""
-    echo "Loading HC schema (best-effort — may fail if HC database is not configured)..."
-    docker compose exec -T web bash -c 'cat /code/dev/ffsfdc.sql | pipenv run python manage.py dbshell --database hc' || true
-    echo ""
     echo "Running collectstatic..."
     docker compose exec -T web pipenv run python manage.py collectstatic --no-input
 else
