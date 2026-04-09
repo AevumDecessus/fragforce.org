@@ -14,7 +14,9 @@ from .models import Key, Stream
 def start_srt(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, id=skey)
-    if not key.active:
+    if not key.owner:
+        return HttpResponseForbidden("no owner assigned")
+    if not key.superstream:
         return HttpResponseForbidden("inactive key")
     # if key.is_live:
     # What to do if already live?
@@ -35,7 +37,9 @@ def start_srt(request):
 def start_livestream(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, id=skey)
-    if not key.active:
+    if not key.owner:
+        return HttpResponseForbidden("no owner assigned")
+    if not key.superstream:
         return HttpResponseForbidden("inactive key")
     if not key.livestream:
         return HttpResponseForbidden("Key not allowed to livestream")
@@ -54,7 +58,9 @@ def start_livestream(request):
 def start(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, id=skey)
-    if not key.active:
+    if not key.owner:
+        return HttpResponseForbidden("no owner assigned")
+    if not key.superstream:
         return HttpResponseForbidden("inactive key")
     # if key.is_live:
     # What to do if already live?
@@ -104,7 +110,7 @@ def play(request):
     streamKey = get_object_or_404(Key, name=request.POST['name'])
 
     # Allow users to pull their own stream if they want
-    if pullKey.pk == streamKey.pk and streamKey.active:
+    if pullKey.pk == streamKey.pk and streamKey.superstream:
         for stream in streamKey.stream_set.filter(is_live=True, ended=None).order_by("-started"):
             return HttpResponseRedirect(stream.stream_key())
 

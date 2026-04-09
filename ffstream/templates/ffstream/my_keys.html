@@ -21,7 +21,7 @@
                     <tr>
                         <td>{{ key.name }}</td>
                         <td><code>{{ key.id }}</code></td>
-                        <td>{% if key.active %}Yes{% else %}No{% endif %}</td>
+                        <td>{% if key.superstream %}Yes{% else %}No{% endif %}</td>
                         <td>{% if key.livestream %}Yes{% else %}No{% endif %}</td>
                     </tr>
                     {% endfor %}

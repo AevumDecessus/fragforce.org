@@ -6,8 +6,8 @@ from .wordlist import generate_stream_key
 
 
 class ActiveBooleanDefault(SimpleListFilter):
-    title = "Can be used for streaming"
-    parameter_name = 'active'
+    title = "Can be used for Super Stream events"
+    parameter_name = 'superstream'
 
     def lookups(self, request, model_admin):
         return (
@@ -38,7 +38,7 @@ class KeyAdmin(admin.ModelAdmin):
     date_hierarchy = "modified"
     list_filter = (
         "is_live",
-        # "active",
+        # "superstream",
         ActiveBooleanDefault,
         "livestream",
         "pull",
@@ -51,7 +51,7 @@ class KeyAdmin(admin.ModelAdmin):
         "created",
         "modified",
         "is_live",
-        "active",
+        "superstream",
         "livestream",
         "pull",
     )
@@ -62,7 +62,7 @@ class KeyAdmin(admin.ModelAdmin):
         "created",
         "modified",
         "is_live",
-        "active",
+        "superstream",
         "livestream",
         "pull",
     )
