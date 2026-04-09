@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 
 from .models import Key, Stream
+from .wordlist import generate_stream_key
 
 
 class ActiveBooleanDefault(SimpleListFilter):
@@ -70,6 +71,23 @@ class KeyAdmin(admin.ModelAdmin):
         "id",
         "owner__username",
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ('id',)
+        return ()
+
+    def get_exclude(self, request, obj=None):
+        if not obj:
+            return ('id',)
+        return ()
+
+    @admin.action(description="Regenerate stream key")
+    def regenerate_key(self, request, queryset):
+        for key in queryset:
+            Key.objects.filter(pk=key.pk).update(id=generate_stream_key())
+
+    actions = ['regenerate_key']
 
     @admin.display(description="Display Name")
     def display_name(self, obj):

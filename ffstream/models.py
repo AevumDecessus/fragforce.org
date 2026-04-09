@@ -3,6 +3,8 @@ import uuid
 from django.conf import settings
 from django.db import models
 
+from ffstream.wordlist import generate_stream_key
+
 
 class Key(models.Model):
     id = models.CharField(max_length=255, primary_key=True, blank=True, verbose_name="Stream Key")
@@ -15,6 +17,11 @@ class Key(models.Model):
                                      verbose_name="Can be used to live stream via reflector directly")
     active = models.BooleanField(default=True, blank=True, verbose_name="Can be used for Super Stream events")
     pull = models.BooleanField(default=False, blank=True, verbose_name="Can be used as a viewer key to watch streams")
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = generate_stream_key()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
