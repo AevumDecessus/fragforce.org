@@ -168,6 +168,25 @@ class StreamKeyGeneratorTest(TestCase):
         # Ensure the wordlist has enough words for good randomness
         self.assertGreaterEqual(len(WORDS), 50)
 
+    def test_generated_key_is_unique(self):
+        from unittest.mock import patch
+        # Force a collision on the first attempt
+        existing = Key.objects.create(name='collision-test', id='CollisionKeyValue')
+        call_count = {'n': 0}
+        original = __import__('ffstream.wordlist', fromlist=['generate_stream_key']).generate_stream_key
+
+        def patched():
+            call_count['n'] += 1
+            if call_count['n'] == 1:
+                return existing.id  # collide first
+            return original()
+
+        with patch('ffstream.models.generate_stream_key', patched):
+            key = Key(name='new-key')
+            key.save()
+        self.assertNotEqual(key.id, existing.id)
+        self.assertGreaterEqual(call_count['n'], 2)
+
     def test_key_auto_generated_on_save(self):
         key = Key(name='auto-gen-test')
         key.save()

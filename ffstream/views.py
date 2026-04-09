@@ -161,7 +161,10 @@ def generate_key(request):
 @require_POST
 @login_required
 def regenerate_key(request):
-    Key.objects.filter(owner=request.user).update(id=generate_stream_key())
+    candidate = generate_stream_key()
+    while Key.objects.filter(id=candidate).exists():
+        candidate = generate_stream_key()
+    Key.objects.filter(owner=request.user).update(id=candidate)
     return redirect('my-keys')
 
 

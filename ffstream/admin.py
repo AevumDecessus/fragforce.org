@@ -85,7 +85,10 @@ class KeyAdmin(admin.ModelAdmin):
     @admin.action(description="Regenerate stream key")
     def regenerate_key(self, request, queryset):
         for key in queryset:
-            Key.objects.filter(pk=key.pk).update(id=generate_stream_key())
+            candidate = generate_stream_key()
+            while Key.objects.filter(id=candidate).exists():
+                candidate = generate_stream_key()
+            Key.objects.filter(pk=key.pk).update(id=candidate)
 
     actions = ['regenerate_key']
 

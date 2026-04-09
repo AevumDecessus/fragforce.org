@@ -20,7 +20,10 @@ class Key(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.id:
-            self.id = generate_stream_key()
+            candidate = generate_stream_key()
+            while Key.objects.filter(id=candidate).exists():
+                candidate = generate_stream_key()
+            self.id = candidate
         super().save(*args, **kwargs)
 
     def __str__(self):
