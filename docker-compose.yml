@@ -3,6 +3,7 @@ services:
     build: .
     volumes:
       - .:/code
+    env_file: .env
     command: pipenv run python manage.py runserver 0.0.0.0:8000
     ports:
       - "8000:8000"
@@ -16,7 +17,7 @@ services:
       - redis
       - init
   db:
-    image: postgres
+    image: postgres:18.3
     restart: unless-stopped
     environment:
       TZ: "Etc/UTC"
