@@ -13,26 +13,19 @@ class ActiveBooleanDefault(SimpleListFilter):
     def lookups(self, request, model_admin):
         return (
             ('all', 'All'),
-            (1, 'Yes'),
-            (None, 'No')
+            ('yes', 'Yes'),
+            ('no', 'No'),
         )
 
-    def choices(self, changelist):
-        for lookup, title in self.lookup_choices:
-            yield {
-                'selected': self.value() == (str(lookup) if lookup else lookup),
-                'query_string': changelist.get_query_string({self.parameter_name: lookup}, []),
-                'display': title,
-            }
-
     def queryset(self, request, queryset):
-        if self.value():
-            if self.value() == "all":
-                return queryset
-            else:
-                return queryset.filter(**{self.parameter_name: self.value()})
-        elif self.value() is None:
-            return queryset.filter(**{self.parameter_name: True})
+        if self.value() == 'all':
+            return queryset
+        elif self.value() == 'yes':
+            return queryset.filter(superstream=True)
+        elif self.value() == 'no':
+            return queryset.filter(superstream=False)
+        # Default: show only superstream-enabled keys
+        return queryset.filter(superstream=True)
 
 
 class KeyAdmin(admin.ModelAdmin):
