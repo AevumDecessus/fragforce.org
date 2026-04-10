@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.db import connection, transaction
+from django.utils.html import format_html
 
 from .models import Key, Stream
 from .wordlist import generate_stream_key
@@ -72,6 +73,17 @@ class KeyAdmin(admin.ModelAdmin):
         "id",
         "owner__username",
     )
+
+    def get_deleted_objects(self, objs, request):
+        # Default implementation enumerates all related objects which is unusable
+        # with millions of Stream records. Show a count summary instead.
+        deleted_objects = []
+        for key in objs:
+            stream_count = Stream.objects.filter(key=key).count()
+            deleted_objects.append(
+                format_html('{} (and {} related stream records)', str(key), stream_count)
+            )
+        return deleted_objects, {}, set(), []
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
