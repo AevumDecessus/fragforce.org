@@ -1,35 +1,52 @@
 #!/usr/bin/env bash
-# Push the current branch, run the test suite, and open a PR with test results in the body.
+# Run the test suite, push the current branch, and open a PR with test results in the body.
 #
 # Usage:
 #   dev/pr.sh "PR title"
 #   dev/pr.sh "PR title" --base some-branch   # default base is dev
+#   dev/pr.sh "PR title" --body "Description" # add a description above test results
+#   dev/pr.sh "PR title" --skip-tests         # push and open PR without running tests
 
 cd "$(git rev-parse --show-toplevel)"
 
 TITLE="${1}"
 if [[ -z "$TITLE" ]]; then
-    echo "Usage: dev/pr.sh \"PR title\" [--base <branch>]"
+    echo "Usage: dev/pr.sh \"PR title\" [--base <branch>] [--body \"description\"] [--skip-tests]"
     exit 1
 fi
 shift
 
 BASE="dev"
+SKIP_TESTS=false
+BODY=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base) BASE="$2"; shift 2 ;;
+        --body) BODY="$2"; shift 2 ;;
+        --skip-tests) SKIP_TESTS=true; shift ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-echo "Pushing $BRANCH to origin..."
-git push -u origin "$BRANCH"
+if [[ "$SKIP_TESTS" = false ]]; then
+    echo "Running tests..."
+    TEST_OUTPUT=$(dev/runtests.sh 2>/dev/null)
+    TEST_EXIT=$?
+
+    if [[ $TEST_EXIT -ne 0 ]]; then
+        echo ""
+        echo "Tests failed - aborting. Use --skip-tests to open a PR anyway."
+        echo ""
+        echo "$TEST_OUTPUT"
+        exit $TEST_EXIT
+    fi
+fi
 
 echo ""
-echo "Running tests..."
-TEST_OUTPUT=$(dev/runtests.sh 2>/dev/null)
+echo "Pushing $BRANCH to origin..."
+git push -u origin "$BRANCH"
 
 echo ""
 echo "Creating PR..."
@@ -37,8 +54,12 @@ gh pr create \
     --title "$TITLE" \
     --base "$BASE" \
     --body "$(cat <<EOF
-## Test Results
+${BODY:+${BODY}
 
-$TEST_OUTPUT
+---
+
+}## Test Results
+
+${TEST_OUTPUT:-"Tests skipped."}
 EOF
-)" "$@"
+)"

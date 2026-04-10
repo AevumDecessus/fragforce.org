@@ -8,6 +8,12 @@
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Ensure containers are running
+if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
+    echo "Containers not running - starting dev stack..."
+    dev/start.sh
+fi
+
 COMMIT=$(git rev-parse --short HEAD)
 DATE=$(date +%Y-%m-%d)
 FENCE='```'

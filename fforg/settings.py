@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'memoize',
     "oauth2_provider",
+    "social_django",
     "django_workflow_engine",
     'ffsite',
     'ffdonations',
@@ -84,6 +85,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
                 'ffsite.ctx.common_org',
                 'ffdonations.ctx.donations',
             ],
@@ -268,9 +271,9 @@ VIEW_SITE_SITE_CACHE = int(os.environ.get('VIEW_SITE_SITE_CACHE', 60))
 VIEW_SITE_STATIC_CACHE = int(os.environ.get('VIEW_SITE_STATIC_CACHE', 300))
 
 # Extra Life Limits and Data
-EXTRALIFE_TEAMID = int(os.environ.get('EXTRALIFE_TEAMID', 0))
-MIN_EL_TEAMID = int(os.environ.get('MIN_EL_TEAMID', 63271))
-MIN_EL_PARTICIPANTID = int(os.environ.get('MIN_EL_PARTICIPANTID', 508522))
+EXTRALIFE_TEAMID = int(os.environ.get('EXTRALIFE_TEAMID', 73149))
+MIN_EL_TEAMID = int(os.environ.get('MIN_EL_TEAMID', 73127))
+MIN_EL_PARTICIPANTID = int(os.environ.get('MIN_EL_PARTICIPANTID', 565075))
 
 # Min time between team updates - Only cares about tracked teams!
 EL_TEAM_UPDATE_FREQUENCY_MIN = timedelta(minutes=int(os.environ.get('EL_TEAM_UPDATE_FREQUENCY_MIN', 5)))
@@ -309,6 +312,10 @@ EL_REQUEST_MIN_TIME = timedelta(seconds=int(os.environ.get('EL_REQUEST_MIN_TIME_
 EL_RETRY_AFTER_SECONDS = int(os.environ.get('EL_RETRY_AFTER_SECONDS', 60))
 # Number of times to retry a request after a 429
 EL_MAX_RETRIES = int(os.environ.get('EL_MAX_RETRIES', 3))
+# Seconds to wait between retries on 5xx or network errors
+EL_SERVER_RETRY_AFTER_SECONDS = int(os.environ.get('EL_SERVER_RETRY_AFTER_SECONDS', 600))
+# Number of times to retry a request on 5xx or network errors (7 total attempts)
+EL_SERVER_MAX_RETRIES = int(os.environ.get('EL_SERVER_MAX_RETRIES', 6))
 # Min time between EL REST requests for any given URL
 EL_REQUEST_MIN_TIME_URL = timedelta(seconds=int(os.environ.get('EL_REQUEST_MIN_TIME_URL_SECONDS', 15)))
 # Min time between request for any given remote host
@@ -436,15 +443,44 @@ LOGGING = {
         },
         'root': {
             'handlers': ['console'],
-            # 'level': 'INFO'
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
         '': {
             'handlers': ['console'],
-            # 'level': 'INFO'
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
         },
     }
 }
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+AUTHENTICATION_BACKENDS = [
+    'social_core.backends.discord.DiscordOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+SOCIAL_AUTH_DISCORD_KEY = os.environ.get('DISCORD_CLIENT_ID', '')
+SOCIAL_AUTH_DISCORD_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
+SOCIAL_AUTH_DISCORD_SCOPE = ['identify', 'email', 'guilds']
+SOCIAL_AUTH_DISCORD_AUTH_EXTRA_ARGUMENTS = {'prompt': 'consent'}
+DISCORD_REQUIRED_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '164136635762606081')
+
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'evtsignup.pipeline.require_discord_guild',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+    'evtsignup.pipeline.save_discord_id',
+)
+
+LOGIN_URL = '/auth/login/discord/'
+LOGIN_REDIRECT_URL = '/stream/my-keys'
+SOCIAL_AUTH_LOGIN_ERROR_URL = '/login-error'
 
 TEST_RUNNER = 'fforg.test_runner.GitHashTestRunner'
 DJANGO_WORKFLOWS = {

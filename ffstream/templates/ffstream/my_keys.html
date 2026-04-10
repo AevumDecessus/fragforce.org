@@ -1,0 +1,128 @@
+{% extends "ff/base.html" %}
+
+{% block title %}My Stream Keys{% endblock %}
+
+{% block head %}
+<style>
+.copy-btn {
+    background: none;
+    border: 1px solid #46a4e8;
+    color: #46a4e8;
+    border-radius: 3px;
+    padding: 0 6px;
+    margin-left: 6px;
+    font-size: 80%;
+    cursor: pointer;
+    vertical-align: middle;
+}
+.copy-btn:hover { background-color: #46a4e8; color: #253137; }
+.copy-btn.copied { border-color: #28a745; color: #28a745; }
+.copy-btn.copied:hover { background-color: #28a745; color: #253137; }
+</style>
+<script>
+function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function() {
+            btn.textContent = 'Copy';
+            btn.classList.remove('copied');
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+    <div class="col">
+        <h2>My Stream Key</h2>
+        {% if key %}
+            <table class="table table-dark">
+                <thead>
+                    <tr>
+                        <th>Display Name</th>
+                        <th>Stream Key</th>
+                        <th>Super Stream</th>
+                        <th>Direct Livestream</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ key.name }}</td>
+                        <td>
+                            <code>{{ key.id }}</code>
+                            <button class="copy-btn" onclick="copyToClipboard('{{ key.id }}', this)">Copy</button>
+                        </td>
+                        <td>{% if key.superstream %}Yes{% else %}No{% endif %}</td>
+                        <td>{% if key.livestream %}Yes{% else %}No{% endif %}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <form method="post" action="{% url 'regenerate-key' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-warning">Regenerate Stream Key</button>
+            </form>
+            {% if key.superstream %}
+            <div class="mt-4">
+                <h3>OBS Setup - Super Stream</h3>
+                <p>In OBS, go to <strong>Settings &rarr; Stream</strong> and configure:</p>
+                <table class="table table-dark">
+                    <tbody>
+                        <tr>
+                            <th>Service</th>
+                            <td>Custom</td>
+                        </tr>
+                        <tr>
+                            <th>Server</th>
+                            <td>
+                                <code>srt://stream.fragforce.org:1935?streamid=publish/{{ key.id }}</code>
+                                <button class="copy-btn" onclick="copyToClipboard('srt://stream.fragforce.org:1935?streamid=publish/{{ key.id }}', this)">Copy</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Stream Key</th>
+                            <td><em>Leave blank</em></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            {% if key.livestream %}
+            <div class="mt-4">
+                <h3>OBS Setup - Direct Livestream</h3>
+                <p>In OBS, go to <strong>Settings &rarr; Stream</strong> and configure:</p>
+                <table class="table table-dark">
+                    <tbody>
+                        <tr>
+                            <th>Service</th>
+                            <td>Custom</td>
+                        </tr>
+                        <tr>
+                            <th>Server</th>
+                            <td>
+                                <code>rtmp://twitch_live.fragforce.org/fraglive/</code>
+                                <button class="copy-btn" onclick="copyToClipboard('rtmp://twitch_live.fragforce.org/fraglive/', this)">Copy</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Stream Key</th>
+                            <td>
+                                <code>{{ key.id }}</code>
+                                <button class="copy-btn" onclick="copyToClipboard('{{ key.id }}', this)">Copy</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        {% else %}
+            <p>You don't have a stream key yet.</p>
+            <form method="post" action="{% url 'generate-key' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Generate Stream Key</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
