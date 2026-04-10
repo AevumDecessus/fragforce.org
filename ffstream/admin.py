@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
-from django.db import connection, transaction
+from django.utils.html import format_html
 
 from .models import Key, Stream
 from .wordlist import generate_stream_key
@@ -13,26 +13,19 @@ class ActiveBooleanDefault(SimpleListFilter):
     def lookups(self, request, model_admin):
         return (
             ('all', 'All'),
-            (1, 'Yes'),
-            (None, 'No')
+            ('yes', 'Yes'),
+            ('no', 'No'),
         )
 
-    def choices(self, changelist):
-        for lookup, title in self.lookup_choices:
-            yield {
-                'selected': self.value() == (str(lookup) if lookup else lookup),
-                'query_string': changelist.get_query_string({self.parameter_name: lookup}, []),
-                'display': title,
-            }
-
     def queryset(self, request, queryset):
-        if self.value():
-            if self.value() == "all":
-                return queryset
-            else:
-                return queryset.filter(**{self.parameter_name: self.value()})
-        elif self.value() is None:
-            return queryset.filter(**{self.parameter_name: True})
+        if self.value() == 'all':
+            return queryset
+        elif self.value() == 'yes':
+            return queryset.filter(superstream=True)
+        elif self.value() == 'no':
+            return queryset.filter(superstream=False)
+        # Default: show only superstream-enabled keys
+        return queryset.filter(superstream=True)
 
 
 class KeyAdmin(admin.ModelAdmin):
@@ -47,7 +40,7 @@ class KeyAdmin(admin.ModelAdmin):
     ordering = ("-modified",)
     sortable_by = (
         "display_name",
-        "stream_key",
+        "stream_key_display",
         "owner",
         "created",
         "modified",
@@ -58,7 +51,7 @@ class KeyAdmin(admin.ModelAdmin):
     )
     list_display = (
         "display_name",
-        "stream_key",
+        "stream_key_display",
         "owner",
         "created",
         "modified",
@@ -69,32 +62,38 @@ class KeyAdmin(admin.ModelAdmin):
     )
     search_fields = (
         "name",
-        "id",
+        "stream_key",
         "owner__username",
     )
 
+    def get_deleted_objects(self, objs, request):
+        # Default implementation enumerates all related objects which is unusable
+        # with millions of Stream records. Show a count summary instead.
+        deleted_objects = []
+        for key in objs:
+            stream_count = Stream.objects.filter(key=key).count()
+            deleted_objects.append(
+                format_html('{} (and {} related stream records)', str(key), stream_count)
+            )
+        return deleted_objects, {}, set(), []
+
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return ('id',)
+            return ('stream_key',)
         return ()
 
     def get_exclude(self, request, obj=None):
         if not obj:
-            return ('id',)
+            return ('stream_key',)
         return ()
 
     @admin.action(description="Regenerate stream key")
     def regenerate_key(self, request, queryset):
         for key in queryset:
             candidate = generate_stream_key()
-            while Key.objects.filter(id=candidate).exists():
+            while Key.objects.filter(stream_key=candidate).exists():
                 candidate = generate_stream_key()
-            with transaction.atomic():
-                with connection.cursor() as cursor:
-                    cursor.execute("SET CONSTRAINTS ALL DEFERRED")
-                old_id = key.pk
-                Key.objects.filter(pk=old_id).update(id=candidate)
-                Stream.objects.filter(key_id=old_id).update(key_id=candidate)
+            Key.objects.filter(pk=key.pk).update(stream_key=candidate)
 
     actions = ['regenerate_key']
 
@@ -103,8 +102,8 @@ class KeyAdmin(admin.ModelAdmin):
         return obj.name
 
     @admin.display(description="Stream Key")
-    def stream_key(self, obj):
-        return obj.id
+    def stream_key_display(self, obj):
+        return obj.stream_key
 
 
 # Register your models here.

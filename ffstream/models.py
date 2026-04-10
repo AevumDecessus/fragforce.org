@@ -7,7 +7,7 @@ from ffstream.wordlist import generate_stream_key
 
 
 class Key(models.Model):
-    id = models.CharField(max_length=255, primary_key=True, blank=True, verbose_name="Stream Key")
+    stream_key = models.CharField(max_length=255, unique=True, blank=True, verbose_name="Stream Key")
     name = models.SlugField(max_length=256, unique=True, verbose_name="Display Name")
     owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Owner")
     created = models.DateTimeField(verbose_name="Created At", null=True, blank=True, auto_now_add=True)
@@ -19,11 +19,11 @@ class Key(models.Model):
     pull = models.BooleanField(default=False, blank=True, verbose_name="Can be used as a viewer key to watch streams")
 
     def save(self, *args, **kwargs):
-        if not self.id:
+        if not self.stream_key:
             candidate = generate_stream_key()
-            while Key.objects.filter(id=candidate).exists():
+            while Key.objects.filter(stream_key=candidate).exists():
                 candidate = generate_stream_key()
-            self.id = candidate
+            self.stream_key = candidate
         super().save(*args, **kwargs)
 
     def __str__(self):

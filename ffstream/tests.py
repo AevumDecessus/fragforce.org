@@ -16,8 +16,8 @@ class MyKeysViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='streamer', password=TEST_PASSWORD)
         self.other_user = User.objects.create_user(username='other', password=TEST_PASSWORD)
-        self.key = Key.objects.create(id='secret-key-1', name='streamer', owner=self.user)
-        self.other_key = Key.objects.create(id='secret-key-2', name='other', owner=self.other_user)
+        self.key = Key.objects.create(stream_key='secret-key-1', name='streamer', owner=self.user)
+        self.other_key = Key.objects.create(stream_key='secret-key-2', name='other', owner=self.other_user)
 
     def test_redirects_unauthenticated_users(self):
         response = self.client.get(reverse('my-keys'))
@@ -110,7 +110,7 @@ class GenerateKeyViewTest(TestCase):
 
     def test_claims_existing_unowned_key_with_matching_name(self):
         # Pre-existing key with the user's username but no owner (legacy data)
-        existing = Key.objects.create(name='streamer', id='OldLegacyKeyValue')
+        existing = Key.objects.create(name='streamer', stream_key='OldLegacyKeyValue')
         self.client.login(username='streamer', password=TEST_PASSWORD)
         self.client.post(reverse('generate-key'))
         existing.refresh_from_db()
@@ -126,6 +126,24 @@ class GenerateKeyViewTest(TestCase):
         key = Key.objects.get(owner=self.user)
         self.assertNotEqual(key.name, 'streamer')
 
+    def test_username_with_period_produces_valid_slug_name(self):
+        # Discord usernames can contain periods which are not valid in SlugField
+        user = User.objects.create_user(username='aevum.decessus', password=TEST_PASSWORD)
+        self.client.login(username='aevum.decessus', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=user)
+        self.assertNotIn('.', key.name)
+
+    def test_username_with_period_claims_dotted_legacy_key(self):
+        # A key may already exist with the dotted username from before slugification
+        user = User.objects.create_user(username='aevum.decessus', password=TEST_PASSWORD)
+        existing = Key.objects.create(name='aevum.decessus', stream_key='LegacyDottedKey')
+        self.client.login(username='aevum.decessus', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=user)
+        self.assertEqual(key.pk, existing.pk)
+        self.assertNotIn('.', key.name)
+
 
 class RegenerateKeyViewTest(TestCase):
     def setUp(self):
@@ -134,10 +152,10 @@ class RegenerateKeyViewTest(TestCase):
 
     def test_regenerates_key(self):
         self.client.login(username='streamer', password=TEST_PASSWORD)
-        old_id = self.key.id
+        old_stream_key = self.key.stream_key
         self.client.post(reverse('regenerate-key'))
         new_key = Key.objects.get(owner=self.user)
-        self.assertNotEqual(new_key.id, old_id)
+        self.assertNotEqual(new_key.stream_key, old_stream_key)
 
     def test_does_not_change_superstream_or_livestream(self):
         self.client.login(username='streamer', password=TEST_PASSWORD)
@@ -189,34 +207,34 @@ class StreamKeyGeneratorTest(TestCase):
     def test_generated_key_is_unique(self):
         from unittest.mock import patch
         # Force a collision on the first attempt
-        existing = Key.objects.create(name='collision-test', id='CollisionKeyValue')
+        existing = Key.objects.create(name='collision-test', stream_key='CollisionKeyValue')
         call_count = {'n': 0}
         original = __import__('ffstream.wordlist', fromlist=['generate_stream_key']).generate_stream_key
 
         def patched():
             call_count['n'] += 1
             if call_count['n'] == 1:
-                return existing.id  # collide first
+                return existing.stream_key  # collide first
             return original()
 
         with patch('ffstream.models.generate_stream_key', patched):
             key = Key(name='new-key')
             key.save()
-        self.assertNotEqual(key.id, existing.id)
+        self.assertNotEqual(key.stream_key, existing.stream_key)
         self.assertGreaterEqual(call_count['n'], 2)
 
-    def test_key_auto_generated_on_save(self):
+    def test_stream_key_auto_generated_on_save(self):
         key = Key(name='auto-gen-test')
         key.save()
-        self.assertIsNotNone(key.id)
-        self.assertNotEqual(key.id, '')
-        words = re.findall(r'[A-Z][a-z]+', key.id)
+        self.assertIsNotNone(key.stream_key)
+        self.assertNotEqual(key.stream_key, '')
+        words = re.findall(r'[A-Z][a-z]+', key.stream_key)
         self.assertEqual(len(words), 4)
 
-    def test_existing_id_not_overwritten_on_save(self):
-        key = Key(name='manual-key', id='ManualKeyValue')
+    def test_existing_stream_key_not_overwritten_on_save(self):
+        key = Key(name='manual-key', stream_key='ManualKeyValue')
         key.save()
-        self.assertEqual(key.id, 'ManualKeyValue')
+        self.assertEqual(key.stream_key, 'ManualKeyValue')
 
 
 class KeyOwnerConstraintTest(TestCase):
@@ -242,37 +260,37 @@ class StreamingViewOwnerCheckTest(TestCase):
         self.unowned_key = Key.objects.create(name='unowned', superstream=True, livestream=True)
 
     def test_start_blocks_ownerless_key(self):
-        response = self.client.post(reverse('pub-start'), {'name': self.unowned_key.id})
+        response = self.client.post(reverse('pub-start'), {'name': self.unowned_key.stream_key})
         self.assertEqual(response.status_code, 403)
         self.assertIn(b'no owner', response.content)
 
     def test_start_srt_blocks_ownerless_key(self):
-        response = self.client.post(reverse('pub-start-srt'), {'name': self.unowned_key.id})
+        response = self.client.post(reverse('pub-start-srt'), {'name': self.unowned_key.stream_key})
         self.assertEqual(response.status_code, 403)
         self.assertIn(b'no owner', response.content)
 
     def test_start_livestream_blocks_ownerless_key(self):
-        response = self.client.post(reverse('pub-start-livestream'), {'name': self.unowned_key.id})
+        response = self.client.post(reverse('pub-start-livestream'), {'name': self.unowned_key.stream_key})
         self.assertEqual(response.status_code, 403)
         self.assertIn(b'no owner', response.content)
 
     def test_start_blocks_non_superstream_key(self):
         self.owned_key.superstream = False
         self.owned_key.save()
-        response = self.client.post(reverse('pub-start'), {'name': self.owned_key.id})
+        response = self.client.post(reverse('pub-start'), {'name': self.owned_key.stream_key})
         self.assertEqual(response.status_code, 403)
         self.assertIn(b'Super Stream', response.content)
 
     def test_start_livestream_does_not_check_superstream(self):
         self.owned_key.superstream = False
         self.owned_key.save()
-        response = self.client.post(reverse('pub-start-livestream'), {'name': self.owned_key.id})
+        response = self.client.post(reverse('pub-start-livestream'), {'name': self.owned_key.stream_key})
         # Should not be blocked by superstream - proceeds past that check
         self.assertNotIn(b'Super Stream', response.content)
 
     def test_start_livestream_blocks_non_livestream_key(self):
         self.owned_key.livestream = False
         self.owned_key.save()
-        response = self.client.post(reverse('pub-start-livestream'), {'name': self.owned_key.id})
+        response = self.client.post(reverse('pub-start-livestream'), {'name': self.owned_key.stream_key})
         self.assertEqual(response.status_code, 403)
         self.assertIn(b'not allowed to livestream', response.content)
