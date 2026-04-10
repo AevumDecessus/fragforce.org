@@ -51,8 +51,8 @@ function copyToClipboard(text, btn) {
                     <tr>
                         <td>{{ key.name }}</td>
                         <td>
-                            <code>{{ key.id }}</code>
-                            <button class="copy-btn" onclick="copyToClipboard('{{ key.id }}', this)">Copy</button>
+                            <code>{{ key.stream_key }}</code>
+                            <button class="copy-btn" onclick="copyToClipboard('{{ key.stream_key }}', this)">Copy</button>
                         </td>
                         <td>{% if key.superstream %}Yes{% else %}No{% endif %}</td>
                         <td>{% if key.livestream %}Yes{% else %}No{% endif %}</td>
@@ -76,8 +76,8 @@ function copyToClipboard(text, btn) {
                         <tr>
                             <th>Server</th>
                             <td>
-                                <code>srt://stream.fragforce.org:1935?streamid=publish/{{ key.id }}</code>
-                                <button class="copy-btn" onclick="copyToClipboard('srt://stream.fragforce.org:1935?streamid=publish/{{ key.id }}', this)">Copy</button>
+                                <code>srt://stream.fragforce.org:1935?streamid=publish/{{ key.stream_key }}</code>
+                                <button class="copy-btn" onclick="copyToClipboard('srt://stream.fragforce.org:1935?streamid=publish/{{ key.stream_key }}', this)">Copy</button>
                             </td>
                         </tr>
                         <tr>
@@ -108,8 +108,8 @@ function copyToClipboard(text, btn) {
                         <tr>
                             <th>Stream Key</th>
                             <td>
-                                <code>{{ key.id }}</code>
-                                <button class="copy-btn" onclick="copyToClipboard('{{ key.id }}', this)">Copy</button>
+                                <code>{{ key.stream_key }}</code>
+                                <button class="copy-btn" onclick="copyToClipboard('{{ key.stream_key }}', this)">Copy</button>
                             </td>
                         </tr>
                     </tbody>

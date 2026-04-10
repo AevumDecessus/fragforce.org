@@ -1,6 +1,5 @@
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
-from django.db import connection, transaction
 from django.utils.html import format_html
 
 from .models import Key, Stream
@@ -48,7 +47,7 @@ class KeyAdmin(admin.ModelAdmin):
     ordering = ("-modified",)
     sortable_by = (
         "display_name",
-        "stream_key",
+        "stream_key_display",
         "owner",
         "created",
         "modified",
@@ -59,7 +58,7 @@ class KeyAdmin(admin.ModelAdmin):
     )
     list_display = (
         "display_name",
-        "stream_key",
+        "stream_key_display",
         "owner",
         "created",
         "modified",
@@ -70,7 +69,7 @@ class KeyAdmin(admin.ModelAdmin):
     )
     search_fields = (
         "name",
-        "id",
+        "stream_key",
         "owner__username",
     )
 
@@ -87,26 +86,21 @@ class KeyAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return ('id',)
+            return ('stream_key',)
         return ()
 
     def get_exclude(self, request, obj=None):
         if not obj:
-            return ('id',)
+            return ('stream_key',)
         return ()
 
     @admin.action(description="Regenerate stream key")
     def regenerate_key(self, request, queryset):
         for key in queryset:
             candidate = generate_stream_key()
-            while Key.objects.filter(id=candidate).exists():
+            while Key.objects.filter(stream_key=candidate).exists():
                 candidate = generate_stream_key()
-            with transaction.atomic():
-                with connection.cursor() as cursor:
-                    cursor.execute("SET CONSTRAINTS ALL DEFERRED")
-                old_id = key.pk
-                Key.objects.filter(pk=old_id).update(id=candidate)
-                Stream.objects.filter(key_id=old_id).update(key_id=candidate)
+            Key.objects.filter(pk=key.pk).update(stream_key=candidate)
 
     actions = ['regenerate_key']
 
@@ -115,8 +109,8 @@ class KeyAdmin(admin.ModelAdmin):
         return obj.name
 
     @admin.display(description="Stream Key")
-    def stream_key(self, obj):
-        return obj.id
+    def stream_key_display(self, obj):
+        return obj.stream_key
 
 
 # Register your models here.
