@@ -4,6 +4,7 @@ from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirec
 from django.shortcuts import get_object_or_404, redirect
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_safe
 
@@ -150,16 +151,18 @@ def my_keys(request):
 @login_required
 def generate_key(request):
     if not Key.objects.filter(owner=request.user).exists():
+        safe_name = slugify(request.user.username.replace('.', '-'))
         # Claim an existing unowned key with the user's name if one exists
-        claimed = Key.objects.filter(name=request.user.username, owner=None).first()
+        claimed = Key.objects.filter(name__in=[request.user.username, safe_name], owner=None).first()
         if claimed:
             claimed.owner = request.user
+            claimed.name = safe_name
             claimed.save()
         else:
-            name = request.user.username
+            name = safe_name
             # Avoid name collision with a key owned by someone else
             while Key.objects.filter(name=name).exists():
-                name = f"{request.user.username}-{generate_stream_key()[:8]}"
+                name = f"{safe_name}-{generate_stream_key()[:8]}"
             Key.objects.create(
                 name=name,
                 owner=request.user,

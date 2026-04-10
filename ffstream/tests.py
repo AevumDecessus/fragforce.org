@@ -126,6 +126,24 @@ class GenerateKeyViewTest(TestCase):
         key = Key.objects.get(owner=self.user)
         self.assertNotEqual(key.name, 'streamer')
 
+    def test_username_with_period_produces_valid_slug_name(self):
+        # Discord usernames can contain periods which are not valid in SlugField
+        user = User.objects.create_user(username='aevum.decessus', password=TEST_PASSWORD)
+        self.client.login(username='aevum.decessus', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=user)
+        self.assertNotIn('.', key.name)
+
+    def test_username_with_period_claims_dotted_legacy_key(self):
+        # A key may already exist with the dotted username from before slugification
+        user = User.objects.create_user(username='aevum.decessus', password=TEST_PASSWORD)
+        existing = Key.objects.create(name='aevum.decessus', id='LegacyDottedKey')
+        self.client.login(username='aevum.decessus', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=user)
+        self.assertEqual(key.pk, existing.pk)
+        self.assertNotIn('.', key.name)
+
 
 class RegenerateKeyViewTest(TestCase):
     def setUp(self):
