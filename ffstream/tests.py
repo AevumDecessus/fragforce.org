@@ -108,6 +108,24 @@ class GenerateKeyViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn('/auth/login/discord/', response['Location'])
 
+    def test_claims_existing_unowned_key_with_matching_name(self):
+        # Pre-existing key with the user's username but no owner (legacy data)
+        existing = Key.objects.create(name='streamer', id='OldLegacyKeyValue')
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        existing.refresh_from_db()
+        self.assertEqual(existing.owner, self.user)
+        self.assertEqual(Key.objects.filter(owner=self.user).count(), 1)
+
+    def test_avoids_name_collision_with_owned_key(self):
+        # Key with user's username already owned by someone else
+        other = User.objects.create_user(username='other', password=TEST_PASSWORD)
+        Key.objects.create(name='streamer', owner=other)
+        self.client.login(username='streamer', password=TEST_PASSWORD)
+        self.client.post(reverse('generate-key'))
+        key = Key.objects.get(owner=self.user)
+        self.assertNotEqual(key.name, 'streamer')
+
 
 class RegenerateKeyViewTest(TestCase):
     def setUp(self):
