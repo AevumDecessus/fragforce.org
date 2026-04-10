@@ -150,12 +150,22 @@ def my_keys(request):
 @login_required
 def generate_key(request):
     if not Key.objects.filter(owner=request.user).exists():
-        Key.objects.create(
-            name=request.user.username,
-            owner=request.user,
-            superstream=False,
-            livestream=False,
-        )
+        # Claim an existing unowned key with the user's name if one exists
+        claimed = Key.objects.filter(name=request.user.username, owner=None).first()
+        if claimed:
+            claimed.owner = request.user
+            claimed.save()
+        else:
+            name = request.user.username
+            # Avoid name collision with a key owned by someone else
+            while Key.objects.filter(name=name).exists():
+                name = f"{request.user.username}-{generate_stream_key()[:8]}"
+            Key.objects.create(
+                name=name,
+                owner=request.user,
+                superstream=False,
+                livestream=False,
+            )
     return redirect('my-keys')
 
 
