@@ -1,5 +1,4 @@
 import logging
-import warnings
 
 import discord
 from asgiref.sync import sync_to_async
@@ -9,9 +8,6 @@ from django.core.management.base import BaseCommand
 from ffbot.utils import get_or_create_stream_key, get_or_register_user
 
 log = logging.getLogger(__name__)
-
-# Suppress PyNaCl warning - voice is not used
-warnings.filterwarnings('ignore', message='PyNaCl is not installed')
 
 
 class Command(BaseCommand):
