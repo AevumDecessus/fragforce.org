@@ -1,4 +1,5 @@
 import logging
+import warnings
 
 import discord
 from asgiref.sync import sync_to_async
@@ -6,6 +7,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 log = logging.getLogger(__name__)
+
+# Suppress PyNaCl warning - voice is not used
+warnings.filterwarnings('ignore', message='PyNaCl is not installed')
 
 
 class Command(BaseCommand):
@@ -15,7 +19,7 @@ class Command(BaseCommand):
         intents = discord.Intents.default()
         bot = discord.Bot(intents=intents)
 
-        guild_ids = [int(settings.DISCORD_GUILD_ID)] if settings.DISCORD_GUILD_ID else None
+        guild_ids = [int(settings.DISCORD_REQUIRED_GUILD_ID)] if settings.DISCORD_REQUIRED_GUILD_ID else None
 
         @bot.event
         async def on_ready():
