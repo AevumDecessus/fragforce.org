@@ -6,7 +6,7 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from ffbot.utils import get_or_register_user
+from ffbot.utils import get_or_create_stream_key, get_or_register_user
 
 log = logging.getLogger(__name__)
 
@@ -33,24 +33,14 @@ class Command(BaseCommand):
             guild_ids=guild_ids,
         )
         async def stream_key(ctx):
-            from ffstream.models import Key
-
             discord_id = str(ctx.author.id)
             discord_username = ctx.author.name
 
             def get_key():
                 user = get_or_register_user(discord_id, discord_username)
-                return Key.objects.filter(owner=user).first()
+                return get_or_create_stream_key(user)
 
             key = await sync_to_async(get_key)()
-
-            if key is None:
-                await ctx.respond(
-                    "No stream key found for your account. "
-                    "Log in at https://fragforce.org/stream/my-keys to generate one.",
-                    ephemeral=True,
-                )
-                return
 
             await ctx.respond(
                 f"**Your Stream Key:** `{key.stream_key}`\n"

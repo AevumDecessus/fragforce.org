@@ -6,7 +6,36 @@ from django.utils.text import slugify
 from evtsignup.models import DiscordEventUser
 from social_django.models import UserSocialAuth
 
+from ffstream.models import Key
+from ffstream.wordlist import generate_stream_key
+
 log = logging.getLogger(__name__)
+
+
+def get_or_create_stream_key(user: User) -> Key:
+    """Get or create a stream key for a user."""
+    key = Key.objects.filter(owner=user).first()
+    if key:
+        return key
+
+    safe_name = slugify(user.username.replace('.', '-'))
+    name = safe_name
+    suffix = 1
+    while Key.objects.filter(name=name).exists():
+        name = f"{safe_name}-{suffix}"
+        suffix += 1
+
+    candidate = generate_stream_key()
+    while Key.objects.filter(stream_key=candidate).exists():
+        candidate = generate_stream_key()
+
+    return Key.objects.create(
+        name=name,
+        stream_key=candidate,
+        owner=user,
+        superstream=False,
+        livestream=False,
+    )
 
 
 def get_or_register_user(discord_id: str, discord_username: str) -> User:
