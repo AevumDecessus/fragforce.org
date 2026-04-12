@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "evtsignup",
     "ffoverlay.apps.FfoverlayConfig",
     "ffbot",
+    "ffdiscord",
 ]
 
 MIDDLEWARE = [
