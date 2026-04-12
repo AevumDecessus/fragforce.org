@@ -39,6 +39,7 @@ COPY ffsite ffsite
 COPY eventer eventer
 COPY evtsignup evtsignup
 COPY ffoverlay ffoverlay
+COPY ffbot ffbot
 COPY manage.py .
 
 RUN chown -R appuser /home/appuser
