@@ -58,7 +58,8 @@ INSTALLED_APPS = [
     'ffstream',
     "eventer",
     "evtsignup",
-    "ffoverlay.apps.FfoverlayConfig"
+    "ffoverlay.apps.FfoverlayConfig",
+    "ffbot",
 ]
 
 MIDDLEWARE = [
@@ -463,6 +464,7 @@ SOCIAL_AUTH_DISCORD_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
 SOCIAL_AUTH_DISCORD_SCOPE = ['identify', 'email', 'guilds']
 SOCIAL_AUTH_DISCORD_AUTH_EXTRA_ARGUMENTS = {'prompt': 'consent'}
 DISCORD_REQUIRED_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '164136635762606081')
+DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
