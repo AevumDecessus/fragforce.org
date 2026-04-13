@@ -23,25 +23,45 @@ def sync_all_guild_members():
     asyncio.run(_sync_members())
 
 
+async def _run_bot_task(bot, work_fn):
+    """Run a one-shot bot task: start bot in background, wait for ready, do work, stop."""
+    import discord
+
+    ready = asyncio.Event()
+
+    @bot.event
+    async def on_ready():
+        ready.set()
+
+    bot_task = asyncio.create_task(bot.start(settings.DISCORD_BOT_TOKEN))
+    await ready.wait()
+
+    try:
+        await work_fn(bot)
+    finally:
+        await bot.close()
+        bot_task.cancel()
+        try:
+            await bot_task
+        except (asyncio.CancelledError, discord.ConnectionClosed):
+            pass
+
+
 async def _sync_roles():
     import discord
     intents = discord.Intents.default()
     bot = discord.Bot(intents=intents)
 
-    @bot.event
-    async def on_ready():
-        try:
-            guild = bot.get_guild(int(settings.DISCORD_REQUIRED_GUILD_ID))
-            if guild is None:
-                log.error("Guild %s not found", settings.DISCORD_REQUIRED_GUILD_ID)
-                return
-            all_roles = [(str(r.id), r.name) for r in guild.roles if not r.is_default()]
-            await sync_to_async(sync_guild_roles)(all_roles)
-            log.info("Synced %d guild roles", len(all_roles))
-        finally:
-            await bot.close()
+    async def work(bot):
+        guild = bot.get_guild(int(settings.DISCORD_REQUIRED_GUILD_ID))
+        if guild is None:
+            log.error("Guild %s not found", settings.DISCORD_REQUIRED_GUILD_ID)
+            return
+        all_roles = [(str(r.id), r.name) for r in guild.roles if not r.is_default()]
+        await sync_to_async(sync_guild_roles)(all_roles)
+        log.info("Synced %d guild roles", len(all_roles))
 
-    await bot.start(settings.DISCORD_BOT_TOKEN, reconnect=False)
+    await _run_bot_task(bot, work)
 
 
 async def _sync_members():
@@ -50,30 +70,26 @@ async def _sync_members():
     intents.members = True
     bot = discord.Bot(intents=intents)
 
-    @bot.event
-    async def on_ready():
-        try:
-            guild = bot.get_guild(int(settings.DISCORD_REQUIRED_GUILD_ID))
-            if guild is None:
-                log.error("Guild %s not found", settings.DISCORD_REQUIRED_GUILD_ID)
-                return
+    async def work(bot):
+        guild = bot.get_guild(int(settings.DISCORD_REQUIRED_GUILD_ID))
+        if guild is None:
+            log.error("Guild %s not found", settings.DISCORD_REQUIRED_GUILD_ID)
+            return
 
-            synced = 0
-            async for member in guild.fetch_members(limit=None):
-                if member.bot:
-                    continue
-                discord_id = str(member.id)
-                role_ids = [str(r.id) for r in member.roles]
+        synced = 0
+        async for member in guild.fetch_members(limit=None):
+            if member.bot:
+                continue
+            discord_id = str(member.id)
+            role_ids = [str(r.id) for r in member.roles]
 
-                def _sync(discord_id=discord_id, role_ids=role_ids, name=member.name):
-                    user = get_or_register_user(discord_id, name)
-                    sync_user_roles(user, role_ids)
+            def _sync(discord_id=discord_id, role_ids=role_ids, name=member.name):
+                user = get_or_register_user(discord_id, name)
+                sync_user_roles(user, role_ids)
 
-                await sync_to_async(_sync)()
-                synced += 1
+            await sync_to_async(_sync)()
+            synced += 1
 
-            log.info("Synced roles for %d guild members", synced)
-        finally:
-            await bot.close()
+        log.info("Synced roles for %d guild members", synced)
 
-    await bot.start(settings.DISCORD_BOT_TOKEN, reconnect=False)
+    await _run_bot_task(bot, work)
