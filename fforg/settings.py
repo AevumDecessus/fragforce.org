@@ -421,9 +421,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ffdonations.tasks.sender.note_new_donations',
         'schedule': SEND_MISSED_DONATIONS,
     },
-    'sync-discord-roles': {
-        'task': 'ffdiscord.tasks.sync_all_guild_roles',
-        'schedule': timedelta(minutes=int(os.environ.get('DISCORD_ROLE_SYNC_MINUTES', 15))),
+    'sync-discord-guild-roles': {
+        'task': 'ffdiscord.tasks.sync_discord_roles',
+        'schedule': timedelta(hours=int(os.environ.get('DISCORD_ROLE_SYNC_HOURS', 1))),
+    },
+    'sync-discord-member-roles': {
+        'task': 'ffdiscord.tasks.sync_all_guild_members',
+        'schedule': timedelta(minutes=int(os.environ.get('DISCORD_MEMBER_SYNC_MINUTES', 15))),
     },
 }
 
