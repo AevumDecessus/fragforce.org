@@ -43,7 +43,7 @@ async def _run_bot_task(bot, work_fn):
         bot_task.cancel()
         try:
             await bot_task
-        except (asyncio.CancelledError, discord.ConnectionClosed):
+        except (asyncio.CancelledError, discord.ConnectionClosed, RuntimeError):
             pass
 
 
