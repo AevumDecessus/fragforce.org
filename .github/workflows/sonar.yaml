@@ -9,7 +9,7 @@ on:
 jobs:
   sonar:
     name: SonarCloud scan
-    if: github.repository == 'fragforce/fragforce.org'
+    if: github.repository == 'fragforce/fragforce.org' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download coverage artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: coverage-report
           github-token: ${{ secrets.GITHUB_TOKEN }}

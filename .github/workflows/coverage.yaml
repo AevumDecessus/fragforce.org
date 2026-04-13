@@ -44,7 +44,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.10'
 
@@ -59,8 +59,17 @@ jobs:
           SECRET_KEY: insecure-test-key-not-used-in-production
           DJANGO_LOG_LEVEL: WARNING
         run: |
-          pipenv run coverage run manage.py test
+          pipenv run coverage run manage.py test --testrunner=xmlrunner.extra.djangotestrunner.XMLTestRunner --output-dir=test-results
           pipenv run coverage xml
+
+      - name: Report test results
+        if: always()
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
+        with:
+          name: Django Tests
+          path: test-results/*.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Save PR metadata
         if: github.event_name == 'pull_request'
@@ -69,7 +78,8 @@ jobs:
           echo "${{ github.sha }}" > pr_sha.txt
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-report
           path: |
