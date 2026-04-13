@@ -58,9 +58,7 @@ jobs:
           REDIS_URL: redis://localhost
           SECRET_KEY: insecure-test-key-not-used-in-production
           DJANGO_LOG_LEVEL: WARNING
-          TEST_OUTPUT_DIR: test-results
         run: |
-          mkdir -p test-results
           pipenv run coverage run manage.py test --testrunner=xmlrunner.extra.djangotestrunner.XMLTestRunner
           pipenv run coverage xml
 
@@ -69,7 +67,7 @@ jobs:
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           name: Django Tests
-          path: test-results/*.xml
+          path: TEST-*.xml
           reporter: java-junit
           fail-on-error: false
 
