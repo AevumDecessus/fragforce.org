@@ -1,0 +1,61 @@
+name: SonarCloud Analysis
+
+on:
+  workflow_run:
+    workflows: ["Coverage"]
+    types:
+      - completed
+
+jobs:
+  sonar:
+    name: SonarCloud scan
+    if: github.repository == 'fragforce/fragforce.org' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Report test results
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
+        with:
+          name: Django Tests
+          path: TEST-*.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Set PR properties for SonarCloud
+        if: github.event.workflow_run.event == 'pull_request'
+        env:
+          PR_NUMBER_FILE: pr_number.txt
+          PR_SHA_FILE: pr_sha.txt
+        run: |
+          echo "SONAR_PR_NUMBER=$(cat "$PR_NUMBER_FILE")" >> "$GITHUB_ENV"
+          echo "SONAR_PR_SHA=$(cat "$PR_SHA_FILE")" >> "$GITHUB_ENV"
+
+      - name: SonarCloud Scan (push)
+        if: github.event.workflow_run.event != 'pull_request'
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: SonarCloud Scan (pull request)
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_SCANNER_OPTS: >-
+            -Dsonar.pullrequest.key=${{ env.SONAR_PR_NUMBER }}
+            -Dsonar.pullrequest.branch=${{ github.event.workflow_run.head_branch }}
+            -Dsonar.pullrequest.base=${{ github.base_ref }}
