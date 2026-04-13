@@ -39,6 +39,7 @@ jobs:
           path: TEST-*.xml
           reporter: java-junit
           fail-on-error: false
+          use-actions-summary: false
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Set PR properties for SonarCloud
