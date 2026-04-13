@@ -8,6 +8,12 @@
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Check Docker daemon is available before proceeding
+if ! docker info > /dev/null 2>&1; then
+    echo "Error: Docker daemon is not running or not accessible." >&2
+    exit 1
+fi
+
 # Ensure containers are running
 if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
     echo "Containers not running - starting dev stack..."
