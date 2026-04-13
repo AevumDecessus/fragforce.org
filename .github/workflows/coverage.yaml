@@ -9,8 +9,7 @@ on:
 
 jobs:
   coverage:
-    name: Run tests with coverage and SonarCloud scan
-    if: github.repository == 'fragforce/fragforce.org'
+    name: Run tests with coverage
     runs-on: ubuntu-latest
 
     services:
@@ -63,8 +62,18 @@ jobs:
           pipenv run coverage run manage.py test
           pipenv run coverage xml
 
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Save PR metadata
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "${{ github.event.number }}" > pr_number.txt
+          echo "${{ github.sha }}" > pr_sha.txt
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            pr_number.txt
+            pr_sha.txt
+          retention-days: 1
