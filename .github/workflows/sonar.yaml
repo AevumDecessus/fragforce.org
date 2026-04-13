@@ -20,10 +20,10 @@ jobs:
 
       - name: Generate app token
         id: app-token
-        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
         with:
-          app_id: ${{ secrets.FRAGFORCE_CI_APP_ID }}
-          private_key: ${{ secrets.FRAGFORCE_CI_PRIVATE_KEY }}
+          app-id: ${{ secrets.FRAGFORCE_CI_APP_ID }}
+          private-key: ${{ secrets.FRAGFORCE_CI_PRIVATE_KEY }}
 
       - name: Download coverage artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -39,6 +39,7 @@ jobs:
           path: TEST-*.xml
           reporter: java-junit
           fail-on-error: false
+          use-actions-summary: false
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Set PR properties for SonarCloud
