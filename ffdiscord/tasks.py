@@ -43,8 +43,11 @@ async def _run_bot_task(bot, work_fn):
         bot_task.cancel()
         try:
             await bot_task
-        except (asyncio.CancelledError, discord.ConnectionClosed, RuntimeError):
+        except (asyncio.CancelledError, discord.ConnectionClosed):
             pass
+        except RuntimeError as e:
+            if "Session is closed" not in str(e):
+                raise
 
 
 async def _sync_roles():
