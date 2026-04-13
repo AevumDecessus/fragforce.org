@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from asgiref.sync import sync_to_async
 from celery import shared_task
 from django.conf import settings
 
@@ -35,7 +36,7 @@ async def _sync_roles():
                 log.error("Guild %s not found", settings.DISCORD_REQUIRED_GUILD_ID)
                 return
             all_roles = [(str(r.id), r.name) for r in guild.roles if not r.is_default()]
-            sync_guild_roles(all_roles)
+            await sync_to_async(sync_guild_roles)(all_roles)
             log.info("Synced %d guild roles", len(all_roles))
         finally:
             await bot.close()
@@ -63,8 +64,12 @@ async def _sync_members():
                     continue
                 discord_id = str(member.id)
                 role_ids = [str(r.id) for r in member.roles]
-                user = get_or_register_user(discord_id, member.name)
-                sync_user_roles(user, role_ids)
+
+                def _sync(discord_id=discord_id, role_ids=role_ids, name=member.name):
+                    user = get_or_register_user(discord_id, name)
+                    sync_user_roles(user, role_ids)
+
+                await sync_to_async(_sync)()
                 synced += 1
 
             log.info("Synced roles for %d guild members", synced)
