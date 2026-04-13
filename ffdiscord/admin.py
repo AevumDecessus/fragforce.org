@@ -11,5 +11,5 @@ class DiscordRoleAdmin(admin.ModelAdmin):
 
 @admin.register(DiscordRoleMapping)
 class DiscordRoleMappingAdmin(admin.ModelAdmin):
-    list_display = ('role', 'group', 'description')
+    list_display = ('role', 'group', 'grants_staff_access', 'description')
     search_fields = ('role__name', 'role__discord_role_id', 'group__name', 'description')

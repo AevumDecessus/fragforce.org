@@ -38,6 +38,11 @@ class DiscordRoleMapping(models.Model):
         blank=True,
         verbose_name="Description",
     )
+    grants_staff_access = models.BooleanField(
+        default=False,
+        verbose_name="Grants admin site access",
+        help_text="Users with this role will have is_staff=True",
+    )
 
     class Meta:
         verbose_name = "Discord Role Mapping"

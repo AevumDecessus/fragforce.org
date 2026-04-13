@@ -41,3 +41,11 @@ def sync_user_roles(user: User, discord_role_ids: list[str]) -> None:
     if to_remove:
         user.groups.remove(*to_remove)
         log.info("Removed groups %s from user %s", [g.name for g in to_remove], user.username)
+
+    # Update is_staff based on whether user holds any staff-granting roles
+    staff_groups = {m.group for m in mappings if m.grants_staff_access}
+    should_be_staff = bool(entitled_groups & staff_groups)
+    if user.is_staff != should_be_staff:
+        user.is_staff = should_be_staff
+        user.save(update_fields=['is_staff'])
+        log.info("Set is_staff=%s for user %s", should_be_staff, user.username)
