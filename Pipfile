@@ -41,6 +41,7 @@ social-auth-app-django = "*"
 
 [dev-packages]
 pyflakes = "*"
+coverage = "*"
 
 #[pipenv]
 #allow_prereleases = true
