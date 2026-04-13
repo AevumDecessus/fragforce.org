@@ -1,14 +1,11 @@
 import asyncio
 import logging
-import warnings
 
 import discord
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
 log = logging.getLogger(__name__)
-
-warnings.filterwarnings('ignore', message='PyNaCl is not installed')
 
 
 class Command(BaseCommand):

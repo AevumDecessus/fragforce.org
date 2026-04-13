@@ -1,5 +1,4 @@
 import logging
-import warnings
 
 import discord
 from asgiref.sync import sync_to_async
@@ -7,11 +6,9 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from ffbot.utils import get_or_create_stream_key, get_or_register_user
+from ffdiscord.utils import sync_user_roles
 
 log = logging.getLogger(__name__)
-
-# Suppress PyNaCl warning - voice is not used
-warnings.filterwarnings('ignore', message='PyNaCl is not installed')
 
 
 class Command(BaseCommand):
@@ -36,8 +33,11 @@ class Command(BaseCommand):
             discord_id = str(ctx.author.id)
             discord_username = ctx.author.name
 
+            role_ids = [str(r.id) for r in ctx.author.roles]
+
             def get_key():
                 user = get_or_register_user(discord_id, discord_username)
+                sync_user_roles(user, role_ids)
                 return get_or_create_stream_key(user)
 
             key = await sync_to_async(get_key)()

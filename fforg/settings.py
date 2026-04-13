@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "evtsignup",
     "ffoverlay.apps.FfoverlayConfig",
     "ffbot",
+    "ffdiscord",
 ]
 
 MIDDLEWARE = [
@@ -419,6 +420,14 @@ CELERY_BEAT_SCHEDULE = {
     'send-missed-tracks': {
         'task': 'ffdonations.tasks.sender.note_new_donations',
         'schedule': SEND_MISSED_DONATIONS,
+    },
+    'sync-discord-guild-roles': {
+        'task': 'ffdiscord.tasks.sync_discord_roles',
+        'schedule': timedelta(hours=int(os.environ.get('DISCORD_ROLE_SYNC_HOURS', 1))),
+    },
+    'sync-discord-member-roles': {
+        'task': 'ffdiscord.tasks.sync_all_guild_members',
+        'schedule': timedelta(minutes=int(os.environ.get('DISCORD_MEMBER_SYNC_MINUTES', 15))),
     },
 }
 
