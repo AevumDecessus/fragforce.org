@@ -18,6 +18,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate app token
+        id: app-token
+        uses: tibdex/github-app-token@3beb63f4bd073e61482598c45c71c1019b59b73a # v2
+        with:
+          app_id: ${{ secrets.FRAGFORCE_CI_APP_ID }}
+          private_key: ${{ secrets.FRAGFORCE_CI_PRIVATE_KEY }}
+
       - name: Download coverage artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -32,6 +39,7 @@ jobs:
           path: TEST-*.xml
           reporter: java-junit
           fail-on-error: false
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Set PR properties for SonarCloud
         if: github.event.workflow_run.event == 'pull_request'
@@ -44,14 +52,14 @@ jobs:
 
       - name: SonarCloud Scan (push)
         if: github.event.workflow_run.event != 'pull_request'
-        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
+        uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: SonarCloud Scan (pull request)
         if: github.event.workflow_run.event == 'pull_request'
-        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6
+        uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
