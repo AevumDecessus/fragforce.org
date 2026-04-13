@@ -58,8 +58,10 @@ jobs:
           REDIS_URL: redis://localhost
           SECRET_KEY: insecure-test-key-not-used-in-production
           DJANGO_LOG_LEVEL: WARNING
+          TEST_OUTPUT_DIR: test-results
         run: |
-          pipenv run coverage run manage.py test --testrunner=xmlrunner.extra.djangotestrunner.XMLTestRunner --output-dir=test-results
+          mkdir -p test-results
+          pipenv run coverage run manage.py test --testrunner=xmlrunner.extra.djangotestrunner.XMLTestRunner
           pipenv run coverage xml
 
       - name: Report test results
