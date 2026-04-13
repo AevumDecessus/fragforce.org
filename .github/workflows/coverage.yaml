@@ -62,28 +62,20 @@ jobs:
           pipenv run coverage run manage.py test --testrunner=xmlrunner.extra.djangotestrunner.XMLTestRunner
           pipenv run coverage xml
 
-      - name: Report test results
-        if: always()
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
-        with:
-          name: Django Tests
-          path: TEST-*.xml
-          reporter: java-junit
-          fail-on-error: false
-
       - name: Save PR metadata
         if: github.event_name == 'pull_request'
         run: |
           echo "${{ github.event.number }}" > pr_number.txt
           echo "${{ github.sha }}" > pr_sha.txt
 
-      - name: Upload coverage artifact
+      - name: Upload coverage and test artifacts
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-report
           path: |
             coverage.xml
+            TEST-*.xml
             pr_number.txt
             pr_sha.txt
           retention-days: 1
