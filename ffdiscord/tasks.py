@@ -41,7 +41,7 @@ async def _sync_roles():
         finally:
             await bot.close()
 
-    await bot.start(settings.DISCORD_BOT_TOKEN)
+    await bot.start(settings.DISCORD_BOT_TOKEN, reconnect=False)
 
 
 async def _sync_members():
@@ -76,4 +76,4 @@ async def _sync_members():
         finally:
             await bot.close()
 
-    await bot.start(settings.DISCORD_BOT_TOKEN)
+    await bot.start(settings.DISCORD_BOT_TOKEN, reconnect=False)
