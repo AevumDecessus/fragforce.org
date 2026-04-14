@@ -15,6 +15,9 @@ jobs:
     name: Build & push docker image
     if: github.repository == 'fragforce/fragforce.org'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     env:
       IMG_NAME: fragforce-prod
     strategy:
