@@ -63,10 +63,11 @@ jobs:
           pipenv run coverage xml
 
       - name: Save PR metadata
-        if: github.event_name == 'pull_request'
         run: |
-          echo "${{ github.event.number }}" > pr_number.txt
+          echo "${{ github.event_name == 'pull_request' && github.event.number || '' }}" > pr_number.txt
           echo "${{ github.sha }}" > pr_sha.txt
+          echo "${{ github.base_ref }}" > pr_base_ref.txt
+          echo "${{ github.ref_name }}" > branch_name.txt
 
       - name: Upload coverage and test artifacts
         if: success()
@@ -78,4 +79,6 @@ jobs:
             TEST-*.xml
             pr_number.txt
             pr_sha.txt
+            pr_base_ref.txt
+            branch_name.txt
           retention-days: 1
