@@ -62,6 +62,7 @@ jobs:
           SONAR_SCANNER_OPTS: -Dsonar.branch.name=${{ env.SONAR_BRANCH_NAME }}
 
       - name: SonarCloud Scan (pull request)
+        id: sonar-scan
         if: github.event.workflow_run.event == 'pull_request'
         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
@@ -71,3 +72,26 @@ jobs:
             -Dsonar.pullrequest.key=${{ env.SONAR_PR_NUMBER }}
             -Dsonar.pullrequest.branch=${{ github.event.workflow_run.head_branch }}
             -Dsonar.pullrequest.base=${{ env.SONAR_PR_BASE }}
+
+      - name: Create SonarCloud quality gate check run
+        if: github.event.workflow_run.event == 'pull_request' && always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SCAN_CONCLUSION: ${{ steps.sonar-scan.conclusion }}
+        run: |
+          if [ "$SCAN_CONCLUSION" = "success" ]; then
+            CONCLUSION="success"
+            TITLE="Quality Gate passed"
+          else
+            CONCLUSION="failure"
+            TITLE="Quality Gate failed"
+          fi
+          gh api repos/${{ github.repository }}/check-runs \
+            --method POST \
+            -f name="SonarCloud Quality Gate" \
+            -f head_sha="$HEAD_SHA" \
+            -f status="completed" \
+            -f conclusion="$CONCLUSION" \
+            -f "output[title]=$TITLE" \
+            -f "output[summary]=See [SonarCloud dashboard](https://sonarcloud.io/dashboard?id=fragforce_fragforce.org&pullRequest=${{ env.SONAR_PR_NUMBER }}) for details."
