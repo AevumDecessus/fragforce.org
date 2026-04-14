@@ -11,6 +11,10 @@ jobs:
     name: SonarCloud scan
     if: github.repository == 'fragforce/fragforce.org' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
 
     steps:
       - name: Checkout PR code
@@ -44,14 +48,15 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Set scan properties
-        env:
-          PR_NUMBER_FILE: pr_number.txt
-          PR_BASE_REF_FILE: pr_base_ref.txt
-          BRANCH_NAME_FILE: branch_name.txt
         run: |
-          echo "SONAR_PR_NUMBER=$(cat "$PR_NUMBER_FILE")" >> "$GITHUB_ENV"
-          echo "SONAR_PR_BASE=$(cat "$PR_BASE_REF_FILE")" >> "$GITHUB_ENV"
-          echo "SONAR_BRANCH_NAME=$(cat "$BRANCH_NAME_FILE")" >> "$GITHUB_ENV"
+          # Read artifact files and sanitize values before writing to GITHUB_ENV
+          # Strip any newlines or control characters to prevent env var injection
+          PR_NUMBER=$(tr -dc '0-9' < pr_number.txt)
+          PR_BASE=$(tr -dc 'A-Za-z0-9/_.-' < pr_base_ref.txt)
+          BRANCH=$(tr -dc 'A-Za-z0-9/_.-' < branch_name.txt)
+          echo "SONAR_PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "SONAR_PR_BASE=$PR_BASE" >> "$GITHUB_ENV"
+          echo "SONAR_BRANCH_NAME=$BRANCH" >> "$GITHUB_ENV"
 
       - name: SonarCloud Scan (push)
         if: github.event.workflow_run.event != 'pull_request'
@@ -68,6 +73,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PR_KEY: ${{ env.SONAR_PR_NUMBER }}
+          SONAR_PR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SONAR_PR_BASE: ${{ env.SONAR_PR_BASE }}
           SONAR_SCANNER_OPTS: >-
             -Dsonar.pullrequest.key=${{ env.SONAR_PR_NUMBER }}
             -Dsonar.pullrequest.branch=${{ github.event.workflow_run.head_branch }}
@@ -79,6 +87,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           SCAN_CONCLUSION: ${{ steps.sonar-scan.conclusion }}
+          PR_NUMBER: ${{ env.SONAR_PR_NUMBER }}
         run: |
           if [ "$SCAN_CONCLUSION" = "success" ]; then
             CONCLUSION="success"
@@ -94,4 +103,4 @@ jobs:
             -f status="completed" \
             -f conclusion="$CONCLUSION" \
             -f "output[title]=$TITLE" \
-            -f "output[summary]=See [SonarCloud dashboard](https://sonarcloud.io/dashboard?id=fragforce_fragforce.org&pullRequest=${{ env.SONAR_PR_NUMBER }}) for details."
+            -f "output[summary]=See [SonarCloud dashboard](https://sonarcloud.io/dashboard?id=fragforce_fragforce.org&pullRequest=$PR_NUMBER) for details."

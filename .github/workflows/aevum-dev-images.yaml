@@ -1,4 +1,4 @@
-name: Events Branch Images
+name: Aevum Dev Images
 
 env:
   BUILD_ARGS: ""
@@ -12,7 +12,11 @@ on:
 jobs:
   build:
     name: Build & push docker image
+    if: github.repository == 'AevumDecessus/fragforce.org'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       max-parallel: 4
       matrix:

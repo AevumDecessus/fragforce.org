@@ -11,6 +11,8 @@ jobs:
   coverage:
     name: Run tests with coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     services:
       postgres:
