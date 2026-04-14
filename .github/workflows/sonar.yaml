@@ -13,9 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout PR code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Generate app token
@@ -42,14 +43,15 @@ jobs:
           use-actions-summary: false
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Set PR properties for SonarCloud
-        if: github.event.workflow_run.event == 'pull_request'
+      - name: Set scan properties
         env:
           PR_NUMBER_FILE: pr_number.txt
-          PR_SHA_FILE: pr_sha.txt
+          PR_BASE_REF_FILE: pr_base_ref.txt
+          BRANCH_NAME_FILE: branch_name.txt
         run: |
           echo "SONAR_PR_NUMBER=$(cat "$PR_NUMBER_FILE")" >> "$GITHUB_ENV"
-          echo "SONAR_PR_SHA=$(cat "$PR_SHA_FILE")" >> "$GITHUB_ENV"
+          echo "SONAR_PR_BASE=$(cat "$PR_BASE_REF_FILE")" >> "$GITHUB_ENV"
+          echo "SONAR_BRANCH_NAME=$(cat "$BRANCH_NAME_FILE")" >> "$GITHUB_ENV"
 
       - name: SonarCloud Scan (push)
         if: github.event.workflow_run.event != 'pull_request'
@@ -57,6 +59,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_SCANNER_OPTS: -Dsonar.branch.name=${{ env.SONAR_BRANCH_NAME }}
 
       - name: SonarCloud Scan (pull request)
         if: github.event.workflow_run.event == 'pull_request'
@@ -67,4 +70,4 @@ jobs:
           SONAR_SCANNER_OPTS: >-
             -Dsonar.pullrequest.key=${{ env.SONAR_PR_NUMBER }}
             -Dsonar.pullrequest.branch=${{ github.event.workflow_run.head_branch }}
-            -Dsonar.pullrequest.base=${{ github.base_ref }}
+            -Dsonar.pullrequest.base=${{ env.SONAR_PR_BASE }}
