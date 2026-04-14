@@ -7,7 +7,7 @@ env:
 on:
   push:
     branches:
-      - events
+      - '**'
 
 jobs:
   build:
@@ -38,7 +38,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ env.IMG_NAME }}-${{ matrix.dockerfile }}
           tags: |
-            type=raw,value=latest
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref_name == 'events' }}
             type=raw,value={{sha}},enable=${{ github.ref_type != 'tag' }}
 
       - name: Login to GitHub Container Registry
