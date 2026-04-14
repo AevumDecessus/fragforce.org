@@ -57,7 +57,7 @@ jobs:
         if: github.event.workflow_run.event != 'pull_request'
         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_SCANNER_OPTS: -Dsonar.branch.name=${{ env.SONAR_BRANCH_NAME }}
 
@@ -65,7 +65,7 @@ jobs:
         if: github.event.workflow_run.event == 'pull_request'
         uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_SCANNER_OPTS: >-
             -Dsonar.pullrequest.key=${{ env.SONAR_PR_NUMBER }}
