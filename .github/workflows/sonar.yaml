@@ -1,0 +1,106 @@
+name: SonarCloud Analysis
+
+on:
+  workflow_run:
+    workflows: ["Coverage"]
+    types:
+      - completed
+
+jobs:
+  sonar:
+    name: SonarCloud scan
+    if: github.repository == 'fragforce/fragforce.org' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          client-id: ${{ secrets.FRAGFORCE_CI_APP_ID }}
+          private-key: ${{ secrets.FRAGFORCE_CI_PRIVATE_KEY }}
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Report test results
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
+        with:
+          name: Django Tests
+          path: TEST-*.xml
+          reporter: java-junit
+          fail-on-error: false
+          use-actions-summary: false
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Set scan properties
+        run: |
+          # Read artifact files and sanitize values before writing to GITHUB_ENV
+          # Strip any newlines or control characters to prevent env var injection
+          PR_NUMBER=$(tr -dc '0-9' < pr_number.txt)
+          PR_BASE=$(tr -dc 'A-Za-z0-9/_.-' < pr_base_ref.txt)
+          BRANCH=$(tr -dc 'A-Za-z0-9/_.-' < branch_name.txt)
+          echo "SONAR_PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "SONAR_PR_BASE=$PR_BASE" >> "$GITHUB_ENV"
+          echo "SONAR_BRANCH_NAME=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: SonarCloud Scan (push)
+        if: github.event.workflow_run.event != 'pull_request'
+        uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_SCANNER_OPTS: -Dsonar.branch.name=${{ env.SONAR_BRANCH_NAME }}
+
+      - name: SonarCloud Scan (pull request)
+        id: sonar-scan
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: SonarSource/sonarqube-scan-action@299e4b793aaa83bf2aba7c9c14bedbb485688ec4 # v7
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PR_KEY: ${{ env.SONAR_PR_NUMBER }}
+          SONAR_PR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SONAR_PR_BASE: ${{ env.SONAR_PR_BASE }}
+          SONAR_SCANNER_OPTS: >-
+            -Dsonar.pullrequest.key=${{ env.SONAR_PR_NUMBER }}
+            -Dsonar.pullrequest.branch=${{ github.event.workflow_run.head_branch }}
+            -Dsonar.pullrequest.base=${{ env.SONAR_PR_BASE }}
+
+      - name: Create SonarCloud quality gate check run
+        if: github.event.workflow_run.event == 'pull_request' && always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          SCAN_CONCLUSION: ${{ steps.sonar-scan.conclusion }}
+          PR_NUMBER: ${{ env.SONAR_PR_NUMBER }}
+        run: |
+          if [ "$SCAN_CONCLUSION" = "success" ]; then
+            CONCLUSION="success"
+            TITLE="Quality Gate passed"
+          else
+            CONCLUSION="failure"
+            TITLE="Quality Gate failed"
+          fi
+          gh api repos/${{ github.repository }}/check-runs \
+            --method POST \
+            -f name="SonarCloud Quality Gate" \
+            -f head_sha="$HEAD_SHA" \
+            -f status="completed" \
+            -f conclusion="$CONCLUSION" \
+            -f "output[title]=$TITLE" \
+            -f "output[summary]=See [SonarCloud dashboard](https://sonarcloud.io/dashboard?id=fragforce_fragforce.org&pullRequest=$PR_NUMBER) for details."

@@ -1,4 +1,4 @@
-name: Events Branch Images
+name: Aevum Dev Images
 
 env:
   BUILD_ARGS: ""
@@ -7,12 +7,16 @@ env:
 on:
   push:
     branches:
-      - events
+      - '**'
 
 jobs:
   build:
     name: Build & push docker image
+    if: github.repository == 'AevumDecessus/fragforce.org'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       max-parallel: 4
       matrix:
@@ -35,6 +39,7 @@ jobs:
           images: ghcr.io/${{ github.repository_owner }}/${{ env.IMG_NAME }}-${{ matrix.dockerfile }}
           tags: |
             type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref_name == 'events' }}
             type=raw,value={{sha}},enable=${{ github.ref_type != 'tag' }}
 
       - name: Login to GitHub Container Registry
