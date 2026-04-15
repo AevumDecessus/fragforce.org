@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import *
+from .models import DonationModel, EventModel, ParticipantModel, TeamModel
 from .tasks.donations import update_donations_if_needed_team, update_donations_if_needed_participant
 
 

@@ -1,4 +1,6 @@
-from .utils import *
+from django.conf import settings
+
+from .utils import el_donation_stats, el_num_donations
 
 
 def donations(request):

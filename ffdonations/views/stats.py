@@ -1,7 +1,7 @@
 from django.http import JsonResponse
 from django.views.decorators.cache import cache_page
 
-from ..tasks import *
+from django.conf import settings
 
 
 @cache_page(settings.VIEW_DONATIONS_STATS_CACHE)

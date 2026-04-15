@@ -3,7 +3,12 @@ from functools import wraps
 from django.http import JsonResponse
 from django.shortcuts import Http404
 
-from ..tasks import *
+from django.conf import settings
+
+from ..models import ParticipantModel, TeamModel
+from ..tasks.donations import update_donations_existing, update_donations_participant, update_donations_team
+from ..tasks.participants import update_participants
+from ..tasks.teams import update_teams
 
 
 def _onlydebug(f):

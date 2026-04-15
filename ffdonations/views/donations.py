@@ -1,7 +1,10 @@
 from django.http import JsonResponse
 from django.views.decorators.cache import cache_page
 
-from ..tasks import *
+from django.conf import settings
+
+from ..models import DonationModel
+from ..tasks.donations import update_donations_if_needed
 from ..utils import el_teams
 
 

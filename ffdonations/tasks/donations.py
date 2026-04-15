@@ -9,7 +9,7 @@ from requests.exceptions import HTTPError
 
 from extralifeapi.donors import Donations
 from .sender import note_new_donation
-from ..models import *
+from ..models import DonationModel, ParticipantModel, TeamModel
 from ..utils import current_el_events
 
 log = logging.getLogger("donations")
@@ -84,7 +84,7 @@ def update_donations_if_needed_team(self, teamID):
 
     try:
         team = TeamModel.objects.get(id=teamID)
-    except TeamModel.DoesNotExist as e:
+    except TeamModel.DoesNotExist:
         # Silently exit for now - It might not have been committed yet - will get next time ;)
         # TODO: Log this
         return None
@@ -143,7 +143,7 @@ def update_donations_team(self, teamID):
 
     try:
         team = TeamModel.objects.get(id=teamID)
-    except TeamModel.DoesNotExist as e:
+    except TeamModel.DoesNotExist:
         team = TeamModel(id=teamID, tracked=False)
         team.save()
 
@@ -170,7 +170,7 @@ def update_donations_team(self, teamID):
         if donation.participantID:
             try:
                 participant = ParticipantModel.objects.get(id=donation.participantID)
-            except ParticipantModel.DoesNotExist as e:
+            except ParticipantModel.DoesNotExist:
                 participant = ParticipantModel(id=donation.participantID, tracked=False)
                 participant.save()
         else:
@@ -178,7 +178,7 @@ def update_donations_team(self, teamID):
 
         try:
             tm = DonationModel.objects.get(id=donation.donationID)
-        except DonationModel.DoesNotExist as e:
+        except DonationModel.DoesNotExist:
             tm = DonationModel(id=donation.donationID)
         tm.team = team
         tm.participant = participant
@@ -208,7 +208,7 @@ def update_donations_if_needed_participant(self, participantID):
 
     try:
         participant = ParticipantModel.objects.get(id=participantID)
-    except ParticipantModel.DoesNotExist as e:
+    except ParticipantModel.DoesNotExist:
         # Silently exit for now - It might not have been committed yet - will get next time ;)
         # TODO: Log this
         return None
@@ -271,7 +271,7 @@ def update_donations_participant(self, participant_id):
 
     try:
         participant = ParticipantModel.objects.get(id=participant_id)
-    except ParticipantModel.DoesNotExist as e:
+    except ParticipantModel.DoesNotExist:
         participant = ParticipantModel(id=participant_id, tracked=False)
         participant.save()
 
@@ -299,7 +299,7 @@ def update_donations_participant(self, participant_id):
         if donation.teamID:
             try:
                 team = TeamModel.objects.get(id=donation.teamID)
-            except TeamModel.DoesNotExist as e:
+            except TeamModel.DoesNotExist:
                 team = TeamModel(id=donation.teamID, tracked=False)
                 team.save()
         else:
@@ -307,7 +307,7 @@ def update_donations_participant(self, participant_id):
 
         try:
             tm = DonationModel.objects.get(id=donation.donationID)
-        except DonationModel.DoesNotExist as e:
+        except DonationModel.DoesNotExist:
             tm = DonationModel(id=donation.donationID)
         tm.team = team
         tm.participant = participant

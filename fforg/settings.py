@@ -248,6 +248,14 @@ else:
     # Django cache
     REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', 'redis://localhost') + "/0"
 
+CELERY_IMPORTS = [
+    'ffdonations.tasks.donations',
+    'ffdonations.tasks.participants',
+    'ffdonations.tasks.sender',
+    'ffdonations.tasks.teams',
+    'ffdonations.tasks.tiltify.campaigns',
+    'ffdonations.tasks.tiltify.teams',
+]
 CELERY_ACCEPT_CONTENT = ['json', ]
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_ACKS_LATE = True

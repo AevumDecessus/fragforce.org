@@ -16,7 +16,7 @@ Including another URLconf
 
 from django.urls import path
 
-from ffsite.views import contact, donate, home, join, login_error, stream
+from ffsite.views.static import contact, donate, home, join, login_error, stream
 
 urlpatterns = [
     path('', home, name='home'),

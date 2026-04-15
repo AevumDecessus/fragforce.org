@@ -1,7 +1,10 @@
 from django.http import JsonResponse
 from django.views.decorators.cache import cache_page
 
-from ..tasks import *
+from django.conf import settings
+
+from ..models import TeamModel
+from ..tasks.teams import update_teams_if_needed
 
 
 @cache_page(settings.VIEW_TEAMS_CACHE)
