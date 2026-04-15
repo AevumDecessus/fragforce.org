@@ -16,18 +16,14 @@
             {% if event.event_start_date %}
             <div class="event_info">
                 <strong>Start:</strong>
-                {% autoescape off %}
                 {{ event.event_start_date|localtime }}
-                {% endautoescape %}
             </div>
             {% endif %}
 
             {% if event.event_end_date %}
             <div class="event_info">
                 <strong>Ends:</strong>
-                {% autoescape off %}
                 {{ event.event_end_date|localtime }}
-                {% endautoescape %}
             </div>
             {% endif %}
 

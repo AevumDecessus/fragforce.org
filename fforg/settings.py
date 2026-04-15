@@ -107,7 +107,6 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
     },
 }
-# DATABASE_ROUTERS = ["fforg.router.HCRouter", ]
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',

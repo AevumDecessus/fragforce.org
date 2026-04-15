@@ -1,26 +1,9 @@
-# from .tasks import *
 from django.conf import settings
 from django.db.models import Sum
 from django.utils import timezone
 from memoize import memoize
 from .models import EventModel, TeamModel
 
-
-# @memoize(timeout=120)
-# def el_num_donations():
-#     baseq = DonationModel.objects.filter(DonationModel.tracked_q())
-#     return baseq.count()
-#
-#
-# @memoize(timeout=120)
-# def el_donation_stats():
-#     baseq = DonationModel.objects.filter(DonationModel.tracked_q())
-#     return baseq.aggregate(
-#         sumDonations=Sum('amount'),
-#         avgDonation=Avg('amount'),
-#         minDonation=Min('amount'),
-#         maxDonation=Max('amount'),
-#     )
 
 @memoize(timeout=120)
 def event_name_maker(year=timezone.now().year):
@@ -39,26 +22,6 @@ def el_teams(year=timezone.now().year):
     for tm in trackedTeams:
         ret.add(tm.id)
     return ret
-
-#
-# @memoize(timeout=120)
-# def el_contact(year=timezone.now().year):
-#     """ Returns a list of participant IDs that we're tracking for the given year """
-#     from ffdonations.tasks.participants import update_participants
-#     yr = event_name_maker(year=year)
-#     ret = []
-#     for sa in Contact.objects.filter(extra_life_id__isnull=False).only('extra_life_id').all():
-#         try:
-#             # Only query the api at all if we have MIN_EL_PARTICIPANTID set and our ID is >= it
-#             if settings.MIN_EL_PARTICIPANTID:
-#                 if int(sa.extra_life_id) >= settings.MIN_EL_PARTICIPANTID:
-#                     tm = ParticipantModel.objects.get(id=int(sa.extra_life_id))
-#                     if tm.event.name == yr:
-#                         ret.append(tm.id)
-#         except ParticipantModel.DoesNotExist:
-#             update_participants.delay([sa.extra_life_id, ])
-#     return ret
-#
 
 @memoize(timeout=120)
 def el_num_donations(year=timezone.now().year):

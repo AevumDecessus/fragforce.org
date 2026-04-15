@@ -79,13 +79,13 @@ class KeyAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
-            return ('stream_key',)
-        return ()
+            return ['stream_key']
+        return []
 
     def get_exclude(self, request, obj=None):
         if not obj:
-            return ('stream_key',)
-        return ()
+            return ['stream_key']
+        return []
 
     @admin.action(description="Regenerate stream key")
     def regenerate_key(self, request, queryset):
