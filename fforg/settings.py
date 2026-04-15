@@ -202,8 +202,10 @@ VERSION = int(HEROKU_RELEASE_VERSION_NUM)
 # Max rows for api to return
 MAX_API_ROWS = int(os.environ.get('MAX_API_ROWS', 1024))
 
+REDIS_LOCALHOST = 'redis://localhost'
+
 if os.environ.get('REDIS_URL', None):
-    REDIS_URL_DEFAULT = 'redis://localhost'
+    REDIS_URL_DEFAULT = REDIS_LOCALHOST
     # Base URL - Needs DB ID added
     REDIS_URL_BASE = os.environ.get('REDIS_URL', REDIS_URL_DEFAULT)
     # Don't use DB 0 for anything
@@ -218,36 +220,29 @@ if os.environ.get('REDIS_URL', None):
     REDIS_URL_DJ_CACHE = REDIS_URL_BASE + "/4"
 
 
-elif os.environ.get('REDIS0_URL', None):
-    REDIS_URL_DEFAULT = 'redis://localhost'
-    # Base URL - Needs DB ID added
-    REDIS_URL_BASE = REDIS_URL_DEFAULT
-    # Don't use DB 0 for anything
-    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', 'redis://localhost') + "/0"
-    # Celery tasks
-    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', 'redis://localhost') + "/0"
-    # Celery tombstones (aka results)
-    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', 'redis://localhost') + "/0"
-    # Misc timers
-    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', 'redis://localhost') + "/0"
-    # Django cache
-    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', 'redis://localhost') + "/0"
-
 else:
-    REDIS_URL_DEFAULT = 'redis://localhost'
+    REDIS_URL_DEFAULT = REDIS_LOCALHOST
     # Base URL - Needs DB ID added
     REDIS_URL_BASE = REDIS_URL_DEFAULT
     # Don't use DB 0 for anything
-    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', 'redis://localhost') + "/0"
+    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', REDIS_LOCALHOST) + "/0"
     # Celery tasks
-    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', 'redis://localhost') + "/0"
+    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', REDIS_LOCALHOST) + "/0"
     # Celery tombstones (aka results)
-    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', 'redis://localhost') + "/0"
+    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', REDIS_LOCALHOST) + "/0"
     # Misc timers
-    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', 'redis://localhost') + "/0"
+    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', REDIS_LOCALHOST) + "/0"
     # Django cache
-    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', 'redis://localhost') + "/0"
+    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', REDIS_LOCALHOST) + "/0"
 
+CELERY_IMPORTS = [
+    'ffdonations.tasks.donations',
+    'ffdonations.tasks.participants',
+    'ffdonations.tasks.sender',
+    'ffdonations.tasks.teams',
+    'ffdonations.tasks.tiltify.campaigns',
+    'ffdonations.tasks.tiltify.teams',
+]
 CELERY_ACCEPT_CONTENT = ['json', ]
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_ACKS_LATE = True

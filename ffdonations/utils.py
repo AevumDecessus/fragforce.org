@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db.models import Sum
 from django.utils import timezone
 from memoize import memoize
-from .models import *
+from .models import EventModel, TeamModel
 
 
 # @memoize(timeout=120)
@@ -30,8 +30,6 @@ def event_name_maker(year=timezone.now().year):
 @memoize(timeout=120)
 def el_teams(year=timezone.now().year):
     """ Returns a list of team IDs that we're tracking for the given year """
-    from ffdonations.tasks.teams import update_teams
-    yr = event_name_maker(year=year)
     ret = set()
     # Always include the EXTRALIFE_TEAMID team
     if settings.EXTRALIFE_TEAMID > 0:

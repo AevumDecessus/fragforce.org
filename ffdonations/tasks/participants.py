@@ -6,7 +6,7 @@ from django.utils import timezone
 from requests.exceptions import HTTPError
 
 from extralifeapi.participants import Participants
-from ..models import *
+from ..models import EventModel, ParticipantModel, TeamModel
 
 
 def _make_p(*args, **kwargs):
@@ -95,7 +95,7 @@ def update_participants(self, participants=None):
         if participant.eventID:
             try:
                 evt = EventModel.objects.get(id=participant.eventID)
-            except EventModel.DoesNotExist as e:
+            except EventModel.DoesNotExist:
                 evt = EventModel(tracked=False, id=participant.eventID)
                 evt.save()
         else:
@@ -104,7 +104,7 @@ def update_participants(self, participants=None):
         if participant.teamID:
             try:
                 team = TeamModel.objects.get(id=participant.teamID)
-            except TeamModel.DoesNotExist as e:
+            except TeamModel.DoesNotExist:
                 team = TeamModel(
                     tracked=False,
                     id=participant.teamID,
@@ -117,7 +117,7 @@ def update_participants(self, participants=None):
         # Get/create
         try:
             tm = ParticipantModel.objects.get(id=participant.participantID)
-        except ParticipantModel.DoesNotExist as e:
+        except ParticipantModel.DoesNotExist:
             tm = ParticipantModel(
                 tracked=False,
                 id=participant.participantID,

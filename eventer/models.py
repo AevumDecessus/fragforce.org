@@ -62,6 +62,7 @@ class Event(models.Model):
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
 
+    @classmethod
     def add_details(cls, fq=None):
         from django.db.models import Sum, F
 

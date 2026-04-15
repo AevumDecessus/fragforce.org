@@ -10,6 +10,8 @@ from django.views.decorators.http import require_POST, require_safe
 from .models import Key, Stream
 from .wordlist import generate_stream_key
 
+NO_OWNER = "no owner assigned"
+
 
 @csrf_exempt
 @require_POST
@@ -17,7 +19,7 @@ def start_srt(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, stream_key=skey)
     if not key.owner:
-        return HttpResponseForbidden("no owner assigned")
+        return HttpResponseForbidden(NO_OWNER)
     if not key.superstream:
         return HttpResponseForbidden("key not enabled for Super Stream events")
     # if key.is_live:
@@ -40,7 +42,7 @@ def start_livestream(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, stream_key=skey)
     if not key.owner:
-        return HttpResponseForbidden("no owner assigned")
+        return HttpResponseForbidden(NO_OWNER)
     if not key.livestream:
         return HttpResponseForbidden("Key not allowed to livestream")
     key.is_live = True
@@ -59,7 +61,7 @@ def start(request):
     skey = request.POST['name']
     key = get_object_or_404(Key, stream_key=skey)
     if not key.owner:
-        return HttpResponseForbidden("no owner assigned")
+        return HttpResponseForbidden(NO_OWNER)
     if not key.superstream:
         return HttpResponseForbidden("key not enabled for Super Stream events")
     # if key.is_live:

@@ -2,7 +2,9 @@ import requests
 from celery import shared_task
 from django.conf import settings
 
-from ..models import *
+from django.db.models import Q
+
+from ..models import DonationModel
 
 TRACKING_BOT = 'TRACKING_BOT'
 
