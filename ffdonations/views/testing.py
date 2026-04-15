@@ -27,7 +27,7 @@ def _onlydebug(f):
 
 @require_safe
 @_onlydebug
-def v_testView(request):
+def v_test_view(request):
     ret = [
         ('pct',),
         ('team',),
@@ -38,7 +38,7 @@ def v_testView(request):
 
 @require_safe
 @_onlydebug
-def v_forceUpdate(request):
+def v_force_update(request):
     ret = [
         update_donations_existing.delay(),
         update_participants.delay(),
