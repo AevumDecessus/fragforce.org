@@ -16,4 +16,4 @@ RUN pipenv install
 
 VOLUME /code
 
-CMD /bin/bash && wait
+CMD ["/bin/bash"]
