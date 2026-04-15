@@ -1538,12 +1538,12 @@
         },
         "py-cord": {
             "hashes": [
-                "sha256:100935f37e77ba8ac1e3eff0b180e6d69bcac083de81d4c83d42327d9a2eddee",
-                "sha256:d95301226f0642f6f3b23e21c31987ebbe23fdb7007cbc8143b010eb6780dec1"
+                "sha256:86d2172c5b0de33d3aa5611d940dd98acfb1b95adfa10ae7b749e6aaf923ffff",
+                "sha256:e25e5e9392f297b3d8fb8f9f31e57989276c1e2b12ebed5a7b1040dd5891d972"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.10' and python_version < '3.14'",
-            "version": "==2.7.1"
+            "version": "==2.7.2"
         },
         "pycparser": {
             "hashes": [
