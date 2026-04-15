@@ -101,9 +101,8 @@ def update_teams(self, teams=None):
         tm.event = evt
 
         tm.raw = team.raw
-        if settings.EXTRALIFE_TEAMID >= 0:
-            if tm.id == settings.EXTRALIFE_TEAMID:
-                tm.tracked = True
+        if settings.EXTRALIFE_TEAMID >= 0 and tm.id == settings.EXTRALIFE_TEAMID:
+            tm.tracked = True
         tm.save()
 
         # Hook in donations update
