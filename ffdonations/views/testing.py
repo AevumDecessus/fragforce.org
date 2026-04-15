@@ -2,6 +2,7 @@ from functools import wraps
 
 from django.http import JsonResponse
 from django.shortcuts import Http404
+from django.views.decorators.http import require_safe
 
 from django.conf import settings
 
@@ -24,6 +25,7 @@ def _onlydebug(f):
     return wrapped
 
 
+@require_safe
 @_onlydebug
 def v_testView(request):
     ret = [
@@ -34,6 +36,7 @@ def v_testView(request):
     return JsonResponse([repr(r) for r in ret], safe=False)
 
 
+@require_safe
 @_onlydebug
 def v_forceUpdate(request):
     ret = [
