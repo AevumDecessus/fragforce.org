@@ -41,7 +41,7 @@ class NotModifiedResponse:
 
 class DonorDriveBase(object):
     DEFAULT_BASE_URL = 'https://www.extra-life.org/api/'
-    RE_MATCH_LINK = re.compile(r'^\<(.*)\>;rel="(.*)"')
+    RE_MATCH_LINK = re.compile(r'^\<([^>]*)\>;rel="([^"]*)"')
 
     def __init__(self, base_url=DEFAULT_BASE_URL, log_parent=mod_logger, request_sleeper=None,
                  max_retries=None, server_max_retries=None, http_cache=None):
