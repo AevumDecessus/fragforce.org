@@ -86,25 +86,6 @@ def el_donation_stats(year=timezone.now().year):
     )
 
 
-@memoize(timeout=120)
-def childsplay_donation_stats():
-    """ For current year """
-    raised = CampaignTiltifyModel.objects.filter(
-        startsAt__lte=timezone.now(),
-        endsAt__gte=timezone.now(),
-        team__in=TeamTiltifyModel.objects.filter(slug__in=settings.TILTIFY_TEAMS)
-    ).aggregate(
-        total=Sum('totalAmountRaised'),
-        supporting=Sum('supportingAmountRaised'),
-        direct=Sum('amountRaised'),
-    )
-    return dict(
-        totalAmountRaised=float(raised.get('total', 0) or 0),
-        supportingAmountRaised=float(raised.get('supporting', 0) or 0),
-        amountRaised=float(raised.get('amount', 0) or 0),
-    )
-
-
 @memoize(timeout=3600)
 def current_el_events():
     """ Gets a list of valid events """
