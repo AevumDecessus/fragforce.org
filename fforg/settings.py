@@ -220,21 +220,6 @@ if os.environ.get('REDIS_URL', None):
     REDIS_URL_DJ_CACHE = REDIS_URL_BASE + "/4"
 
 
-elif os.environ.get('REDIS0_URL', None):
-    REDIS_URL_DEFAULT = REDIS_LOCALHOST
-    # Base URL - Needs DB ID added
-    REDIS_URL_BASE = REDIS_URL_DEFAULT
-    # Don't use DB 0 for anything
-    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', REDIS_LOCALHOST) + "/0"
-    # Celery tasks
-    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', REDIS_LOCALHOST) + "/0"
-    # Celery tombstones (aka results)
-    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', REDIS_LOCALHOST) + "/0"
-    # Misc timers
-    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', REDIS_LOCALHOST) + "/0"
-    # Django cache
-    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', REDIS_LOCALHOST) + "/0"
-
 else:
     REDIS_URL_DEFAULT = REDIS_LOCALHOST
     # Base URL - Needs DB ID added
