@@ -2,8 +2,14 @@ from functools import wraps
 
 from django.http import JsonResponse
 from django.shortcuts import Http404
+from django.views.decorators.http import require_safe
 
-from ..tasks import *
+from django.conf import settings
+
+from ..models import ParticipantModel, TeamModel
+from ..tasks.donations import update_donations_existing, update_donations_participant, update_donations_team
+from ..tasks.participants import update_participants
+from ..tasks.teams import update_teams
 
 
 def _onlydebug(f):
@@ -19,8 +25,9 @@ def _onlydebug(f):
     return wrapped
 
 
+@require_safe
 @_onlydebug
-def v_testView(request):
+def v_test_view(request):
     ret = [
         ('pct',),
         ('team',),
@@ -29,8 +36,9 @@ def v_testView(request):
     return JsonResponse([repr(r) for r in ret], safe=False)
 
 
+@require_safe
 @_onlydebug
-def v_forceUpdate(request):
+def v_force_update(request):
     ret = [
         update_donations_existing.delay(),
         update_participants.delay(),

@@ -1,4 +1,6 @@
-from .redisdb import *
+from django.conf import settings
+
+from .redisdb import HttpCacheDB, TimersDB
 
 # Timers
 r_timers = TimersDB(settings.REDIS_URL_TIMERS)

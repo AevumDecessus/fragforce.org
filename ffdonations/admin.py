@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import *
+from .models import DonationModel, EventModel, ParticipantModel, TeamModel
 from .tasks.donations import update_donations_if_needed_team, update_donations_if_needed_participant
 
 
@@ -31,16 +31,3 @@ class ParticipantModelAdmin(admin.ModelAdmin):
             count += 1
         self.message_user(request, f"Queued donation sync for {count} participant(s).")
 admin.site.register(DonationModel)
-admin.site.register(MediaTiltifyModel)
-admin.site.register(RewardTiltifyModel)
-admin.site.register(SocailTiltifyModel)
-admin.site.register(AddressTiltifyModel)
-admin.site.register(ColorTiltifyModel)
-admin.site.register(SettingsTiltifyModel)
-admin.site.register(CauseTiltifyModel)
-admin.site.register(EventTiltifyModel)
-admin.site.register(LiveStreamTiltifyModel)
-admin.site.register(TeamTiltifyModel)
-admin.site.register(UserTiltifyModel)
-admin.site.register(CampaignTiltifyModel)
-admin.site.register(DonationTiltifyModel)

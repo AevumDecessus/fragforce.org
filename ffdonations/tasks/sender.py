@@ -2,15 +2,11 @@ import requests
 from celery import shared_task
 from django.conf import settings
 
-from ..models import *
+from django.db.models import Q
+
+from ..models import DonationModel
 
 TRACKING_BOT = 'TRACKING_BOT'
-
-
-# @receiver(post_save, sender=DonationModel)
-# def cb_post_save(sender, instance, **kwargs):
-#     if settings.FRAG_BOT_KEY != "":
-#         note_new_donation.delay(instance.id)
 
 
 @shared_task(bind=True)

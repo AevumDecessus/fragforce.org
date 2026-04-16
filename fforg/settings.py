@@ -107,7 +107,6 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
     },
 }
-# DATABASE_ROUTERS = ["fforg.router.HCRouter", ]
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -202,8 +201,10 @@ VERSION = int(HEROKU_RELEASE_VERSION_NUM)
 # Max rows for api to return
 MAX_API_ROWS = int(os.environ.get('MAX_API_ROWS', 1024))
 
+REDIS_LOCALHOST = 'redis://localhost'
+
 if os.environ.get('REDIS_URL', None):
-    REDIS_URL_DEFAULT = 'redis://localhost'
+    REDIS_URL_DEFAULT = REDIS_LOCALHOST
     # Base URL - Needs DB ID added
     REDIS_URL_BASE = os.environ.get('REDIS_URL', REDIS_URL_DEFAULT)
     # Don't use DB 0 for anything
@@ -218,36 +219,29 @@ if os.environ.get('REDIS_URL', None):
     REDIS_URL_DJ_CACHE = REDIS_URL_BASE + "/4"
 
 
-elif os.environ.get('REDIS0_URL', None):
-    REDIS_URL_DEFAULT = 'redis://localhost'
-    # Base URL - Needs DB ID added
-    REDIS_URL_BASE = REDIS_URL_DEFAULT
-    # Don't use DB 0 for anything
-    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', 'redis://localhost') + "/0"
-    # Celery tasks
-    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', 'redis://localhost') + "/0"
-    # Celery tombstones (aka results)
-    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', 'redis://localhost') + "/0"
-    # Misc timers
-    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', 'redis://localhost') + "/0"
-    # Django cache
-    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', 'redis://localhost') + "/0"
-
 else:
-    REDIS_URL_DEFAULT = 'redis://localhost'
+    REDIS_URL_DEFAULT = REDIS_LOCALHOST
     # Base URL - Needs DB ID added
     REDIS_URL_BASE = REDIS_URL_DEFAULT
     # Don't use DB 0 for anything
-    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', 'redis://localhost') + "/0"
+    REDIS_URL_DEFAULT = os.environ.get('REDIS0_URL', REDIS_LOCALHOST) + "/0"
     # Celery tasks
-    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', 'redis://localhost') + "/0"
+    REDIS_URL_TASKS = os.environ.get('REDIS1_URL', REDIS_LOCALHOST) + "/0"
     # Celery tombstones (aka results)
-    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', 'redis://localhost') + "/0"
+    REDIS_URL_TOMBS = os.environ.get('REDIS2_URL', REDIS_LOCALHOST) + "/0"
     # Misc timers
-    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', 'redis://localhost') + "/0"
+    REDIS_URL_TIMERS = os.environ.get('REDIS3_URL', REDIS_LOCALHOST) + "/0"
     # Django cache
-    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', 'redis://localhost') + "/0"
+    REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', REDIS_LOCALHOST) + "/0"
 
+CELERY_IMPORTS = [
+    'ffdonations.tasks.donations',
+    'ffdonations.tasks.participants',
+    'ffdonations.tasks.sender',
+    'ffdonations.tasks.teams',
+    'ffdonations.tasks.tiltify.campaigns',
+    'ffdonations.tasks.tiltify.teams',
+]
 CELERY_ACCEPT_CONTENT = ['json', ]
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_ACKS_LATE = True
@@ -259,9 +253,6 @@ GOOGLE_ANALYTICS_ID = os.environ.get('GOOGLE_ANALYTICS_ID', None)
 MAX_UPCOMING_EVENTS = int(os.environ.get('MAX_UPCOMING_EVENTS', 20))
 MAX_PAST_EVENTS = int(os.environ.get('MAX_PAST_EVENTS', 20))
 MAX_ALL_EVENTS = int(os.environ.get('MAX_ALL_EVENTS', 20))
-TILTIFY_TOKEN = os.environ.get('TILTIFY_TOKEN', None)
-TILTIFY_TIMEOUT = int(os.environ.get('TILTIFY_TIMEOUT', 60))
-TILTIFY_APP_OWNER = os.environ.get('TILTIFY_APP_OWNER', HEROKU_APP_NAME)
 
 # Various view cache timeouts
 VIEW_TEAMS_CACHE = int(os.environ.get('VIEW_TEAMS_CACHE', 20))
@@ -323,17 +314,8 @@ EL_REQUEST_MIN_TIME_URL = timedelta(seconds=int(os.environ.get('EL_REQUEST_MIN_T
 # Min time between request for any given remote host
 REQUEST_MIN_TIME_HOST = timedelta(seconds=int(os.environ.get('REQUEST_MIN_TIME_HOST_SECONDS', 15)))
 
-# How often to check for updates
-TIL_TEAMS_UPDATE_FREQUENCY_CHECK = timedelta(minutes=int(os.environ.get('TIL_TEAMS_UPDATE_FREQUENCY_CHECK', 1)))
-
 # How often to check for missed donations to send to twitch bot
 SEND_MISSED_DONATIONS = datetime.timedelta(minutes=int(os.environ.get('SEND_MISSED_DONATIONS', 10)))
-
-# How long to wait in seconds after getting a parent before fetching any children
-TF_UPDATE_WAIT = timedelta(seconds=int(os.environ.get('TF_UPDATE_WAIT', 120)))
-
-# Comma seperated list of tiltify teams (the slugs or IDs) to monitor
-TILTIFY_TEAMS = os.environ.get('TILTIFY_TEAMS', 'fragforce').split(',')
 
 # Current Extra-Life event id - Unused atm
 EL_EVENT_ID = int(os.environ.get('EL_EVENT_ID', -1))
@@ -413,11 +395,7 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ffdonations.tasks.donations.update_donations_if_needed',
         'schedule': EL_DON_UPDATE_FREQUENCY_CHECK,
     },
-    # 'til-update-all-teams': {
-    #     'task': 'ffdonations.tasks.tiltify.teams.update_teams',
-    #     'schedule': TIL_TEAMS_UPDATE_FREQUENCY_CHECK,
-    # },
-    'send-missed-tracks': {
+'send-missed-tracks': {
         'task': 'ffdonations.tasks.sender.note_new_donations',
         'schedule': SEND_MISSED_DONATIONS,
     },

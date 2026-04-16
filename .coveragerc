@@ -1,0 +1,11 @@
+[run]
+omit =
+    */migrations/*
+    manage.py
+    fforg/test_runner.py
+
+[report]
+omit =
+    */migrations/*
+    manage.py
+    fforg/test_runner.py

@@ -6,7 +6,7 @@ from django.utils import timezone
 from requests.exceptions import HTTPError
 
 from extralifeapi.teams import Teams
-from ..models import *
+from ..models import EventModel, TeamModel
 
 
 def _make_team(*args, **kwargs):
@@ -79,7 +79,7 @@ def update_teams(self, teams=None):
         if team.eventID:
             try:
                 evt = EventModel.objects.get(id=team.eventID)
-            except EventModel.DoesNotExist as e:
+            except EventModel.DoesNotExist:
                 evt = EventModel(tracked=False, id=team.eventID, name=team.eventName)
                 evt.save()
         else:
@@ -88,7 +88,7 @@ def update_teams(self, teams=None):
         try:
             tm = TeamModel.objects.get(id=team.teamID)
 
-        except TeamModel.DoesNotExist as e:
+        except TeamModel.DoesNotExist:
             tm = TeamModel(
                 tracked=False,
                 id=team.teamID,
@@ -101,9 +101,8 @@ def update_teams(self, teams=None):
         tm.event = evt
 
         tm.raw = team.raw
-        if settings.EXTRALIFE_TEAMID >= 0:
-            if tm.id == settings.EXTRALIFE_TEAMID:
-                tm.tracked = True
+        if settings.EXTRALIFE_TEAMID >= 0 and tm.id == settings.EXTRALIFE_TEAMID:
+            tm.tracked = True
         tm.save()
 
         # Hook in donations update

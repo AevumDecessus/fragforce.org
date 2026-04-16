@@ -1,9 +1,14 @@
 from django.http import JsonResponse
 from django.views.decorators.cache import cache_page
+from django.views.decorators.http import require_safe
 
-from ..tasks import *
+from django.conf import settings
+
+from ..models import TeamModel
+from ..tasks.teams import update_teams_if_needed
 
 
+@require_safe
 @cache_page(settings.VIEW_TEAMS_CACHE)
 def v_teams(request):
     update_teams_if_needed.delay()
@@ -13,6 +18,7 @@ def v_teams(request):
     )
 
 
+@require_safe
 @cache_page(settings.VIEW_TEAMS_CACHE)
 def v_tracked_teams(request):
     update_teams_if_needed.delay()

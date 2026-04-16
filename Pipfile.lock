@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "0dc6c8324149fe7760b64945cf462f03c1e56bd59700dcc368f5a5897bee8922"
+            "sha256": "a50dd8a98b88c4035ead4cc138117bacb3d36783b6c95984deeefb1e72b6f8bd"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -1258,11 +1258,11 @@
         },
         "packaging": {
             "hashes": [
-                "sha256:00243ae351a257117b6a241061796684b084ed1c516a08c48a3f7e147a9d80b4",
-                "sha256:b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529"
+                "sha256:5d9c0669c6285e491e0ced2eee587eaf67b670d94a19e94e3984a481aba6802f",
+                "sha256:f042152b681c4bfac5cae2742a55e103d27ab2ec0f3d88037136b6bfe7c9c5de"
             ],
             "markers": "python_version >= '3.8'",
-            "version": "==26.0"
+            "version": "==26.1"
         },
         "parso": {
             "hashes": [
@@ -1672,11 +1672,6 @@
                 "sha256:d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695"
             ],
             "version": "==0.6.3"
-        },
-        "tiltify2": {
-            "editable": true,
-            "git": "https://github.com/gpmidi/tiltify-v2-api-python.git",
-            "ref": "a566265e35ea9d79f2775ca53a2b9fee2106cfd8"
         },
         "traitlets": {
             "hashes": [

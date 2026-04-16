@@ -15,12 +15,16 @@ Including another URLconf
 """
 from django.urls import path
 
-from ffdonations.views import *
+from ffdonations.views.donations import v_donations, v_tracked_donations
+from ffdonations.views.participants import v_participants, v_tracked_participants
+from ffdonations.views.stats import v_tracked_donations_stats
+from ffdonations.views.teams import v_teams, v_tracked_teams
+from ffdonations.views.testing import v_force_update, v_test_view
 
 urlpatterns = [
     # Test stuff - Only enabled if DEBUG=True
-    path('test', v_testView, name='testview'),
-    path('update/force', v_forceUpdate, name='force-update'),
+    path('test', v_test_view, name='testview'),
+    path('update/force', v_force_update, name='force-update'),
     # Teams
     path('teams', v_teams, name='teams'),
     path('teams/tracked', v_tracked_teams, name='teams-tracked'),

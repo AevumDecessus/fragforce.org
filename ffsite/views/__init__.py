@@ -1,2 +1,1 @@
-# Import all subs
-from .static import *
+# Views are imported directly from submodules
