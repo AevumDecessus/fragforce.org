@@ -132,3 +132,19 @@ class AdminLoginDiscordButtonTest(TestCase):
     def test_discord_button_hidden_when_credentials_not_set(self):
         response = self.client.get(reverse('admin:login'))
         self.assertNotContains(response, reverse('social:begin', args=['discord']))
+
+    @override_settings(
+        SOCIAL_AUTH_DISCORD_KEY='123456789012345678',
+        SOCIAL_AUTH_DISCORD_SECRET='abcDEF123_-abcDEF123_-abcDEF1234',
+    )
+    def test_discord_button_includes_default_admin_next(self):
+        response = self.client.get(reverse('admin:login'))
+        self.assertContains(response, reverse('social:begin', args=['discord']) + '?next=/admin/')
+
+    @override_settings(
+        SOCIAL_AUTH_DISCORD_KEY='123456789012345678',
+        SOCIAL_AUTH_DISCORD_SECRET='abcDEF123_-abcDEF123_-abcDEF1234',
+    )
+    def test_discord_button_preserves_next_param(self):
+        response = self.client.get(reverse('admin:login') + '?next=/admin/ffstream/')
+        self.assertContains(response, reverse('social:begin', args=['discord']) + '?next=/admin/ffstream/')
