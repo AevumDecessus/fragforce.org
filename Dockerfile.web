@@ -41,6 +41,7 @@ COPY evtsignup evtsignup
 COPY ffoverlay ffoverlay
 COPY ffbot ffbot
 COPY ffdiscord ffdiscord
+COPY templates templates
 COPY manage.py .
 
 RUN chown -R appuser /home/appuser

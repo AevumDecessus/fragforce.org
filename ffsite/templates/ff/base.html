@@ -69,6 +69,11 @@
                 <li class="nav-item">
                     <a class="nav-link" href="{% url 'my-keys' %}">My Stream Keys</a>
                 </li>
+                {% if user.is_staff %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{% url 'admin:index' %}">Admin</a>
+                </li>
+                {% endif %}
                 <li class="nav-item">
                     <form method="post" action="{% url 'logout' %}" class="d-inline m-0 p-0">
                         {% csrf_token %}
