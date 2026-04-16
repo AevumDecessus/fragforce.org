@@ -1,5 +1,8 @@
+from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
+
+TEST_PASSWORD = 'pass'
 
 
 class LoginErrorViewTest(TestCase):
@@ -90,3 +93,23 @@ class StreamViewTest(TestCase):
     def test_context_stream_url_none_when_not_set(self):
         response = self.client.get(reverse('stream'))
         self.assertIsNone(response.context['stream_url'])
+
+
+class AdminNavLinkTest(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user('staff', is_staff=True, password=TEST_PASSWORD)
+        self.regular_user = User.objects.create_user('regular', is_staff=False, password=TEST_PASSWORD)
+
+    def test_admin_link_shown_for_staff(self):
+        self.client.login(username='staff', password=TEST_PASSWORD)
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, reverse('admin:index'))
+
+    def test_admin_link_hidden_for_regular_user(self):
+        self.client.login(username='regular', password=TEST_PASSWORD)
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, reverse('admin:index'))
+
+    def test_admin_link_hidden_when_not_logged_in(self):
+        response = self.client.get(reverse('home'))
+        self.assertNotContains(response, reverse('admin:index'))
