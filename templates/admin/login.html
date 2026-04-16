@@ -1,0 +1,11 @@
+{% extends "admin/login.html" %}
+{% load i18n %}
+
+{% block content %}
+{{ block.super }}
+{% if discord_login_enabled %}
+<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ccc; text-align: center;">
+    <a href="{% url 'social:begin' 'discord' %}" class="button">{% trans "Login with Discord" %}</a>
+</div>
+{% endif %}
+{% endblock %}
