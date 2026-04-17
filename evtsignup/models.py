@@ -2,11 +2,6 @@ from django.db import models
 from django_workflow_engine.executor import User
 
 
-class SalesforceEventUser(models.Model):
-    """ Created if a user maps to a SFID """
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    salesforce_id = models.CharField(max_length=64, blank=False, db_index=True, null=False, unique=True)
-
 
 class InterestLevel(models.Model):
     """ Different levels/types of interest """
