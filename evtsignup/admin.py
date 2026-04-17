@@ -1,8 +1,10 @@
 # Register your models here.
 from django.contrib import admin
 
-from evtsignup.models import EventAvailabilityInterest, EventInterest, EventRoleInterest, \
-    GameInterestUser, GameInterestUserEvent, InterestLevel, SalesforceEventUser, StreamSuggestion
+from evtsignup.models import (
+    EventAvailabilityInterest, EventInterest, GameInterestUserEvent,
+    InterestLevel, SalesforceEventUser,
+)
 
 
 @admin.register(EventAvailabilityInterest)
@@ -12,16 +14,6 @@ class EventAvailabilityInterestAdmin(admin.ModelAdmin):
 
 @admin.register(EventInterest)
 class EventInterestAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(EventRoleInterest)
-class EventRoleInterestAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(GameInterestUser)
-class GameInterestUserAdmin(admin.ModelAdmin):
     pass
 
 
@@ -37,9 +29,4 @@ class InterestLevelAdmin(admin.ModelAdmin):
 
 @admin.register(SalesforceEventUser)
 class SalesforceEventUserAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(StreamSuggestion)
-class StreamSuggestionAdmin(admin.ModelAdmin):
     pass
