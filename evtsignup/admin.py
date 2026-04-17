@@ -1,13 +1,8 @@
 # Register your models here.
 from django.contrib import admin
 
-from evtsignup.models import DiscordEventUser, EventAvailabilityInterest, EventInterest, EventRoleInterest, \
+from evtsignup.models import EventAvailabilityInterest, EventInterest, EventRoleInterest, \
     ExtraLifeEventUser, GameInterestUser, GameInterestUserEvent, InterestLevel, SalesforceEventUser, StreamSuggestion
-
-
-@admin.register(DiscordEventUser)
-class DiscordEventUserAdmin(admin.ModelAdmin):
-    pass
 
 
 @admin.register(EventAvailabilityInterest)
