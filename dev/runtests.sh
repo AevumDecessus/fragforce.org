@@ -2,9 +2,11 @@
 # Run the full test suite (or a subset) via Docker and format output as a GitHub comment.
 #
 # Usage:
-#   dev/runtests.sh               # run all tests
+#   dev/runtests.sh               # run all tests (reuses existing test DB)
 #   dev/runtests.sh ffdonations   # run a single app
 #   dev/runtests.sh ffdonations.tests.SomeTestClass.test_method
+#   dev/runtests.sh --fresh       # drop and recreate the test DB first, then run all tests
+#   dev/runtests.sh --fresh ffdonations  # drop and recreate, then run a single app
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -24,8 +26,15 @@ COMMIT=$(git rev-parse --short HEAD)
 DATE=$(date +%Y-%m-%d)
 FENCE='```'
 
+# Handle --fresh flag
+KEEPDB="--keepdb"
+if [[ "${1:-}" == "--fresh" ]]; then
+    shift
+    KEEPDB=""
+fi
+
 # Run tests, capturing all output (Django test runner writes to stderr)
-OUTPUT=$(docker compose exec -T web pipenv run python manage.py test "$@" 2>&1)
+OUTPUT=$(docker compose exec -T web pipenv run python manage.py test $KEEPDB "$@" 2>&1)
 EXIT_CODE=$?
 
 # Extract summary lines
