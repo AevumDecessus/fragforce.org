@@ -9,13 +9,6 @@ class SalesforceEventUser(models.Model):
     salesforce_id = models.CharField(max_length=64, blank=False, db_index=True, null=False, unique=True)
 
 
-class ExtraLifeEventUser(models.Model):
-    """ Created if a user maps to an extra life user """
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
-    el_participant_id = models.PositiveBigIntegerField(blank=False, db_index=True, null=False, unique=True)
-    # el_participant_url = models.URLField(max_length=8192, blank=False, null=False) # calc'ed
-
-
 class StreamSuggestion(models.Model):
     """ A user would like to stream a game """
     event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
@@ -32,6 +25,11 @@ class EventInterest(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=False, null=False)
     event = models.ForeignKey("eventer.Event", on_delete=models.CASCADE, blank=False, null=False)
     interest_level = models.ForeignKey("evtsignup.InterestLevel", on_delete=models.CASCADE, blank=False, null=False)
+
+    # Display info from signup form
+    display_name = models.CharField(max_length=255, blank=True)
+    preferences = models.TextField(blank=True)  # pronouns, other info
+    acknowledged = models.BooleanField(default=False)
 
     class Meta:
         unique_together = [
@@ -52,6 +50,15 @@ class EventRoleInterest(models.Model):
     event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
     event_role = models.ForeignKey("eventer.EventRole", on_delete=models.CASCADE, blank=False, null=False)
     interest_level = models.ForeignKey("InterestLevel", on_delete=models.CASCADE, blank=False, null=False)
+
+    # Fundraising (streamers)
+    fundraising_url = models.URLField(null=True, blank=True)
+    el_participant = models.ForeignKey(
+        'ffdonations.ParticipantModel', null=True, blank=True, on_delete=models.SET_NULL
+    )
+
+    # Write-in game preferences
+    notes = models.TextField(blank=True)
 
     class Meta:
         unique_together = [
@@ -84,13 +91,13 @@ class GameInterestUserEvent(models.Model):
 
 
 class EventAvailabilityInterest(models.Model):
-    """ Used by users to show their availability for a given time period for an event they've expressed interest in """
-    event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
+    """ User's availability for a given time period for a specific role in an event """
+    event_role_interest = models.ForeignKey("EventRoleInterest", on_delete=models.CASCADE, blank=True, null=True)
     interest_level = models.ForeignKey("InterestLevel", on_delete=models.CASCADE, blank=False, null=False)
     period_start = models.DateTimeField(null=False, blank=False)
     period_end = models.DateTimeField(null=False, blank=False)
 
     class Meta:
         unique_together = [
-            ["event_interest", "period_start", "period_end"],  # Basic overlap check
+            ["event_role_interest", "period_start", "period_end"],
         ]

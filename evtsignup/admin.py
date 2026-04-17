@@ -2,7 +2,7 @@
 from django.contrib import admin
 
 from evtsignup.models import EventAvailabilityInterest, EventInterest, EventRoleInterest, \
-    ExtraLifeEventUser, GameInterestUser, GameInterestUserEvent, InterestLevel, SalesforceEventUser, StreamSuggestion
+    GameInterestUser, GameInterestUserEvent, InterestLevel, SalesforceEventUser, StreamSuggestion
 
 
 @admin.register(EventAvailabilityInterest)
@@ -17,11 +17,6 @@ class EventInterestAdmin(admin.ModelAdmin):
 
 @admin.register(EventRoleInterest)
 class EventRoleInterestAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(ExtraLifeEventUser)
-class ExtraLifeEventUserAdmin(admin.ModelAdmin):
     pass
 
 
