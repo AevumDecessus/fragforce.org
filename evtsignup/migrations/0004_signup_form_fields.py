@@ -44,10 +44,6 @@ class Migration(migrations.Migration):
             model_name='streamsuggestion',
             name='suggested_players',
         ),
-        migrations.AlterUniqueTogether(
-            name='eventavailabilityinterest',
-            unique_together={('event_interest', 'hour')},
-        ),
         migrations.AddField(
             model_name='eventavailabilityinterest',
             name='as_moderator',
@@ -72,6 +68,10 @@ class Migration(migrations.Migration):
             model_name='eventavailabilityinterest',
             name='hour',
             field=models.DateTimeField(default='2025-01-01 00:00:00'),
+        ),
+        migrations.AlterUniqueTogether(
+            name='eventavailabilityinterest',
+            unique_together={('event_interest', 'hour')},
         ),
         migrations.AddField(
             model_name='eventinterest',
