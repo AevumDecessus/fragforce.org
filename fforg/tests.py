@@ -1,9 +1,18 @@
+import importlib
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+from django.conf import settings
 from django.test import TestCase
 
 from .redisdb import HttpCacheDB, TimersDB
+
+
+class CeleryImportsTest(TestCase):
+    def test_all_celery_imports_are_importable(self):
+        for module in settings.CELERY_IMPORTS:
+            with self.subTest(module=module):
+                importlib.import_module(module)
 
 
 class TimersDBTimeUntilTest(TestCase):
