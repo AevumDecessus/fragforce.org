@@ -36,7 +36,7 @@ class Participants(DonorDriveBase):
         return 'participants'
 
     def sub_by_pid(self, participantID):
-        return 'participants/%d' % participantID
+        return 'participants/%s' % participantID
 
     def sub_by_eid(self, eventID):
         return 'events/%d/participants' % eventID

@@ -602,6 +602,18 @@ class ParticipantFetchTest(TestCase):
         self.assertEqual(result.displayName, 'Liam Bonham')
         self.assertEqual(result.teamID, 8775)
 
+    @patch('extralifeapi.base.time')
+    def test_participant_accepts_vanity_slug(self, mock_time):
+        data = {'participantID': 19265, 'displayName': 'Liam Bonham', 'eventID': 508,
+                'teamID': 8775, 'fundraisingGoal': 8000.0, 'sumDonations': 0.0, 'numDonations': 0}
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=data))
+
+        result = self.client.participant('liambonham2024')
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('participants/liambonham2024', called_url)
+        self.assertEqual(result.participantID, 19265)
+
 
 class DonationMappingTest(TestCase):
     def test_maps_all_api_fields_to_namedtuple(self):
@@ -704,6 +716,16 @@ class TeamsFetchTest(TestCase):
 
         called_url = self.client.session.get.call_args[0][0]
         self.assertIn('teams/8775', called_url)
+
+    @patch('extralifeapi.base.time')
+    def test_team_accepts_vanity_slug(self, mock_time):
+        self.client.session.get = MagicMock(return_value=_mock_response(json_data=_TEAM_DATA))
+
+        result = self.client.team('fragforce-dcm')
+
+        called_url = self.client.session.get.call_args[0][0]
+        self.assertIn('teams/fragforce-dcm', called_url)
+        self.assertEqual(result.teamID, 8775)
 
     @patch('extralifeapi.base.time')
     def test_teams_yields_team_namedtuples(self, mock_time):

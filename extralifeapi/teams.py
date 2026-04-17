@@ -30,7 +30,7 @@ class Teams(DonorDriveBase):
         return 'teams'
 
     def sub_team_by_tid(self, teamID):
-        return 'teams/%d' % teamID
+        return 'teams/%s' % teamID
 
     def sub_team_by_eid(self, eventID):
         return 'events/%d/teams' % eventID
