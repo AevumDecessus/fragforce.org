@@ -239,8 +239,6 @@ CELERY_IMPORTS = [
     'ffdonations.tasks.participants',
     'ffdonations.tasks.sender',
     'ffdonations.tasks.teams',
-    'ffdonations.tasks.tiltify.campaigns',
-    'ffdonations.tasks.tiltify.teams',
 ]
 CELERY_ACCEPT_CONTENT = ['json', ]
 CELERY_TASK_TRACK_STARTED = True
