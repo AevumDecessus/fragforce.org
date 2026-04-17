@@ -4,8 +4,6 @@ import requests
 from django.conf import settings
 from social_core.exceptions import AuthForbidden
 
-from evtsignup.models import DiscordEventUser
-
 log = logging.getLogger(__name__)
 
 
@@ -29,16 +27,3 @@ def require_discord_guild(backend, response, *args, **kwargs):
     if str(required_guild_id) not in guild_ids:
         log.warning("User not in required guild %s", required_guild_id)
         raise AuthForbidden(backend)
-
-
-def save_discord_id(backend, user, response, *args, **kwargs):
-    """Populate DiscordEventUser with the Discord user ID after login."""
-    if backend.name != 'discord':
-        return
-    discord_id = str(response.get('id', ''))
-    if not discord_id:
-        return
-    DiscordEventUser.objects.update_or_create(
-        user=user,
-        defaults={'discord_id': discord_id},
-    )

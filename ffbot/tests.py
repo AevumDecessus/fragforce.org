@@ -1,20 +1,12 @@
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from evtsignup.models import DiscordEventUser
 from ffbot.utils import get_or_create_stream_key, get_or_register_user
 from ffstream.models import Key
 from social_django.models import UserSocialAuth
 
 
 class GetOrRegisterUserTest(TestCase):
-    def test_returns_existing_user_via_discord_event_user(self):
-        user = User.objects.create_user(username='existing')
-        DiscordEventUser.objects.create(user=user, discord_id='111111111111111111')
-        result = get_or_register_user('111111111111111111', 'existing')
-        self.assertEqual(result, user)
-        self.assertEqual(User.objects.count(), 1)
-
     def test_returns_existing_user_via_social_auth(self):
         user = User.objects.create_user(username='webuser')
         UserSocialAuth.objects.create(user=user, provider='discord', uid='222222222222222222', extra_data={})
@@ -25,7 +17,6 @@ class GetOrRegisterUserTest(TestCase):
     def test_creates_new_user_with_correct_records(self):
         result = get_or_register_user('333333333333333333', 'newuser')
         self.assertEqual(result.username, 'newuser')
-        self.assertTrue(DiscordEventUser.objects.filter(user=result, discord_id='333333333333333333').exists())
         self.assertTrue(UserSocialAuth.objects.filter(user=result, provider='discord', uid='333333333333333333').exists())
 
     def test_handles_username_collision(self):
