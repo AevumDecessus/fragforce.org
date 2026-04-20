@@ -46,6 +46,10 @@ class Game(models.Model):
     description = models.TextField(default='', blank=False, null=False)
     igdb_id = models.PositiveIntegerField(unique=True, null=False, blank=False)
     igdb_slug = models.SlugField(max_length=255, unique=True, null=True, blank=True, db_index=True)
+    igdb_url = models.URLField(null=True, blank=True)
+    igdb_cover_hash = models.CharField(max_length=255, null=True, blank=True)  # use //images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg
+    summary = models.TextField(blank=True)
+    multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True)
     status = models.ForeignKey('GameStatus', on_delete=models.CASCADE, blank=False, null=False)
     flags = HStoreField(default=dict, blank=False, null=False)
 
