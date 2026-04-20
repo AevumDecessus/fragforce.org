@@ -44,7 +44,8 @@ class Game(models.Model):
     name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
-    igdb_id = models.SlugField(max_length=255, blank=False, null=False, unique=True)
+    igdb_id = models.PositiveIntegerField(unique=True, null=False, blank=False)
+    igdb_slug = models.SlugField(max_length=255, unique=True, null=True, blank=True, db_index=True)
     status = models.ForeignKey('GameStatus', on_delete=models.CASCADE, blank=False, null=False)
     flags = HStoreField(default=dict, blank=False, null=False)
 
