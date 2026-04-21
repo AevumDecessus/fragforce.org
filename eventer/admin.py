@@ -5,7 +5,8 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, Game, Team, TeamMember, TeamRole
+from eventer.models import Event, EventPeriod, EventRole, EventSlotConfig, EventSlotTemplate, Game, Team, TeamMember, TeamRole
+from eventer.slot_generator import generate_slots
 
 SUPERSTREAM_ROLES = [
     {'name': 'Participant', 'slug': 'participant', 'description': 'Game participant - plays games with a streamer'},
@@ -64,6 +65,9 @@ class EventAdmin(admin.ModelAdmin):
             path('<int:event_id>/setup-superstream/',
                  self.admin_site.admin_view(self.setup_superstream_view),
                  name='eventer_event_setup_superstream'),
+            path('<int:event_id>/generate-slots/',
+                 self.admin_site.admin_view(self.generate_slots_view),
+                 name='eventer_event_generate_slots'),
         ]
         return custom + urls
 
@@ -105,6 +109,47 @@ class EventAdmin(admin.ModelAdmin):
             'title': f'Add Superstream Period - {event.name}',
         }
         return render(request, 'admin/eventer/event/setup_superstream.html', context)
+
+    def generate_slots_view(self, request, event_id):
+        event = get_object_or_404(Event, pk=event_id)
+        errors = None
+
+        if request.method == 'POST':
+            replace = request.POST.get('replace') == '1'
+            try:
+                result = generate_slots(event, replace=replace)
+                self.message_user(
+                    request,
+                    f"Generated slots: {result['created']} created, "
+                    f"{result['skipped']} already existed, "
+                    f"{result['deleted']} deleted.",
+                    messages.SUCCESS,
+                )
+                return HttpResponseRedirect(f'../../{event_id}/change/')
+            except ValueError as e:
+                errors = str(e)
+
+        existing_count = event.slot_templates.count()
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event,
+            'existing_count': existing_count,
+            'errors': errors,
+            'title': f'Generate Slot Templates - {event.name}',
+        }
+        return render(request, 'admin/eventer/event/generate_slots.html', context)
+
+@admin.register(EventSlotConfig)
+class EventSlotConfigAdmin(admin.ModelAdmin):
+    pass
+
+
+@admin.register(EventSlotTemplate)
+class EventSlotTemplateAdmin(admin.ModelAdmin):
+    list_display = ['event', 'label', 'start', 'stop']
+    list_filter = ['event']
+    filter_horizontal = ['roles']
+
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):

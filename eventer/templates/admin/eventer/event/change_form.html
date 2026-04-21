@@ -9,6 +9,11 @@
         Add Superstream Period
       </a>
     </li>
+    <li>
+      <a href="{% url 'admin:eventer_event_generate_slots' original.pk %}" class="historylink">
+        Generate Slot Templates
+      </a>
+    </li>
   </ul>
   {% endif %}
 {% endblock %}
