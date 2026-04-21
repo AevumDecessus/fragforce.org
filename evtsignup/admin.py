@@ -1,10 +1,7 @@
 # Register your models here.
 from django.contrib import admin
 
-from evtsignup.models import (
-    EventAvailabilityInterest, EventInterest, GameInterestUserEvent,
-    InterestLevel,
-)
+from evtsignup.models import EventAvailabilityInterest, EventInterest, GameInterestUserEvent
 
 
 @admin.register(EventAvailabilityInterest)
@@ -19,9 +16,4 @@ class EventInterestAdmin(admin.ModelAdmin):
 
 @admin.register(GameInterestUserEvent)
 class GameInterestUserEventAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(InterestLevel)
-class InterestLevelAdmin(admin.ModelAdmin):
     pass
