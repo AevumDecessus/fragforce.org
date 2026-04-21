@@ -1,6 +1,33 @@
 from django.db import models
 from django_workflow_engine.executor import User
 
+SUPERSTREAM_TIMEZONES = [
+    ('US/Canada', [
+        ('America/New_York', 'Eastern (ET)'),
+        ('America/Chicago', 'Central (CT)'),
+        ('America/Denver', 'Mountain (MT)'),
+        ('America/Los_Angeles', 'Pacific (PT)'),
+        ('America/Anchorage', 'Alaska (AKT)'),
+        ('Pacific/Honolulu', 'Hawaii (HT)'),
+    ]),
+    ('Australia/NZ', [
+        ('Australia/Sydney', 'Sydney/Melbourne (AEST)'),
+        ('Australia/Brisbane', 'Brisbane (AEST no DST)'),
+        ('Australia/Perth', 'Perth (AWST)'),
+        ('Pacific/Auckland', 'Auckland (NZST)'),
+    ]),
+    ('Europe/UK', [
+        ('Europe/London', 'London (GMT/BST)'),
+        ('Europe/Paris', 'Central Europe (CET/CEST)'),
+        ('Europe/Helsinki', 'Eastern Europe (EET/EEST)'),
+    ]),
+    ('Other', [
+        ('UTC', 'UTC'),
+        ('Asia/Singapore', 'Singapore (SGT)'),
+        ('Asia/Tokyo', 'Japan (JST)'),
+    ]),
+]
+
 
 class Team(models.Model):
     """ A team or group of people who do events """
@@ -78,7 +105,8 @@ class Event(models.Model):
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
     timezone = models.CharField(max_length=64, default='America/New_York', blank=False, null=False,
-                                help_text="IANA timezone name for coordinator-facing display (e.g. America/New_York). Public schedule uses browser local time via the |localtime template filter.")
+                                choices=SUPERSTREAM_TIMEZONES,
+                                help_text="Timezone for coordinator-facing display. Public schedule uses browser local time via the |localtime template filter.")
 
     @property
     def start(self):
