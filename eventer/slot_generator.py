@@ -66,6 +66,14 @@ def _generate_grid(event, tz, start, stop, config, use_prime_time, roles, first_
 
         is_first = False
         slot_stop = min(current + timedelta(hours=hours), stop)
+
+        # If the remaining time after this slot is less than the minimum slot length,
+        # absorb it into this slot rather than creating a stub at the end.
+        min_slot_hours = max(config.prime_block_hours, 2)
+        remaining = stop - slot_stop
+        if timedelta(0) < remaining < timedelta(hours=min_slot_hours):
+            slot_stop = stop
+
         label = _format_label(local, slot_stop.astimezone(tz))
 
         template, was_created = EventSlotTemplate.objects.get_or_create(
