@@ -65,6 +65,20 @@ class Event(models.Model):
     name = models.CharField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
+    timezone = models.CharField(max_length=64, default='America/New_York', blank=False, null=False,
+                                help_text="IANA timezone name for coordinator-facing display (e.g. America/New_York). Public schedule uses browser local time via the |localtime template filter.")
+
+    @property
+    def start(self):
+        """ Earliest period start - the event's effective start time """
+        period = self.eventperiod_set.order_by('start').first()
+        return period.start if period else None
+
+    @property
+    def end(self):
+        """ Latest period stop - the event's effective end time """
+        period = self.eventperiod_set.order_by('stop').last()
+        return period.stop if period else None
 
     @classmethod
     def add_details(cls, fq=None):
