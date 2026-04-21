@@ -1,4 +1,9 @@
+import zoneinfo
+
 from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import path
 
 from eventer.models import Event, EventPeriod, EventRole, Game, Team, TeamMember, TeamRole
 
@@ -23,6 +28,55 @@ class EventRoleAdmin(admin.ModelAdmin):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     actions = ['ensure_superstream_roles']
+    change_form_template = 'admin/eventer/event/change_form.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path('<int:event_id>/setup-superstream/',
+                 self.admin_site.admin_view(self.setup_superstream_view),
+                 name='eventer_event_setup_superstream'),
+        ]
+        return custom + urls
+
+    def setup_superstream_view(self, request, event_id):
+        event = get_object_or_404(Event, pk=event_id)
+        existing_periods = list(event.eventperiod_set.all())
+        errors = None
+
+        if request.method == 'POST':
+            start_str = request.POST.get('start', '').strip()
+            duration_str = request.POST.get('duration', '40').strip()
+            try:
+                duration = int(duration_str)
+                if duration < 1:
+                    raise ValueError("Duration must be at least 1 hour")
+                # Parse the datetime-local value (naive, in event's timezone)
+                from datetime import datetime, timedelta
+                naive_start = datetime.strptime(start_str, '%Y-%m-%dT%H:%M')
+                tz = zoneinfo.ZoneInfo(event.timezone)
+                local_start = naive_start.replace(tzinfo=tz)
+                utc_start = local_start.astimezone(zoneinfo.ZoneInfo('UTC'))
+                utc_stop = utc_start + timedelta(hours=duration)
+                EventPeriod.objects.create(event=event, start=utc_start, stop=utc_stop)
+                self.message_user(
+                    request,
+                    f"Added {duration}-hour period starting {local_start.strftime('%Y-%m-%d %H:%M %Z')}",
+                    messages.SUCCESS,
+                )
+                return HttpResponseRedirect(f'../../{event_id}/change/')
+            except (ValueError, KeyError) as e:
+                errors = str(e)
+
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event,
+            'existing_periods': existing_periods,
+            'errors': errors,
+            'form_start': '',
+            'title': f'Add Superstream Period - {event.name}',
+        }
+        return render(request, 'admin/eventer/event/setup_superstream.html', context)
 
     @admin.action(description='Ensure Superstream event roles exist (Participant, Streamer, Moderator, Tech Manager)')
     def ensure_superstream_roles(self, request, queryset):

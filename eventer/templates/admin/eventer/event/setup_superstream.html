@@ -1,0 +1,49 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Add Superstream Period - {{ event.name }}{% endblock %}
+
+{% block content %}
+<h1>Add Superstream Period for "{{ event.name }}"</h1>
+
+{% if existing_periods %}
+<div class="errornote">
+  <p><strong>Warning:</strong> This event already has {{ existing_periods|length }} period(s):</p>
+  <ul>
+    {% for p in existing_periods %}
+    <li>{{ p.start }} &rarr; {{ p.stop }}</li>
+    {% endfor %}
+  </ul>
+  <p>Adding a new period will not remove the existing ones.</p>
+</div>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  <fieldset class="module aligned">
+    <h2>Superstream Period</h2>
+    <div class="form-row">
+      <div>
+        <label for="id_start" class="required">Start ({{ event.timezone }}):</label>
+        <input type="datetime-local" name="start" id="id_start" required value="{{ form_start }}">
+        <p class="help">Event starts in {{ event.timezone }}. Enter local time - it will be stored as UTC.</p>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="id_duration" class="required">Duration (hours):</label>
+        <input type="number" name="duration" id="id_duration" required value="40" min="1" max="168">
+      </div>
+    </div>
+  </fieldset>
+
+  {% if errors %}
+  <p class="errornote">{{ errors }}</p>
+  {% endif %}
+
+  <div class="submit-row">
+    <input type="submit" value="Add Period">
+    <a href="{% url 'admin:eventer_event_change' event.pk %}" class="deletelink" style="float:none; margin-left: 1em;">Cancel</a>
+  </div>
+</form>
+{% endblock %}

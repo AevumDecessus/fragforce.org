@@ -85,3 +85,83 @@ class EnsureSuperstreamRolesActionTest(TestCase):
         EventRole.objects.create(name='Streamer', slug='streamer', description='')
         self.admin.ensure_superstream_roles(self._make_request(), Event.objects.none())
         self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
+
+
+class SetupSuperstreamViewTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+        self.event = Event.objects.create(name='Test Event', slug='test-event', description='')
+
+    def _url(self):
+        return f'/admin/eventer/event/{self.event.pk}/setup-superstream/'
+
+    def test_get_renders_form(self):
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Add Superstream Period')
+
+    def test_post_creates_event_period_edt(self):
+        # April 4 2025 is in EDT (UTC-4) - 8am EDT = 12:00 UTC
+        response = self.client.post(self._url(), {
+            'start': '2025-04-04T08:00',
+            'duration': '40',
+        })
+        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/change/', fetch_redirect_response=False)
+        self.assertEqual(EventPeriod.objects.filter(event=self.event).count(), 1)
+        period = EventPeriod.objects.get(event=self.event)
+        self.assertEqual(period.start.hour, 12)  # 8am EDT (UTC-4) = 12:00 UTC
+
+    def test_post_creates_event_period_est(self):
+        # January 10 2025 is in EST (UTC-5) - 8am EST = 13:00 UTC
+        response = self.client.post(self._url(), {
+            'start': '2025-01-10T08:00',
+            'duration': '40',
+        })
+        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/change/', fetch_redirect_response=False)
+        period = EventPeriod.objects.get(event=self.event)
+        self.assertEqual(period.start.hour, 13)  # 8am EST (UTC-5) = 13:00 UTC
+
+    def test_post_creates_event_period_pacific_timezone(self):
+        # Event in Pacific time - April 4 2025 is PDT (UTC-7) - 8am PDT = 15:00 UTC
+        pacific_event = Event.objects.create(
+            name='Pacific Event', slug='pacific-event', description='',
+            timezone='America/Los_Angeles'
+        )
+        response = self.client.post(
+            f'/admin/eventer/event/{pacific_event.pk}/setup-superstream/',
+            {'start': '2025-04-04T08:00', 'duration': '40'},
+        )
+        self.assertRedirects(response, f'/admin/eventer/event/{pacific_event.pk}/change/', fetch_redirect_response=False)
+        period = EventPeriod.objects.get(event=pacific_event)
+        self.assertEqual(period.start.hour, 15)  # 8am PDT (UTC-7) = 15:00 UTC
+
+    def test_post_creates_event_period_utc_timezone(self):
+        # Event in UTC - 8am UTC = 8:00 UTC, no DST
+        utc_event = Event.objects.create(
+            name='UTC Event', slug='utc-event', description='',
+            timezone='UTC'
+        )
+        response = self.client.post(
+            f'/admin/eventer/event/{utc_event.pk}/setup-superstream/',
+            {'start': '2025-04-04T08:00', 'duration': '40'},
+        )
+        self.assertRedirects(response, f'/admin/eventer/event/{utc_event.pk}/change/', fetch_redirect_response=False)
+        period = EventPeriod.objects.get(event=utc_event)
+        self.assertEqual(period.start.hour, 8)  # 8am UTC = 8:00 UTC
+
+    def test_post_with_invalid_duration_shows_error(self):
+        response = self.client.post(self._url(), {
+            'start': '2025-04-04T08:00',
+            'duration': '-1',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Duration must be at least 1 hour')
+        self.assertEqual(EventPeriod.objects.filter(event=self.event).count(), 0)
+
+    def test_get_shows_existing_periods(self):
+        from datetime import datetime, timezone as dt_timezone, timedelta
+        start = datetime(2025, 4, 4, 12, 0, tzinfo=dt_timezone.utc)
+        EventPeriod.objects.create(event=self.event, start=start, stop=start + timedelta(hours=40))
+        response = self.client.get(self._url())
+        self.assertContains(response, 'already has 1 period')
