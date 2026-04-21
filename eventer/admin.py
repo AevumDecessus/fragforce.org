@@ -22,12 +22,40 @@ class EventPeriodAdmin(admin.ModelAdmin):
 
 @admin.register(EventRole)
 class EventRoleAdmin(admin.ModelAdmin):
-    pass
+    change_list_template = 'admin/eventer/eventrole/change_list.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path('seed-superstream/',
+                 self.admin_site.admin_view(self.seed_superstream_view),
+                 name='eventer_eventrole_seed_superstream'),
+        ]
+        return custom + urls
+
+    def seed_superstream_view(self, request):
+        created = []
+        existing = []
+        for role_data in SUPERSTREAM_ROLES:
+            _, was_created = EventRole.objects.get_or_create(
+                slug=role_data['slug'],
+                defaults={'name': role_data['name'], 'description': role_data['description']},
+            )
+            if was_created:
+                created.append(role_data['name'])
+            else:
+                existing.append(role_data['name'])
+
+        if created:
+            self.message_user(request, f"Created roles: {', '.join(created)}", messages.SUCCESS)
+        if existing:
+            self.message_user(request, f"Already existed: {', '.join(existing)}", messages.INFO)
+
+        return HttpResponseRedirect('../')
 
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    actions = ['ensure_superstream_roles']
     change_form_template = 'admin/eventer/event/change_form.html'
 
     def get_urls(self):
@@ -77,26 +105,6 @@ class EventAdmin(admin.ModelAdmin):
             'title': f'Add Superstream Period - {event.name}',
         }
         return render(request, 'admin/eventer/event/setup_superstream.html', context)
-
-    @admin.action(description='Ensure Superstream event roles exist (Participant, Streamer, Moderator, Tech Manager)')
-    def ensure_superstream_roles(self, request, queryset):
-        created = []
-        existing = []
-        for role_data in SUPERSTREAM_ROLES:
-            _, was_created = EventRole.objects.get_or_create(
-                slug=role_data['slug'],
-                defaults={'name': role_data['name'], 'description': role_data['description']},
-            )
-            if was_created:
-                created.append(role_data['name'])
-            else:
-                existing.append(role_data['name'])
-
-        if created:
-            self.message_user(request, f"Created roles: {', '.join(created)}", messages.SUCCESS)
-        if existing:
-            self.message_user(request, f"Already existed: {', '.join(existing)}", messages.INFO)
-
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):

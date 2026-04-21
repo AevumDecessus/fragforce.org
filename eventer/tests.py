@@ -1,11 +1,9 @@
 from datetime import datetime, timezone as dt_timezone
 
-from django.contrib.admin.sites import AdminSite
 from django.contrib.auth.models import User
-from django.contrib.messages.storage.cookie import CookieStorage
-from django.test import RequestFactory, TestCase
+from django.test import TestCase
 
-from eventer.admin import EventAdmin, SUPERSTREAM_ROLES
+from eventer.admin import SUPERSTREAM_ROLES
 from eventer.models import Event, EventPeriod, EventRole
 
 
@@ -54,22 +52,17 @@ class EventStartEndTest(TestCase):
         self.assertEqual(self.event.end, late_stop)
 
 
-class EnsureSuperstreamRolesActionTest(TestCase):
+class SeedSuperstreamRolesViewTest(TestCase):
     def setUp(self):
-        self.factory = RequestFactory()
-        self.site = AdminSite()
-        self.admin = EventAdmin(Event, self.site)
         self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
-        self.event = Event.objects.create(name='Test Event', slug='test-event', description='')
+        self.client.login(username='admin', password='pass')
 
-    def _make_request(self):
-        request = self.factory.post('/')
-        request.user = self.superuser
-        request._messages = CookieStorage(request)
-        return request
+    def _url(self):
+        return '/admin/eventer/eventrole/seed-superstream/'
 
     def test_creates_all_roles_when_none_exist(self):
-        self.admin.ensure_superstream_roles(self._make_request(), Event.objects.none())
+        response = self.client.post(self._url())
+        self.assertRedirects(response, '/admin/eventer/eventrole/', fetch_redirect_response=False)
         self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
         slugs = set(EventRole.objects.values_list('slug', flat=True))
         self.assertEqual(slugs, {r['slug'] for r in SUPERSTREAM_ROLES})
@@ -77,13 +70,18 @@ class EnsureSuperstreamRolesActionTest(TestCase):
     def test_idempotent_when_roles_already_exist(self):
         for role in SUPERSTREAM_ROLES:
             EventRole.objects.create(name=role['name'], slug=role['slug'], description=role['description'])
-        self.admin.ensure_superstream_roles(self._make_request(), Event.objects.none())
+        self.client.post(self._url())
         self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
 
     def test_creates_only_missing_roles(self):
         EventRole.objects.create(name='Participant', slug='participant', description='')
         EventRole.objects.create(name='Streamer', slug='streamer', description='')
-        self.admin.ensure_superstream_roles(self._make_request(), Event.objects.none())
+        self.client.post(self._url())
+        self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
+
+    def test_get_also_seeds_and_redirects(self):
+        response = self.client.get(self._url())
+        self.assertRedirects(response, '/admin/eventer/eventrole/', fetch_redirect_response=False)
         self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
 
 
