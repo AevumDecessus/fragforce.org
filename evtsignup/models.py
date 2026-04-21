@@ -22,6 +22,10 @@ class EventInterest(models.Model):
     participant_notes = models.TextField(blank=True)
     streamer_notes = models.TextField(blank=True)
 
+    def __str__(self):
+        name = self.display_name or str(self.user)
+        return f'{name} - {self.event}'
+
     class Meta:
         unique_together = [["user", "event"]]
 
@@ -30,6 +34,9 @@ class GameInterestUserEvent(models.Model):
     """ User's pre-selected game checkbox for a particular event """
     event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
     game = models.ForeignKey('eventer.Game', on_delete=models.CASCADE, blank=False, null=False)
+
+    def __str__(self):
+        return f'{self.event_interest} - {self.game}'
 
     class Meta:
         unique_together = [["event_interest", "game"]]
@@ -45,6 +52,10 @@ class EventAvailabilityInterest(models.Model):
     as_streamer = models.BooleanField(default=False)
     as_moderator = models.BooleanField(default=False)
     as_tech = models.BooleanField(default=False)
+
+    def __str__(self):
+        roles = [r for r, v in [('P', self.as_participant), ('S', self.as_streamer), ('M', self.as_moderator), ('T', self.as_tech)] if v]
+        return f'{self.event_interest} @ {self.hour:%Y-%m-%d %H:%M} UTC [{",".join(roles) or "-"}]'
 
     class Meta:
         unique_together = [["event_interest", "hour"]]
