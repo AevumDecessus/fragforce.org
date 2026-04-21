@@ -1,10 +1,12 @@
-from datetime import datetime, timezone as dt_timezone
+import zoneinfo
+from datetime import datetime, timezone as dt_timezone, timedelta
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 
 from eventer.admin import SUPERSTREAM_ROLES
-from eventer.models import Event, EventPeriod, EventRole
+from eventer.models import Event, EventPeriod, EventRole, EventSlotConfig, EventSlotTemplate
+from eventer.slot_generator import _format_label, _variable_block_hours, generate_slots
 
 
 def dt(year, month, day, hour=0, minute=0):
@@ -158,8 +160,169 @@ class SetupSuperstreamViewTest(TestCase):
         self.assertEqual(EventPeriod.objects.filter(event=self.event).count(), 0)
 
     def test_get_shows_existing_periods(self):
-        from datetime import datetime, timezone as dt_timezone, timedelta
         start = datetime(2025, 4, 4, 12, 0, tzinfo=dt_timezone.utc)
         EventPeriod.objects.create(event=self.event, start=start, stop=start + timedelta(hours=40))
         response = self.client.get(self._url())
         self.assertContains(response, 'already has 1 period')
+
+
+def _local(year, month, day, hour, tz_name='America/New_York'):
+    tz = zoneinfo.ZoneInfo(tz_name)
+    return datetime(year, month, day, hour, tzinfo=dt_timezone.utc).astimezone(tz)
+
+
+def _seed_roles():
+    for slug, name in [
+        ('participant', 'Participant'),
+        ('streamer', 'Streamer'),
+        ('moderator', 'Moderator'),
+        ('tech-manager', 'Tech Manager'),
+    ]:
+        EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': ''})
+
+
+class FormatLabelTest(TestCase):
+    def test_same_day(self):
+        # Fri Apr 4 2025: 12 UTC = 8am EDT, 15 UTC = 11am EDT
+        self.assertEqual(_format_label(_local(2025, 4, 4, 12), _local(2025, 4, 4, 15)), 'Friday 8am - 11am')
+
+    def test_crosses_midnight(self):
+        # Fri 11pm EDT = Sat 3 UTC, Sat 2am EDT = Sat 6 UTC
+        self.assertEqual(
+            _format_label(_local(2025, 4, 5, 3), _local(2025, 4, 5, 6)),
+            'Friday 11pm - Saturday 2am'
+        )
+
+
+class VariableBlockHoursTest(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(name='Test', slug='test', description='')
+        self.config = EventSlotConfig.objects.create(event=self.event)
+
+    def test_standard_block_outside_prime(self):
+        # 8am EDT = 12 UTC - outside prime time (2pm-9pm ET)
+        local = _local(2025, 4, 4, 12)
+        self.assertEqual(_variable_block_hours(local, self.config), self.config.standard_block_hours)
+
+    def test_prime_block_during_prime(self):
+        # 3pm EDT = 19 UTC - inside prime time
+        local = _local(2025, 4, 4, 19)
+        self.assertEqual(_variable_block_hours(local, self.config), self.config.prime_block_hours)
+
+    def test_prime_start_boundary(self):
+        # 2pm EDT = 18 UTC - at prime_time_start, should be prime
+        local = _local(2025, 4, 4, 18)
+        self.assertEqual(_variable_block_hours(local, self.config), self.config.prime_block_hours)
+
+    def test_prime_end_boundary(self):
+        # 9pm EDT = 01 UTC next day - at prime_time_end, should be standard
+        local = _local(2025, 4, 5, 1)
+        self.assertEqual(_variable_block_hours(local, self.config), self.config.standard_block_hours)
+
+
+class GenerateSlotsTest(TestCase):
+    def setUp(self):
+        _seed_roles()
+        self.event = Event.objects.create(
+            name='Test Superstream', slug='test-superstream', description='',
+            timezone='America/New_York',
+        )
+        # 40hr event: Fri Apr 4 8am EDT (12 UTC) → Sun Apr 6 12am EDT (04 UTC)
+        EventPeriod.objects.create(
+            event=self.event,
+            start=datetime(2025, 4, 4, 12, 0, tzinfo=dt_timezone.utc),
+            stop=datetime(2025, 4, 6, 4, 0, tzinfo=dt_timezone.utc),
+        )
+
+    def _config(self):
+        config, _ = EventSlotConfig.objects.get_or_create(event=self.event)
+        return config
+
+    def test_raises_without_periods(self):
+        event = Event.objects.create(name='No Period', slug='no-period', description='')
+        with self.assertRaises(ValueError):
+            generate_slots(event)
+
+    def test_raises_without_roles(self):
+        EventRole.objects.all().delete()
+        with self.assertRaises(ValueError):
+            generate_slots(self.event)
+
+    def test_creates_slots(self):
+        result = generate_slots(self.event)
+        self.assertGreater(result['created'], 0)
+        self.assertEqual(result['deleted'], 0)
+        # Some skipped is expected when grids share slot boundaries
+        self.assertGreaterEqual(result['skipped'], 0)
+
+    def test_participant_and_streamer_share_slots(self):
+        generate_slots(self.event)
+        participant = EventRole.objects.get(slug='participant')
+        streamer = EventRole.objects.get(slug='streamer')
+        p_slots = set(EventSlotTemplate.objects.filter(event=self.event, roles=participant).values_list('id', flat=True))
+        s_slots = set(EventSlotTemplate.objects.filter(event=self.event, roles=streamer).values_list('id', flat=True))
+        self.assertEqual(p_slots, s_slots)
+
+    def test_tech_has_uniform_management_block_size(self):
+        generate_slots(self.event)
+        config = self._config()
+        tech = EventRole.objects.get(slug='tech-manager')
+        slots = list(EventSlotTemplate.objects.filter(event=self.event, roles=tech).order_by('start'))
+        for slot in slots[:-1]:  # last slot may be absorbed
+            duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+            self.assertEqual(duration_hrs, config.management_block_hours, f"Tech slot {slot.label} should be {config.management_block_hours}hr")
+
+    def test_moderator_first_block_matches_config(self):
+        generate_slots(self.event)
+        config = self._config()
+        moderator = EventRole.objects.get(slug='moderator')
+        first_slot = EventSlotTemplate.objects.filter(event=self.event, roles=moderator).order_by('start').first()
+        duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / 3600
+        self.assertEqual(duration_hrs, config.mod_first_block_hours)
+
+    def test_prime_time_slots_use_prime_block_hours(self):
+        generate_slots(self.event)
+        config = self._config()
+        tz = zoneinfo.ZoneInfo(self.event.timezone)
+        participant = EventRole.objects.get(slug='participant')
+        for slot in EventSlotTemplate.objects.filter(event=self.event, roles=participant):
+            local_start = slot.start.astimezone(tz)
+            t = local_start.time()
+            if config.prime_time_start <= t < config.prime_time_end:
+                duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+                self.assertEqual(duration_hrs, config.prime_block_hours, f"Prime-time slot {slot.label} should be {config.prime_block_hours}hr")
+
+    def test_non_prime_slots_use_standard_block_hours(self):
+        generate_slots(self.event)
+        config = self._config()
+        tz = zoneinfo.ZoneInfo(self.event.timezone)
+        participant = EventRole.objects.get(slug='participant')
+        slots = list(EventSlotTemplate.objects.filter(event=self.event, roles=participant).order_by('start'))
+        for slot in slots[:-1]:  # skip last slot (may be absorbed)
+            local_start = slot.start.astimezone(tz)
+            t = local_start.time()
+            if not (config.prime_time_start <= t < config.prime_time_end):
+                duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+                self.assertEqual(duration_hrs, config.standard_block_hours, f"Non-prime slot {slot.label} should be {config.standard_block_hours}hr")
+
+    def test_no_stub_slots_shorter_than_min(self):
+        generate_slots(self.event)
+        config = self._config()
+        min_hours = max(config.prime_block_hours, 2)
+        for slot in EventSlotTemplate.objects.filter(event=self.event):
+            duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+            self.assertGreaterEqual(duration_hrs, min_hours, f"Slot {slot.label} is too short: {duration_hrs}hr")
+
+    def test_replace_deletes_existing_and_regenerates(self):
+        generate_slots(self.event)
+        first_count = EventSlotTemplate.objects.filter(event=self.event).count()
+        result = generate_slots(self.event, replace=True)
+        self.assertGreater(result['deleted'], 0)
+        self.assertEqual(EventSlotTemplate.objects.filter(event=self.event).count(), first_count)
+
+    def test_idempotent_without_replace(self):
+        generate_slots(self.event)
+        first_count = EventSlotTemplate.objects.filter(event=self.event).count()
+        result = generate_slots(self.event, replace=False)
+        self.assertEqual(result['created'], 0)
+        self.assertEqual(EventSlotTemplate.objects.filter(event=self.event).count(), first_count)
