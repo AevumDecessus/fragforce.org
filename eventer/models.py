@@ -41,19 +41,23 @@ class EventRole(models.Model):
 class Game(models.Model):
     """ An IGDB backed game """
 
-    name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False)
-    slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
-    description = models.TextField(default='', blank=False, null=False)
-    igdb_id = models.SlugField(max_length=255, blank=False, null=False, unique=True)
-    status = models.ForeignKey('GameStatus', on_delete=models.CASCADE, blank=False, null=False)
-    flags = HStoreField(default=dict, blank=False, null=False)
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending review'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected - not allowed on stream (e.g. banned on Twitch)'
 
-
-class GameStatus(models.Model):
-    """ Game's approval status """
-    name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False)
-    slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
-    description = models.TextField(default='', blank=False, null=False)
+    name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False, verbose_name="Game name")
+    slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True, verbose_name="Fragforce slug", help_text="Internal URL slug for this app")
+    coordinator_notes = models.TextField(blank=True, verbose_name="Coordinator notes", help_text="Internal notes for coordinators, e.g. hardware requirements or known issues")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True, verbose_name="Status", help_text="Moderation status - rejected games cannot be selected on signup forms")
+    suggested = models.BooleanField(default=False, db_index=True, verbose_name="Suggested game", help_text="Show this game on the signup form game selection list (only applies when status=approved)")
+    igdb_id = models.PositiveIntegerField(unique=True, null=False, blank=False, verbose_name="IGDB ID", help_text="Numeric IGDB game ID, e.g. 115555")
+    igdb_slug = models.SlugField(max_length=255, unique=True, null=True, blank=True, db_index=True, verbose_name="IGDB slug", help_text="IGDB URL slug, e.g. 'going-medieval'")
+    igdb_url = models.URLField(null=True, blank=True, verbose_name="IGDB URL", help_text="Full IGDB game page URL")
+    igdb_cover_hash = models.CharField(max_length=255, null=True, blank=True, verbose_name="IGDB cover hash", help_text="IGDB image hash - use //images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg")
+    summary = models.TextField(blank=True, verbose_name="IGDB summary", help_text="Short game description from IGDB")
+    multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players", help_text="Maximum number of players; null=unknown, 1=single player only")
+    flags = HStoreField(default=dict, blank=False, null=False, verbose_name="Flags")
 
 
 class Event(models.Model):
@@ -61,6 +65,20 @@ class Event(models.Model):
     name = models.CharField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
+    timezone = models.CharField(max_length=64, default='America/New_York', blank=False, null=False,
+                                help_text="IANA timezone name for coordinator-facing display (e.g. America/New_York). Public schedule uses browser local time via the |localtime template filter.")
+
+    @property
+    def start(self):
+        """ Earliest period start - the event's effective start time """
+        period = self.eventperiod_set.order_by('start').first()
+        return period.start if period else None
+
+    @property
+    def end(self):
+        """ Latest period stop - the event's effective end time """
+        period = self.eventperiod_set.order_by('stop').last()
+        return period.stop if period else None
 
     @classmethod
     def add_details(cls, fq=None):
