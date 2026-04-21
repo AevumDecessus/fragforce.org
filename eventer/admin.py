@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from eventer.models import Event, EventPeriod, EventRole, Game, GameStatus, Team, TeamMember, TeamRole
+from eventer.models import Event, EventPeriod, EventRole, Game, Team, TeamMember, TeamRole
 
 
 @admin.register(EventPeriod)
@@ -20,11 +20,6 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    pass
-
-
-@admin.register(GameStatus)
-class GameStatusAdmin(admin.ModelAdmin):
     pass
 
 
