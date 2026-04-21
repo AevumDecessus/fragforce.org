@@ -1,12 +1,12 @@
 """
 Slot template generator for Superstream events.
 
-Generates EventSlotTemplate records from an event's EventPeriod and EventSlotConfig.
+Generates EventSignupSlot records from an event's EventPeriod and EventSignupSlotConfig.
 """
 import zoneinfo
 from datetime import timedelta
 
-from eventer.models import Event, EventRole, EventSlotConfig, EventSlotTemplate
+from eventer.models import Event, EventRole, EventSignupSlotConfig, EventSignupSlot
 
 
 def _format_label(start_local, stop_local):
@@ -42,7 +42,7 @@ def _generate_grid(event, tz, start, stop, config, use_prime_time, roles, first_
         tz: zoneinfo.ZoneInfo for label formatting
         start: UTC datetime for grid start
         stop: UTC datetime for grid end
-        config: EventSlotConfig instance
+        config: EventSignupSlotConfig instance
         use_prime_time: if True use variable block sizes, otherwise use management_block_hours
         roles: list of EventRole instances to assign
         first_block_hours: if set, override the block size for the first slot only
@@ -76,7 +76,7 @@ def _generate_grid(event, tz, start, stop, config, use_prime_time, roles, first_
 
         label = _format_label(local, slot_stop.astimezone(tz))
 
-        template, was_created = EventSlotTemplate.objects.get_or_create(
+        template, was_created = EventSignupSlot.objects.get_or_create(
             event=event,
             start=current,
             stop=slot_stop,
@@ -96,7 +96,7 @@ def _generate_grid(event, tz, start, stop, config, use_prime_time, roles, first_
 
 def generate_slots(event: Event, replace: bool = False) -> dict:
     """
-    Generate EventSlotTemplate records for an event.
+    Generate EventSignupSlot records for an event.
 
     Args:
         event: The Event to generate slots for
@@ -122,14 +122,14 @@ def generate_slots(event: Event, replace: bool = False) -> dict:
             "Run 'Seed Superstream Roles' first."
         )
 
-    config, _ = EventSlotConfig.objects.get_or_create(event=event)
+    config, _ = EventSignupSlotConfig.objects.get_or_create(event=event)
     tz = zoneinfo.ZoneInfo(event.timezone)
     event_start = event.start
     event_stop = event.end
 
     deleted = 0
     if replace:
-        deleted, _ = EventSlotTemplate.objects.filter(event=event).delete()
+        deleted, _ = EventSignupSlot.objects.filter(event=event).delete()
 
     total_created = total_skipped = 0
 

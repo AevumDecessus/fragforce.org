@@ -151,7 +151,7 @@ class EventPeriod(models.Model):
         return F('stop') - F('start')
 
 
-class EventSlotConfig(models.Model):
+class EventSignupSlotConfig(models.Model):
     """ Generator configuration for slot templates for an event """
     event = models.OneToOneField(Event, on_delete=models.CASCADE, related_name='slot_config')
 
@@ -187,9 +187,9 @@ class EventSlotConfig(models.Model):
         return f'Slot config for {self.event}'
 
 
-class EventSlotTemplate(models.Model):
+class EventSignupSlot(models.Model):
     """ A single slot on the signup form, linked to one or more roles """
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='slot_templates')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='signup_slots')
     roles = models.ManyToManyField(EventRole, blank=True, help_text="Roles this slot applies to")
     start = models.DateTimeField(help_text="Slot start time (UTC)")
     stop = models.DateTimeField(help_text="Slot end time (UTC)")

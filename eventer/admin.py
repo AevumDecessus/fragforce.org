@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSlotConfig, EventSlotTemplate, Game, Team, TeamMember, TeamRole
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, Game, Team, TeamMember, TeamRole
 from eventer.slot_generator import generate_slots
 
 SUPERSTREAM_ROLES = [
@@ -139,13 +139,13 @@ class EventAdmin(admin.ModelAdmin):
         }
         return render(request, 'admin/eventer/event/generate_slots.html', context)
 
-@admin.register(EventSlotConfig)
-class EventSlotConfigAdmin(admin.ModelAdmin):
+@admin.register(EventSignupSlotConfig)
+class EventSignupSlotConfigAdmin(admin.ModelAdmin):
     pass
 
 
-@admin.register(EventSlotTemplate)
-class EventSlotTemplateAdmin(admin.ModelAdmin):
+@admin.register(EventSignupSlot)
+class EventSignupSlotAdmin(admin.ModelAdmin):
     list_display = ['event', 'label', 'start', 'stop']
     list_filter = ['event']
     filter_horizontal = ['roles']
