@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.db import models
 from django_workflow_engine.executor import User
 
@@ -147,3 +149,55 @@ class EventPeriod(models.Model):
         """ Field value for duration (stop-start) """
         from django.db.models import F
         return F('stop') - F('start')
+
+
+class EventSlotConfig(models.Model):
+    """ Generator configuration for slot templates for an event """
+    event = models.OneToOneField(Event, on_delete=models.CASCADE, related_name='slot_config')
+
+    # Player/Streamer block sizes
+    standard_block_hours = models.PositiveSmallIntegerField(
+        default=3,
+        help_text="Default slot block size in hours for participant/streamer grid",
+    )
+    prime_block_hours = models.PositiveSmallIntegerField(
+        default=2,
+        help_text="Slot block size during prime time hours",
+    )
+    prime_time_start = models.TimeField(
+        default=time(14, 0),
+        help_text="Start of prime time (in event timezone) - shorter blocks begin here",
+    )
+    prime_time_end = models.TimeField(
+        default=time(21, 0),
+        help_text="End of prime time (in event timezone) - shorter blocks end here",
+    )
+
+    # Management (Moderator/Tech) block sizes
+    management_block_hours = models.PositiveSmallIntegerField(
+        default=6,
+        help_text="Block size in hours for moderator and tech manager slots",
+    )
+    mod_first_block_hours = models.PositiveSmallIntegerField(
+        default=3,
+        help_text="Length of the first moderator block - shorter than standard to stagger mod/tech changeovers",
+    )
+
+    def __str__(self):
+        return f'Slot config for {self.event}'
+
+
+class EventSlotTemplate(models.Model):
+    """ A single slot on the signup form, linked to one or more roles """
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='slot_templates')
+    roles = models.ManyToManyField(EventRole, blank=True, help_text="Roles this slot applies to")
+    start = models.DateTimeField(help_text="Slot start time (UTC)")
+    stop = models.DateTimeField(help_text="Slot end time (UTC)")
+    label = models.CharField(max_length=255, help_text="Human-readable label shown on signup form")
+
+    class Meta:
+        ordering = ['start']
+        unique_together = [['event', 'start', 'stop']]
+
+    def __str__(self):
+        return f'{self.event} - {self.label}'
