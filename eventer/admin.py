@@ -129,7 +129,7 @@ class EventAdmin(admin.ModelAdmin):
             except ValueError as e:
                 errors = str(e)
 
-        existing_count = event.slot_templates.count()
+        existing_count = event.signup_slots.count()
         context = {
             **self.admin_site.each_context(request),
             'event': event,
