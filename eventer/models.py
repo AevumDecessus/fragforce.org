@@ -69,7 +69,6 @@ class Game(models.Model):
     igdb_cover_hash = models.CharField(max_length=255, null=True, blank=True, verbose_name="IGDB cover hash", help_text="IGDB image hash - use //images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg")
     summary = models.TextField(blank=True, verbose_name="IGDB summary", help_text="Short game description from IGDB")
     multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players", help_text="Maximum number of players; null=unknown, 1=single player only")
-    flags = HStoreField(default=dict, blank=False, null=False, verbose_name="Flags")
 
     def __str__(self):
         return self.name
