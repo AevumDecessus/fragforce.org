@@ -146,9 +146,31 @@ class EventSignupSlotConfigAdmin(admin.ModelAdmin):
 
 @admin.register(EventSignupSlot)
 class EventSignupSlotAdmin(admin.ModelAdmin):
-    list_display = ['event', 'label', 'start', 'stop']
-    list_filter = ['event']
+    list_display = ['event', 'role_list', 'label', 'start_local', 'stop_local', 'start_utc', 'stop_utc']
+    list_filter = ['event', 'roles']
     filter_horizontal = ['roles']
+
+    @admin.display(description='Roles')
+    def role_list(self, obj):
+        return ', '.join(obj.roles.values_list('name', flat=True))
+
+    @admin.display(description='Start (Local)', ordering='start')
+    def start_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.start.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
+
+    @admin.display(description='Stop (Local)', ordering='stop')
+    def stop_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.stop.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
+
+    @admin.display(description='Start (UTC)', ordering='start')
+    def start_utc(self, obj):
+        return obj.start
+
+    @admin.display(description='Stop (UTC)', ordering='stop')
+    def stop_utc(self, obj):
+        return obj.stop
 
 
 @admin.register(Game)
