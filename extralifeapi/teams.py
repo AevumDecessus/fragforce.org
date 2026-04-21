@@ -53,7 +53,10 @@ class Teams(DonorDriveBase):
 
     def team(self, teamID):
         """ Get a team """
-        fresp = list(self.fetch(sub_url=self.sub_team_by_tid(teamID)))[0]
+        results = list(self.fetch(sub_url=self.sub_team_by_tid(teamID)))
+        if not results:
+            raise IndexError(f"No team found for teamID={teamID}")
+        fresp = results[0]
         self.log.info("fresp=", extra=dict(fresp=fresp))
         return self._team_to_team(fresp)
 
