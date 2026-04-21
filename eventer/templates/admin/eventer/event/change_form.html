@@ -1,12 +1,14 @@
 {% extends "admin/change_form.html" %}
 
-{% block object-tools-items %}
+{% block object-tools %}
   {{ block.super }}
   {% if original %}
-  <li>
-    <a href="{% url 'admin:eventer_event_setup_superstream' original.pk %}" class="historylink">
-      Add Superstream Period
-    </a>
-  </li>
+  <ul class="object-tools">
+    <li>
+      <a href="{% url 'admin:eventer_event_setup_superstream' original.pk %}" class="historylink">
+        Add Superstream Period
+      </a>
+    </li>
+  </ul>
   {% endif %}
 {% endblock %}
