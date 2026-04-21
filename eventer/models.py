@@ -11,6 +11,9 @@ class Team(models.Model):
     role = models.ForeignKey('TeamRole', on_delete=models.CASCADE, blank=False, null=False)
     description = models.TextField(default='', blank=False, null=False)
 
+    def __str__(self):
+        return self.name
+
 
 class TeamRole(models.Model):
     """ A role a user can have in a team """
@@ -18,12 +21,18 @@ class TeamRole(models.Model):
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
 
+    def __str__(self):
+        return self.name
+
 
 class TeamMember(models.Model):
     """ Connect a User to a Role in a Team """
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=False, null=False)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, blank=False, null=False)
     role = models.ForeignKey(TeamRole, on_delete=models.CASCADE, blank=False, null=False)
+
+    def __str__(self):
+        return f'{self.user} - {self.team} ({self.role})'
 
     class Meta:
         unique_together = [
@@ -36,6 +45,9 @@ class EventRole(models.Model):
     name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
+
+    def __str__(self):
+        return self.name
 
 
 class Game(models.Model):
@@ -59,6 +71,9 @@ class Game(models.Model):
     multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players", help_text="Maximum number of players; null=unknown, 1=single player only")
     flags = HStoreField(default=dict, blank=False, null=False, verbose_name="Flags")
 
+    def __str__(self):
+        return self.name
+
 
 class Event(models.Model):
     """ A gaming event """
@@ -80,6 +95,9 @@ class Event(models.Model):
         period = self.eventperiod_set.order_by('stop').last()
         return period.stop if period else None
 
+    def __str__(self):
+        return self.name
+
     @classmethod
     def add_details(cls, fq=None):
         from django.db.models import Sum, F
@@ -95,6 +113,9 @@ class EventPeriod(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, blank=False, null=False)
     start = models.DateTimeField(null=False, blank=False)
     stop = models.DateTimeField(null=False, blank=False)
+
+    def __str__(self):
+        return f'{self.event} - {self.start} to {self.stop}'
 
     @staticmethod
     def duration_f():
