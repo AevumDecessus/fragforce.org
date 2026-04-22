@@ -150,12 +150,31 @@ def signup_view(request, event_slug):
 
             return redirect('evtsignup-signup', event_slug=event_slug)
 
-    # Pre-populate from existing signup
+    # Pre-populate: from POST data on validation error, otherwise from saved signup
     prefill = {}
     selected_slot_ids = {'participant': set(), 'streamer': set(), 'moderator': set(), 'tech': set()}
     selected_game_ids = {'participant': set(), 'streamer': set()}
 
-    if existing:
+    if errors:
+        prefill = {
+            'display_name': request.POST.get('display_name', ''),
+            'preferences': request.POST.get('preferences', ''),
+            'acknowledged': bool(request.POST.get('acknowledged')),
+            'fundraising_url': request.POST.get('fundraising_url', ''),
+            'participant_notes': request.POST.get('participant_notes', ''),
+            'streamer_notes': request.POST.get('streamer_notes', ''),
+        }
+        selected_slot_ids = {
+            'participant': {int(x) for x in request.POST.getlist('participant_slots') if x.isdigit()},
+            'streamer': {int(x) for x in request.POST.getlist('streamer_slots') if x.isdigit()},
+            'moderator': {int(x) for x in request.POST.getlist('moderator_slots') if x.isdigit()},
+            'tech': {int(x) for x in request.POST.getlist('tech_slots') if x.isdigit()},
+        }
+        selected_game_ids = {
+            'participant': {int(x) for x in request.POST.getlist('participant_games') if x.isdigit()},
+            'streamer': {int(x) for x in request.POST.getlist('streamer_games') if x.isdigit()},
+        }
+    elif existing:
         prefill = {
             'display_name': existing.display_name,
             'preferences': existing.preferences,
