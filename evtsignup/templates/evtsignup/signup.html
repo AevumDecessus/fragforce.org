@@ -1,4 +1,5 @@
 {% extends "ff/base.html" %}
+{% load fftz %}
 
 {% block title %}Sign Up - {{ event.name }}{% endblock %}
 
@@ -7,6 +8,20 @@
   <div class="col-lg-10 offset-lg-1">
 
     <h2>{{ event.name }} - Sign Up</h2>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        {% if event.description %}
+        <p>{{ event.description }}</p>
+        {% endif %}
+        {% if event.start %}
+        <p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime }}</p>
+        {% endif %}
+        {% if event.end %}
+        <p class="mb-0"><strong>Ends:</strong> {{ event.end|date:"Y-m-d H:i:s"|localtime }}</p>
+        {% endif %}
+      </div>
+    </div>
 
     {% if locked %}
     <div class="alert alert-secondary">
