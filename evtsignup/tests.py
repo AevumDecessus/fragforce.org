@@ -227,6 +227,121 @@ class SignupViewPostTest(TestCase):
         self.assertEqual(EventAvailabilityInterest.objects.filter(event_interest=interest).count(), 0)
 
 
+class SignupViewGameSelectionTest(TestCase):
+    def setUp(self):
+        from eventer.models import Game
+        self.user = User.objects.create_user('tester', 'tester@example.com', 'pass')
+        self.client.login(username='tester', password='pass')
+        self.event = _make_event()
+        self.slot = EventSignupSlot.objects.filter(event=self.event).first()
+        self.game = Game.objects.create(
+            name='Test Game', slug='test-game', status='approved', suggested=True,
+            igdb_id=12345,
+        )
+
+    def _url(self):
+        return f'/signup/{self.event.slug}/'
+
+    def test_game_selection_creates_game_interest_rows(self):
+        from evtsignup.models import GameInterestUserEvent
+        self.client.post(self._url(), {
+            'acknowledged': '1',
+            'participant_games': [str(self.game.pk)],
+        })
+        interest = EventInterest.objects.get(user=self.user, event=self.event)
+        self.assertTrue(GameInterestUserEvent.objects.filter(event_interest=interest, game=self.game).exists())
+
+    def test_resubmit_replaces_game_selections(self):
+        from evtsignup.models import GameInterestUserEvent
+        self.client.post(self._url(), {
+            'acknowledged': '1',
+            'participant_games': [str(self.game.pk)],
+        })
+        self.client.post(self._url(), {'acknowledged': '1'})
+        interest = EventInterest.objects.get(user=self.user, event=self.event)
+        self.assertEqual(GameInterestUserEvent.objects.filter(event_interest=interest).count(), 0)
+
+    def test_fundraising_url_saved(self):
+        self.client.post(self._url(), {
+            'acknowledged': '1',
+            'fundraising_url': 'https://www.extra-life.org/participants/511438',
+        })
+        interest = EventInterest.objects.get(user=self.user, event=self.event)
+        self.assertEqual(interest.fundraising_url, 'https://www.extra-life.org/participants/511438')
+
+    def test_fundraising_url_blank_stored_as_null(self):
+        self.client.post(self._url(), {'acknowledged': '1', 'fundraising_url': ''})
+        interest = EventInterest.objects.get(user=self.user, event=self.event)
+        self.assertIsNone(interest.fundraising_url)
+
+
+class SignupViewPrefillTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('tester', 'tester@example.com', 'pass')
+        self.client.login(username='tester', password='pass')
+        self.event = _make_event()
+        self.slot = EventSignupSlot.objects.filter(event=self.event).first()
+
+    def _url(self):
+        return f'/signup/{self.event.slug}/'
+
+    def test_reedit_preselects_previously_chosen_slots(self):
+        # Submit with a slot selected
+        self.client.post(self._url(), {
+            'acknowledged': '1',
+            'participant_slots': [str(self.slot.pk)],
+        })
+        # Re-open form - slot should be pre-checked
+        response = self.client.get(self._url())
+        self.assertIn(self.slot.pk, response.context['selected_slot_ids']['participant'])
+
+    def test_reedit_does_not_preselect_unselected_slots(self):
+        self.client.post(self._url(), {'acknowledged': '1'})
+        response = self.client.get(self._url())
+        self.assertNotIn(self.slot.pk, response.context['selected_slot_ids']['participant'])
+
+
+class GroupSlotsByDayTest(TestCase):
+    def setUp(self):
+        import zoneinfo
+        self.tz = zoneinfo.ZoneInfo('America/New_York')
+        self.event = Event.objects.create(
+            name='Day Test', slug='day-test', description='',
+            timezone='America/New_York',
+        )
+
+    def test_slots_on_same_day_grouped_together(self):
+        from evtsignup.views import _group_slots_by_day
+        # Both slots start on Friday Apr 4 in ET (12 UTC and 15 UTC = 8am and 11am EDT)
+        EventSignupSlot.objects.create(event=self.event, start=_dt(2025, 4, 4, 12), stop=_dt(2025, 4, 4, 15), label='8am')
+        EventSignupSlot.objects.create(event=self.event, start=_dt(2025, 4, 4, 15), stop=_dt(2025, 4, 4, 18), label='11am')
+        groups = _group_slots_by_day(EventSignupSlot.objects.filter(event=self.event).order_by('start'), self.tz)
+        self.assertEqual(len(groups), 1)
+        _, slots = groups[0]
+        self.assertEqual(len(slots), 2)
+
+    def test_slots_crossing_midnight_split_into_two_days(self):
+        from evtsignup.views import _group_slots_by_day
+        # Friday 11pm EDT = Saturday 03:00 UTC; Saturday 2am EDT = Saturday 06:00 UTC
+        EventSignupSlot.objects.create(event=self.event, start=_dt(2025, 4, 4, 23), stop=_dt(2025, 4, 5, 2), label='Fri late')
+        EventSignupSlot.objects.create(event=self.event, start=_dt(2025, 4, 5, 6), stop=_dt(2025, 4, 5, 9), label='Sat early')
+        groups = _group_slots_by_day(EventSignupSlot.objects.filter(event=self.event).order_by('start'), self.tz)
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(groups[0][0], 'Friday, April 4')
+        self.assertEqual(groups[1][0], 'Saturday, April 5')
+
+    def test_day_label_format(self):
+        from evtsignup.views import _group_slots_by_day
+        EventSignupSlot.objects.create(event=self.event, start=_dt(2025, 4, 4, 12), stop=_dt(2025, 4, 4, 15), label='8am')
+        groups = _group_slots_by_day(EventSignupSlot.objects.filter(event=self.event), self.tz)
+        self.assertEqual(groups[0][0], 'Friday, April 4')
+
+    def test_empty_queryset_returns_empty_list(self):
+        from evtsignup.views import _group_slots_by_day
+        groups = _group_slots_by_day(EventSignupSlot.objects.none(), self.tz)
+        self.assertEqual(groups, [])
+
+
 def _make_backend(name='discord'):
     backend = MagicMock()
     backend.name = name
