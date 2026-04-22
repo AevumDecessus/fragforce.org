@@ -55,10 +55,29 @@ class EventRoleAdmin(admin.ModelAdmin):
         return HttpResponseRedirect('../')
 
 
+class HasEventPeriodFilter(admin.SimpleListFilter):
+    title = 'event period'
+    parameter_name = 'has_period'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('yes', 'Scheduled (has period)'),
+            ('no', 'Unscheduled (no period)'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'yes':
+            return queryset.filter(eventperiod__isnull=False).distinct()
+        if self.value() == 'no':
+            return queryset.filter(eventperiod__isnull=True)
+        return queryset
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     change_form_template = 'admin/eventer/event/change_form.html'
     list_display = ['name', 'slug', 'event_start']
+    list_filter = [HasEventPeriodFilter]
     prepopulated_fields = {'slug': ('name',)}
 
     @admin.display(description='Start', ordering='eventperiod__start')
