@@ -110,8 +110,10 @@
         <div class="card-body {% if not selected_slot_ids.participant and not selected_game_ids.participant %}d-none{% endif %}" id="participant-body">
 
           <h6>Availability</h6>
+          {% for day_label, day_slots in participant_slot_days %}
+          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
           <div class="row">
-            {% for slot in participant_slots %}
+            {% for slot in day_slots %}
             <div class="col-md-4 col-sm-6">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="participant_slots"
@@ -122,6 +124,7 @@
             </div>
             {% endfor %}
           </div>
+          {% endfor %}
 
           {% if participant_games %}
           <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to play)</small></h6>
@@ -170,8 +173,10 @@
           </div>
 
           <h6>Availability</h6>
+          {% for day_label, day_slots in streamer_slot_days %}
+          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
           <div class="row">
-            {% for slot in streamer_slots %}
+            {% for slot in day_slots %}
             <div class="col-md-4 col-sm-6">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="streamer_slots"
@@ -182,6 +187,7 @@
             </div>
             {% endfor %}
           </div>
+          {% endfor %}
 
           {% if streamer_games %}
           <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to stream)</small></h6>
@@ -223,8 +229,10 @@
         <div class="card-body {% if not selected_slot_ids.moderator %}d-none{% endif %}" id="moderator-body">
 
           <h6>Availability</h6>
+          {% for day_label, day_slots in moderator_slot_days %}
+          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
           <div class="row">
-            {% for slot in moderator_slots %}
+            {% for slot in day_slots %}
             <div class="col-md-4 col-sm-6">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="moderator_slots"
@@ -235,6 +243,7 @@
             </div>
             {% endfor %}
           </div>
+          {% endfor %}
 
         </div>
       </div>
@@ -256,8 +265,10 @@
         <div class="card-body {% if not selected_slot_ids.tech %}d-none{% endif %}" id="tech-body">
 
           <h6>Availability</h6>
+          {% for day_label, day_slots in tech_slot_days %}
+          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
           <div class="row">
-            {% for slot in tech_slots %}
+            {% for slot in day_slots %}
             <div class="col-md-4 col-sm-6">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="tech_slots"
@@ -268,6 +279,7 @@
             </div>
             {% endfor %}
           </div>
+          {% endfor %}
 
         </div>
       </div>

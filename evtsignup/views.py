@@ -1,3 +1,5 @@
+import zoneinfo
+from collections import defaultdict
 from datetime import timedelta
 
 from django.contrib import messages
@@ -14,6 +16,19 @@ def _expand_to_hours(slot):
     while current < slot.stop:
         yield current
         current += timedelta(hours=1)
+
+
+def _group_slots_by_day(slots_qs, tz):
+    """Return an ordered list of (day_label, [slot, ...]) grouped by slot start day in tz."""
+    groups = defaultdict(list)
+    order = []
+    for slot in slots_qs:
+        local_start = slot.start.astimezone(tz)
+        day_key = local_start.date()
+        if day_key not in groups:
+            order.append(day_key)
+        groups[day_key].append(slot)
+    return [(day.strftime('%A, %B %-d'), groups[day]) for day in order]
 
 
 def _load_roles():
@@ -204,6 +219,7 @@ def signup_view(request, event_slug):
             'event': event, 'locked': False, 'signups_closed': True,
         })
 
+    tz = zoneinfo.ZoneInfo(event.timezone)
     participant_role, streamer_role, moderator_role, tech_role = _load_roles()
     participant_slots = _slot_qs_for_role(slots, participant_role)
     streamer_slots = _slot_qs_for_role(slots, streamer_role)
@@ -247,6 +263,11 @@ def signup_view(request, event_slug):
         'existing': existing,
         'errors': errors,
         'prefill': prefill,
+        'participant_slot_days': _group_slots_by_day(participant_slots, tz),
+        'streamer_slot_days': _group_slots_by_day(streamer_slots, tz),
+        'moderator_slot_days': _group_slots_by_day(moderator_slots, tz),
+        'tech_slot_days': _group_slots_by_day(tech_slots, tz),
+        # flat lists still needed for track visibility checks
         'participant_slots': participant_slots,
         'streamer_slots': streamer_slots,
         'moderator_slots': moderator_slots,
