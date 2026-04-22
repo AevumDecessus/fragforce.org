@@ -1,15 +1,43 @@
-from django.contrib.postgres.fields import HStoreField
 from django.db import models
 from django_workflow_engine.executor import User
+
+SUPERSTREAM_TIMEZONES = [
+    ('US/Canada', [
+        ('America/New_York', 'Eastern (ET)'),
+        ('America/Chicago', 'Central (CT)'),
+        ('America/Denver', 'Mountain (MT)'),
+        ('America/Los_Angeles', 'Pacific (PT)'),
+        ('America/Anchorage', 'Alaska (AKT)'),
+        ('Pacific/Honolulu', 'Hawaii (HT)'),
+    ]),
+    ('Australia/NZ', [
+        ('Australia/Sydney', 'Sydney/Melbourne (AEST)'),
+        ('Australia/Brisbane', 'Brisbane (AEST no DST)'),
+        ('Australia/Perth', 'Perth (AWST)'),
+        ('Pacific/Auckland', 'Auckland (NZST)'),
+    ]),
+    ('Europe/UK', [
+        ('Europe/London', 'London (GMT/BST)'),
+        ('Europe/Paris', 'Central Europe (CET/CEST)'),
+        ('Europe/Helsinki', 'Eastern Europe (EET/EEST)'),
+    ]),
+    ('Other', [
+        ('UTC', 'UTC'),
+        ('Asia/Singapore', 'Singapore (SGT)'),
+        ('Asia/Tokyo', 'Japan (JST)'),
+    ]),
+]
 
 
 class Team(models.Model):
     """ A team or group of people who do events """
     name = models.CharField(max_length=255, unique=True, blank=False, null=False)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
-    team_info = HStoreField(default=dict, null=False)
     role = models.ForeignKey('TeamRole', on_delete=models.CASCADE, blank=False, null=False)
     description = models.TextField(default='', blank=False, null=False)
+
+    def __str__(self):
+        return self.name
 
 
 class TeamRole(models.Model):
@@ -18,12 +46,18 @@ class TeamRole(models.Model):
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
 
+    def __str__(self):
+        return self.name
+
 
 class TeamMember(models.Model):
     """ Connect a User to a Role in a Team """
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=False, null=False)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, blank=False, null=False)
     role = models.ForeignKey(TeamRole, on_delete=models.CASCADE, blank=False, null=False)
+
+    def __str__(self):
+        return f'{self.user} - {self.team} ({self.role})'
 
     class Meta:
         unique_together = [
@@ -36,6 +70,9 @@ class EventRole(models.Model):
     name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
+
+    def __str__(self):
+        return self.name
 
 
 class Game(models.Model):
@@ -57,7 +94,9 @@ class Game(models.Model):
     igdb_cover_hash = models.CharField(max_length=255, null=True, blank=True, verbose_name="IGDB cover hash", help_text="IGDB image hash - use //images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg")
     summary = models.TextField(blank=True, verbose_name="IGDB summary", help_text="Short game description from IGDB")
     multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players", help_text="Maximum number of players; null=unknown, 1=single player only")
-    flags = HStoreField(default=dict, blank=False, null=False, verbose_name="Flags")
+
+    def __str__(self):
+        return self.name
 
 
 class Event(models.Model):
@@ -66,7 +105,8 @@ class Event(models.Model):
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
     timezone = models.CharField(max_length=64, default='America/New_York', blank=False, null=False,
-                                help_text="IANA timezone name for coordinator-facing display (e.g. America/New_York). Public schedule uses browser local time via the |localtime template filter.")
+                                choices=SUPERSTREAM_TIMEZONES,
+                                help_text="Timezone for coordinator-facing display. Public schedule uses browser local time via the |localtime template filter.")
 
     @property
     def start(self):
@@ -79,6 +119,9 @@ class Event(models.Model):
         """ Latest period stop - the event's effective end time """
         period = self.eventperiod_set.order_by('stop').last()
         return period.stop if period else None
+
+    def __str__(self):
+        return self.name
 
     @classmethod
     def add_details(cls, fq=None):
@@ -95,6 +138,9 @@ class EventPeriod(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, blank=False, null=False)
     start = models.DateTimeField(null=False, blank=False)
     stop = models.DateTimeField(null=False, blank=False)
+
+    def __str__(self):
+        return f'{self.event} - {self.start} to {self.stop}'
 
     @staticmethod
     def duration_f():

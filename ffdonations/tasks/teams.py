@@ -65,8 +65,8 @@ def update_teams(self, teams=None):
     for tid in teams:
         try:
             el_teams.append(el_api.team(teamID=int(tid)))
-        except HTTPError as e:
-            if e.response is not None and e.response.status_code == 404:
+        except (HTTPError, IndexError) as e:
+            if isinstance(e, IndexError) or (e.response is not None and e.response.status_code == 404):
                 try:
                     tm = TeamModel.objects.get(id=int(tid))
                     tm.tracked = False
