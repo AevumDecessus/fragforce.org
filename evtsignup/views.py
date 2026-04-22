@@ -46,15 +46,18 @@ def signup_view(request, event_slug):
             'existing': existing,
         })
 
+    # Load roles and slots
+    slots = EventSignupSlot.objects.filter(event=event).prefetch_related('roles').order_by('start')
+
+    if not slots.exists():
+        can_signup = False
+
     if not existing and not can_signup:
         return render(request, 'evtsignup/signup.html', {
             'event': event,
             'locked': False,
             'signups_closed': True,
         })
-
-    # Load roles and slots
-    slots = EventSignupSlot.objects.filter(event=event).prefetch_related('roles').order_by('start')
     try:
         participant_role = EventRole.objects.get(slug='participant')
         streamer_role = EventRole.objects.get(slug='streamer')
