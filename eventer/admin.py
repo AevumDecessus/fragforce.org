@@ -58,6 +58,16 @@ class EventRoleAdmin(admin.ModelAdmin):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     change_form_template = 'admin/eventer/event/change_form.html'
+    list_display = ['name', 'slug', 'event_start']
+    prepopulated_fields = {'slug': ('name',)}
+
+    @admin.display(description='Start', ordering='eventperiod__start')
+    def event_start(self, obj):
+        period = obj.eventperiod_set.order_by('start').first()
+        if period is None:
+            return '-'
+        tz = zoneinfo.ZoneInfo(obj.timezone)
+        return period.start.astimezone(tz).strftime('%Y-%m-%d %H:%M %Z')
 
     def get_urls(self):
         urls = super().get_urls()
