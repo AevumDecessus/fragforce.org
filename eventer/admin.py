@@ -80,6 +80,9 @@ class EventAdmin(admin.ModelAdmin):
     list_filter = [HasEventPeriodFilter]
     prepopulated_fields = {'slug': ('name',)}
 
+    def response_add(self, request, obj, post_url_continue=None):
+        return HttpResponseRedirect(f'../../eventsignupslotconfig/add/?event={obj.pk}')
+
     @admin.display(description='Start', ordering='eventperiod__start')
     def event_start(self, obj):
         period = obj.eventperiod_set.order_by('start').first()
@@ -158,13 +161,14 @@ class EventAdmin(admin.ModelAdmin):
             except ValueError as e:
                 errors = str(e)
 
-        existing_count = event.signup_slots.count()
+        existing_slots = list(event.signup_slots.prefetch_related('roles').order_by('start'))
         context = {
             **self.admin_site.each_context(request),
             'event': event,
-            'existing_count': existing_count,
+            'existing_slots': existing_slots,
+            'existing_count': len(existing_slots),
             'errors': errors,
-            'title': f'Generate Slot Templates - {event.name}',
+            'title': f'Generate Signup Slots - {event.name}',
         }
         return render(request, 'admin/eventer/event/generate_slots.html', context)
 
