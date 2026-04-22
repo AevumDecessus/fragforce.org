@@ -1,6 +1,7 @@
 import zoneinfo
 from datetime import timedelta
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render, redirect
 
@@ -91,7 +92,7 @@ def signup_view(request, event_slug):
         selected_streamer_games = set(request.POST.getlist('streamer_games'))
 
         if not errors:
-            interest, _ = EventInterest.objects.update_or_create(
+            interest, created = EventInterest.objects.update_or_create(
                 user=request.user,
                 event=event,
                 defaults={
@@ -148,6 +149,10 @@ def signup_view(request, event_slug):
                 for gid in all_game_ids
             ])
 
+            if created:
+                messages.success(request, "Your signup has been received!")
+            else:
+                messages.success(request, "Your signup has been updated.")
             return redirect('evtsignup-signup', event_slug=event_slug)
 
     # Pre-populate: from POST data on validation error, otherwise from saved signup
