@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render, redirect
+from django.views.decorators.http import require_http_methods
 
 from eventer.models import Event, EventSignupSlot, EventRole, Game
 from evtsignup.models import EventInterest, EventAvailabilityInterest, GameInterestUserEvent
@@ -194,6 +195,7 @@ def _prefill_from_existing(existing, slot_qs_by_track, participant_games, stream
 
 
 @login_required
+@require_http_methods(["GET", "POST"])
 def signup_view(request, event_slug):
     event = get_object_or_404(Event, slug=event_slug)
 

@@ -1,5 +1,4 @@
-import random
-import string
+import secrets
 
 from django import template
 from django.utils.safestring import mark_safe
@@ -8,7 +7,7 @@ register = template.Library()
 
 
 def _random_id():
-    return ''.join(random.choice(string.ascii_letters) for _ in range(15))
+    return secrets.token_hex(8)
 
 
 @register.filter(name='localtime')
