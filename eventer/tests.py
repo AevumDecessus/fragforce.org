@@ -107,7 +107,7 @@ class SetupSuperstreamViewTest(TestCase):
             'start': '2025-04-04T08:00',
             'duration': '40',
         })
-        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/generate-slots/', fetch_redirect_response=False)
         self.assertEqual(EventPeriod.objects.filter(event=self.event).count(), 1)
         period = EventPeriod.objects.get(event=self.event)
         self.assertEqual(period.start.hour, 12)  # 8am EDT (UTC-4) = 12:00 UTC
@@ -118,7 +118,7 @@ class SetupSuperstreamViewTest(TestCase):
             'start': '2025-01-10T08:00',
             'duration': '40',
         })
-        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/generate-slots/', fetch_redirect_response=False)
         period = EventPeriod.objects.get(event=self.event)
         self.assertEqual(period.start.hour, 13)  # 8am EST (UTC-5) = 13:00 UTC
 
@@ -132,7 +132,7 @@ class SetupSuperstreamViewTest(TestCase):
             f'/admin/eventer/event/{pacific_event.pk}/setup-superstream/',
             {'start': '2025-04-04T08:00', 'duration': '40'},
         )
-        self.assertRedirects(response, f'/admin/eventer/event/{pacific_event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{pacific_event.pk}/generate-slots/', fetch_redirect_response=False)
         period = EventPeriod.objects.get(event=pacific_event)
         self.assertEqual(period.start.hour, 15)  # 8am PDT (UTC-7) = 15:00 UTC
 
@@ -146,7 +146,7 @@ class SetupSuperstreamViewTest(TestCase):
             f'/admin/eventer/event/{utc_event.pk}/setup-superstream/',
             {'start': '2025-04-04T08:00', 'duration': '40'},
         )
-        self.assertRedirects(response, f'/admin/eventer/event/{utc_event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{utc_event.pk}/generate-slots/', fetch_redirect_response=False)
         period = EventPeriod.objects.get(event=utc_event)
         self.assertEqual(period.start.hour, 8)  # 8am UTC = 8:00 UTC
 

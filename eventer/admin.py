@@ -128,7 +128,7 @@ class EventAdmin(admin.ModelAdmin):
                     f"Added {duration}-hour period starting {local_start.strftime('%Y-%m-%d %H:%M %Z')}",
                     messages.SUCCESS,
                 )
-                return HttpResponseRedirect(f'../../{event_id}/change/')
+                return HttpResponseRedirect(f'../../{event_id}/generate-slots/')
             except (ValueError, KeyError) as e:
                 errors = str(e)
 
@@ -174,7 +174,8 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
-    pass
+    def response_add(self, request, obj, post_url_continue=None):
+        return HttpResponseRedirect(f'../../event/{obj.event_id}/setup-superstream/')
 
 
 @admin.register(EventSignupSlot)
