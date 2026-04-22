@@ -1,0 +1,279 @@
+{% extends "ff/base.html" %}
+
+{% block title %}Sign Up - {{ event.name }}{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+  <div class="col-lg-10 offset-lg-1">
+
+    <h2>{{ event.name }} - Sign Up</h2>
+
+    {% if locked %}
+    <div class="alert alert-secondary">
+      Signups for this event are currently locked. Please check back later.
+    </div>
+
+    {% elif edits_closed %}
+    <div class="alert alert-info">
+      <strong>Your signup has been received.</strong>
+      The window for editing signups has closed. Contact a coordinator if you need to make changes.
+    </div>
+
+    {% elif signups_closed %}
+    <div class="alert alert-warning">
+      Signups for this event are currently closed.
+    </div>
+
+    {% else %}
+
+    {% if existing %}
+    <div class="alert alert-success">
+      <strong>You have already signed up.</strong> You can update your signup below.
+    </div>
+    {% endif %}
+
+    {% if errors %}
+    <div class="alert alert-danger">
+      <ul class="mb-0">
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+
+      {# --- Basic Info --- #}
+      <div class="card mb-4">
+        <div class="card-header"><strong>Basic Info</strong></div>
+        <div class="card-body">
+
+          <div class="form-group">
+            <label for="display_name">Display name <small class="text-muted">(shown on schedule and stream ads)</small></label>
+            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255"
+                   value="{{ prefill.display_name|default:'' }}">
+          </div>
+
+          <div class="form-group">
+            <label for="preferences">Pronouns / preferences <small class="text-muted">(optional)</small></label>
+            <input type="text" class="form-control" id="preferences" name="preferences"
+                   value="{{ prefill.preferences|default:'' }}"
+                   placeholder="e.g. he/him, she/her, they/them">
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="acknowledged" name="acknowledged" value="1"
+                   {% if prefill.acknowledged %}checked{% endif %}>
+            <label class="form-check-label" for="acknowledged">
+              I have read and agree to the <a href="https://discord.gg/fragforce" target="_blank" rel="noopener noreferrer">Fragforce rules</a>
+              and understand that signing up does not guarantee a specific slot, game, or role.
+            </label>
+          </div>
+
+        </div>
+      </div>
+
+      {# --- Track: Participant --- #}
+      {% if participant_slots %}
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="form-check mb-0">
+            <input class="form-check-input track-toggle" type="checkbox" id="track_participant"
+                   data-target="#participant-body"
+                   {% if selected_slot_ids.participant or selected_game_ids.participant %}checked{% endif %}>
+            <label class="form-check-label" for="track_participant">
+              <strong>Participant</strong> - Play games with a streamer
+            </label>
+          </div>
+        </div>
+        <div class="card-body {% if not selected_slot_ids.participant and not selected_game_ids.participant %}d-none{% endif %}" id="participant-body">
+
+          <h6>Availability</h6>
+          <div class="row">
+            {% for slot in participant_slots %}
+            <div class="col-md-4 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="participant_slots"
+                       id="pslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                       {% if slot.pk in selected_slot_ids.participant %}checked{% endif %}>
+                <label class="form-check-label" for="pslot_{{ slot.pk }}">{{ slot.label }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {% if participant_games %}
+          <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to play)</small></h6>
+          <div class="row">
+            {% for game in participant_games %}
+            <div class="col-md-4 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="participant_games"
+                       id="pgame_{{ game.pk }}" value="{{ game.pk }}"
+                       {% if game.pk in selected_game_ids.participant %}checked{% endif %}>
+                <label class="form-check-label" for="pgame_{{ game.pk }}">{{ game.name }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="form-group mt-2">
+            <label for="participant_notes">Other game preferences <small class="text-muted">(optional)</small></label>
+            <textarea class="form-control" id="participant_notes" name="participant_notes" rows="2">{{ prefill.participant_notes|default:'' }}</textarea>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+      {% endif %}
+
+      {# --- Track: Streamer --- #}
+      {% if streamer_slots %}
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="form-check mb-0">
+            <input class="form-check-input track-toggle" type="checkbox" id="track_streamer"
+                   data-target="#streamer-body"
+                   {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}checked{% endif %}>
+            <label class="form-check-label" for="track_streamer">
+              <strong>Streamer</strong> - Lead a time slot on stream
+            </label>
+          </div>
+        </div>
+        <div class="card-body {% if not selected_slot_ids.streamer and not selected_game_ids.streamer and not prefill.fundraising_url %}d-none{% endif %}" id="streamer-body">
+
+          <div class="form-group">
+            <label for="fundraising_url">Fundraising page URL <small class="text-muted">(Extra Life or hospital charity page - required for streamers)</small></label>
+            <input type="url" class="form-control" id="fundraising_url" name="fundraising_url"
+                   value="{{ prefill.fundraising_url|default:'' }}"
+                   placeholder="https://www.extra-life.org/participants/...">
+          </div>
+
+          <h6>Availability</h6>
+          <div class="row">
+            {% for slot in streamer_slots %}
+            <div class="col-md-4 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="streamer_slots"
+                       id="sslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                       {% if slot.pk in selected_slot_ids.streamer %}checked{% endif %}>
+                <label class="form-check-label" for="sslot_{{ slot.pk }}">{{ slot.label }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {% if streamer_games %}
+          <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to stream)</small></h6>
+          <div class="row">
+            {% for game in streamer_games %}
+            <div class="col-md-4 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="streamer_games"
+                       id="sgame_{{ game.pk }}" value="{{ game.pk }}"
+                       {% if game.pk in selected_game_ids.streamer %}checked{% endif %}>
+                <label class="form-check-label" for="sgame_{{ game.pk }}">{{ game.name }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="form-group mt-2">
+            <label for="streamer_notes">Other game preferences <small class="text-muted">(optional)</small></label>
+            <textarea class="form-control" id="streamer_notes" name="streamer_notes" rows="2">{{ prefill.streamer_notes|default:'' }}</textarea>
+          </div>
+          {% endif %}
+
+        </div>
+      </div>
+      {% endif %}
+
+      {# --- Track: Moderator --- #}
+      {% if moderator_slots %}
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="form-check mb-0">
+            <input class="form-check-input track-toggle" type="checkbox" id="track_moderator"
+                   data-target="#moderator-body"
+                   {% if selected_slot_ids.moderator %}checked{% endif %}>
+            <label class="form-check-label" for="track_moderator">
+              <strong>Moderator</strong> - Moderate chat and support the streamer
+            </label>
+          </div>
+        </div>
+        <div class="card-body {% if not selected_slot_ids.moderator %}d-none{% endif %}" id="moderator-body">
+
+          <h6>Availability</h6>
+          <div class="row">
+            {% for slot in moderator_slots %}
+            <div class="col-md-4 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="moderator_slots"
+                       id="mslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                       {% if slot.pk in selected_slot_ids.moderator %}checked{% endif %}>
+                <label class="form-check-label" for="mslot_{{ slot.pk }}">{{ slot.label }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+        </div>
+      </div>
+      {% endif %}
+
+      {# --- Track: Tech Manager --- #}
+      {% if tech_slots %}
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="form-check mb-0">
+            <input class="form-check-input track-toggle" type="checkbox" id="track_tech"
+                   data-target="#tech-body"
+                   {% if selected_slot_ids.tech %}checked{% endif %}>
+            <label class="form-check-label" for="track_tech">
+              <strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs
+            </label>
+          </div>
+        </div>
+        <div class="card-body {% if not selected_slot_ids.tech %}d-none{% endif %}" id="tech-body">
+
+          <h6>Availability</h6>
+          <div class="row">
+            {% for slot in tech_slots %}
+            <div class="col-md-4 col-sm-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="tech_slots"
+                       id="tslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                       {% if slot.pk in selected_slot_ids.tech %}checked{% endif %}>
+                <label class="form-check-label" for="tslot_{{ slot.pk }}">{{ slot.label }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+        </div>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary btn-lg mb-4">
+        {% if existing %}Update my signup{% else %}Submit signup{% endif %}
+      </button>
+
+    </form>
+
+    {% endif %}{# end locked/closed/open branches #}
+
+  </div>
+</div>
+
+{% block extra_js %}
+<script>
+  document.querySelectorAll('.track-toggle').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var target = document.querySelector(this.dataset.target);
+      if (target) {
+        target.classList.toggle('d-none', !this.checked);
+      }
+    });
+  });
+</script>
+{% endblock %}
+
+{% endblock %}
