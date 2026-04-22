@@ -38,4 +38,5 @@ urlpatterns = [
     path('stream/', include('ffstream.urls')),
     path('overlays/', include('ffoverlay.urls')),
     path("workflow/", workflow_urls()),
+    path('signup/', include('evtsignup.urls')),
 ]
