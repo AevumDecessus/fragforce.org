@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from eventer.admin import SUPERSTREAM_ROLES
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, HOUR_SECONDS
 from eventer.slot_generator import _format_label, _variable_block_hours, generate_slots
 
 
@@ -269,7 +269,7 @@ class GenerateSlotsTest(TestCase):
         tech = EventRole.objects.get(slug='tech-manager')
         slots = list(EventSignupSlot.objects.filter(event=self.event, roles=tech).order_by('start'))
         for slot in slots[:-1]:  # last slot may be absorbed
-            duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+            duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
             self.assertEqual(duration_hrs, config.management_block_hours, f"Tech slot {slot.label} should be {config.management_block_hours}hr")
 
     def test_moderator_first_block_matches_config(self):
@@ -277,7 +277,7 @@ class GenerateSlotsTest(TestCase):
         config = self._config()
         moderator = EventRole.objects.get(slug='moderator')
         first_slot = EventSignupSlot.objects.filter(event=self.event, roles=moderator).order_by('start').first()
-        duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / 3600
+        duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / HOUR_SECONDS
         self.assertEqual(duration_hrs, config.mod_first_block_hours)
 
     def test_prime_time_slots_use_prime_block_hours(self):
@@ -289,7 +289,7 @@ class GenerateSlotsTest(TestCase):
             local_start = slot.start.astimezone(tz)
             t = local_start.time()
             if config.prime_time_start <= t < config.prime_time_end:
-                duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+                duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
                 self.assertEqual(duration_hrs, config.prime_block_hours, f"Prime-time slot {slot.label} should be {config.prime_block_hours}hr")
 
     def test_non_prime_slots_use_standard_block_hours(self):
@@ -302,7 +302,7 @@ class GenerateSlotsTest(TestCase):
             local_start = slot.start.astimezone(tz)
             t = local_start.time()
             if not (config.prime_time_start <= t < config.prime_time_end):
-                duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+                duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
                 self.assertEqual(duration_hrs, config.standard_block_hours, f"Non-prime slot {slot.label} should be {config.standard_block_hours}hr")
 
     def test_no_stub_slots_shorter_than_min(self):
@@ -310,7 +310,7 @@ class GenerateSlotsTest(TestCase):
         config = self._config()
         min_hours = max(config.prime_block_hours, 2)
         for slot in EventSignupSlot.objects.filter(event=self.event):
-            duration_hrs = (slot.stop - slot.start).total_seconds() / 3600
+            duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
             self.assertGreaterEqual(duration_hrs, min_hours, f"Slot {slot.label} is too short: {duration_hrs}hr")
 
     def test_replace_deletes_existing_and_regenerates(self):

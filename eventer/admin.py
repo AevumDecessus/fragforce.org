@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, Game, Team, TeamMember, TeamRole
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
 from eventer.slot_generator import generate_slots
 
 SUPERSTREAM_ROLES = [
@@ -146,13 +146,17 @@ class EventSignupSlotConfigAdmin(admin.ModelAdmin):
 
 @admin.register(EventSignupSlot)
 class EventSignupSlotAdmin(admin.ModelAdmin):
-    list_display = ['event', 'role_list', 'label', 'start_local', 'stop_local', 'start_utc', 'stop_utc']
+    list_display = ['event', 'role_list', 'label', 'duration_hours', 'start_local', 'stop_local', 'start_utc', 'stop_utc']
     list_filter = ['event', 'roles']
     filter_horizontal = ['roles']
 
     @admin.display(description='Roles')
     def role_list(self, obj):
         return ', '.join(obj.roles.values_list('name', flat=True))
+
+    @admin.display(description='Duration')
+    def duration_hours(self, obj):
+        return f'{int((obj.stop - obj.start).total_seconds() / HOUR_SECONDS)}h'
 
     @admin.display(description='Start (Local)', ordering='start')
     def start_local(self, obj):

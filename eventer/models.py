@@ -3,6 +3,8 @@ from datetime import time
 from django.db import models
 from django_workflow_engine.executor import User
 
+HOUR_SECONDS = 3600
+
 SUPERSTREAM_TIMEZONES = [
     ('US/Canada', [
         ('America/New_York', 'Eastern (ET)'),
