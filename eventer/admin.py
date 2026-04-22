@@ -5,7 +5,8 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, Game, Team, TeamMember, TeamRole
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.slot_generator import generate_slots
 
 SUPERSTREAM_ROLES = [
     {'name': 'Participant', 'slug': 'participant', 'description': 'Game participant - plays games with a streamer'},
@@ -64,6 +65,9 @@ class EventAdmin(admin.ModelAdmin):
             path('<int:event_id>/setup-superstream/',
                  self.admin_site.admin_view(self.setup_superstream_view),
                  name='eventer_event_setup_superstream'),
+            path('<int:event_id>/generate-slots/',
+                 self.admin_site.admin_view(self.generate_slots_view),
+                 name='eventer_event_generate_slots'),
         ]
         return custom + urls
 
@@ -105,6 +109,73 @@ class EventAdmin(admin.ModelAdmin):
             'title': f'Add Superstream Period - {event.name}',
         }
         return render(request, 'admin/eventer/event/setup_superstream.html', context)
+
+    def generate_slots_view(self, request, event_id):
+        event = get_object_or_404(Event, pk=event_id)
+        errors = None
+
+        if request.method == 'POST':
+            replace = request.POST.get('replace') == '1'
+            try:
+                result = generate_slots(event, replace=replace)
+                self.message_user(
+                    request,
+                    f"Generated slots: {result['created']} created, "
+                    f"{result['skipped']} already existed, "
+                    f"{result['deleted']} deleted.",
+                    messages.SUCCESS,
+                )
+                return HttpResponseRedirect(f'../../{event_id}/change/')
+            except ValueError as e:
+                errors = str(e)
+
+        existing_count = event.signup_slots.count()
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event,
+            'existing_count': existing_count,
+            'errors': errors,
+            'title': f'Generate Slot Templates - {event.name}',
+        }
+        return render(request, 'admin/eventer/event/generate_slots.html', context)
+
+@admin.register(EventSignupSlotConfig)
+class EventSignupSlotConfigAdmin(admin.ModelAdmin):
+    pass
+
+
+@admin.register(EventSignupSlot)
+class EventSignupSlotAdmin(admin.ModelAdmin):
+    list_display = ['event', 'role_list', 'label', 'duration_hours', 'start_local', 'stop_local', 'start_utc', 'stop_utc']
+    list_filter = ['event', 'roles']
+    filter_horizontal = ['roles']
+
+    @admin.display(description='Roles')
+    def role_list(self, obj):
+        return ', '.join(obj.roles.values_list('name', flat=True))
+
+    @admin.display(description='Duration')
+    def duration_hours(self, obj):
+        return f'{int((obj.stop - obj.start).total_seconds() / HOUR_SECONDS)}h'
+
+    @admin.display(description='Start (Local)', ordering='start')
+    def start_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.start.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
+
+    @admin.display(description='Stop (Local)', ordering='stop')
+    def stop_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.stop.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
+
+    @admin.display(description='Start (UTC)', ordering='start')
+    def start_utc(self, obj):
+        return obj.start
+
+    @admin.display(description='Stop (UTC)', ordering='stop')
+    def stop_utc(self, obj):
+        return obj.stop
+
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
