@@ -1,21 +1,21 @@
+import random
+import string
+
 from django import template
-from django.template.defaultfilters import stringfilter
+from django.utils.safestring import mark_safe
 
 register = template.Library()
 
 
 @register.filter(name='localtime')
-@stringfilter
 def format_datetime(value, eid=None):
-    import random
-    import string
-
     if eid is None:
         eid = ''.join([random.choice(string.ascii_letters) for i in range(0, 15)])
     eid = str(eid)
-    return """
+    dt = str(value)
+    return mark_safe("""
 <time id="{id}"></time>
 <script>
     updateTimeValue("#{id}","{dt}.000Z");
 </script>
-    """.format(id=eid, dt=value)
+    """.format(id=eid, dt=dt))
