@@ -176,6 +176,38 @@ class LocaltimeFilterTest(TestCase):
         self.assertIn('id="myid"', result)
         self.assertIn('"#myid"', result)
 
+    def test_format_datetime_output_is_safe(self):
+        from django.utils.safestring import SafeData
+        from ffsite.templatetags.fftz import format_datetime
+        result = format_datetime('2026-04-16T12:00:00')
+        self.assertIsInstance(result, SafeData)
+
+
+class LocaltimeShortFilterTest(TestCase):
+    def test_returns_html_with_time_element(self):
+        from ffsite.templatetags.fftz import format_datetime_short
+        result = format_datetime_short('2026-04-16T12:00:00')
+        self.assertIn('<time', result)
+        self.assertIn('2026-04-16T12:00:00.000Z', result)
+
+    def test_uses_toLocaleString_with_options(self):
+        from ffsite.templatetags.fftz import format_datetime_short
+        result = format_datetime_short('2026-04-16T12:00:00')
+        self.assertIn('toLocaleString', result)
+        self.assertIn('timeZoneName', result)
+        self.assertNotIn('updateTimeValue', result)
+
+    def test_uses_provided_eid(self):
+        from ffsite.templatetags.fftz import format_datetime_short
+        result = format_datetime_short('2026-04-16T12:00:00', eid='myid')
+        self.assertIn('id="myid"', result)
+
+    def test_output_is_safe(self):
+        from django.utils.safestring import SafeData
+        from ffsite.templatetags.fftz import format_datetime_short
+        result = format_datetime_short('2026-04-16T12:00:00')
+        self.assertIsInstance(result, SafeData)
+
 
 class RandomContactTest(TestCase):
     @patch('ffsite.utils.el_teams', return_value=[1])

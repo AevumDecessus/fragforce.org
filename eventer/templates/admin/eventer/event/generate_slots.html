@@ -1,37 +1,37 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
 
-{% block title %}Generate Slot Templates - {{ event.name }}{% endblock %}
+{% block title %}Generate Signup Slots - {{ event.name }}{% endblock %}
 
 {% block content %}
-<h1>Generate Slot Templates for "{{ event.name }}"</h1>
-
-{% if existing_count %}
-<div class="errornote">
-  <p><strong>Warning:</strong> This event already has {{ existing_count }} slot template(s).</p>
-  <p>You can regenerate them (which will delete existing ones) or cancel.</p>
-</div>
-{% endif %}
+<h1>Generate Signup Slots for "{{ event.name }}"</h1>
 
 {% if errors %}
 <p class="errornote">{{ errors }}</p>
 {% endif %}
 
+{% if existing_slots %}
+<div class="errornote">
+  <p><strong>Warning:</strong> This event already has {{ existing_count }} signup slot(s).</p>
+  <p>You can regenerate them (which will delete existing ones) or cancel.</p>
+</div>
+{% endif %}
+
 <form method="post">
   {% csrf_token %}
   <fieldset class="module aligned">
-    <h2>Slot Template Generation</h2>
+    <h2>Slot Generation</h2>
     <p>
-      Generates slot templates based on this event's period and slot configuration.
+      Generates signup slots based on this event's period and slot configuration.
       Participant/Streamer slots use variable block sizes (prime time vs standard).
       Moderator and Tech Manager slots use fixed block sizes with a staggered changeover.
     </p>
-    {% if existing_count %}
+    {% if existing_slots %}
     <div class="form-row">
       <div>
         <label>
           <input type="checkbox" name="replace" value="1">
-          Delete existing {{ existing_count }} slot template(s) and regenerate
+          Delete existing {{ existing_count }} slot(s) and regenerate
         </label>
       </div>
     </div>
@@ -45,4 +45,29 @@
     <a href="{% url 'admin:eventer_event_change' event.pk %}" class="deletelink" style="float:none; margin-left: 1em;">Cancel</a>
   </div>
 </form>
+
+{% if existing_slots %}
+<h2 style="margin-top: 2em;">Existing Slots ({{ existing_count }})</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Label</th>
+      <th>Roles</th>
+      <th>Start (UTC)</th>
+      <th>Stop (UTC)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for slot in existing_slots %}
+    <tr>
+      <td>{{ slot.label }}</td>
+      <td>{{ slot.roles.all|join:", " }}</td>
+      <td>{{ slot.start }}</td>
+      <td>{{ slot.stop }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 {% endblock %}

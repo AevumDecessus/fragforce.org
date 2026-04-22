@@ -55,9 +55,41 @@ class EventRoleAdmin(admin.ModelAdmin):
         return HttpResponseRedirect('../')
 
 
+class HasEventPeriodFilter(admin.SimpleListFilter):
+    title = 'event period'
+    parameter_name = 'has_period'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('yes', 'Scheduled (has period)'),
+            ('no', 'Unscheduled (no period)'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'yes':
+            return queryset.filter(eventperiod__isnull=False).distinct()
+        if self.value() == 'no':
+            return queryset.filter(eventperiod__isnull=True)
+        return queryset
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     change_form_template = 'admin/eventer/event/change_form.html'
+    list_display = ['name', 'slug', 'event_start']
+    list_filter = [HasEventPeriodFilter]
+    prepopulated_fields = {'slug': ('name',)}
+
+    def response_add(self, request, obj, post_url_continue=None):
+        return HttpResponseRedirect(f'../../eventsignupslotconfig/add/?event={obj.pk}')
+
+    @admin.display(description='Start', ordering='eventperiod__start')
+    def event_start(self, obj):
+        period = obj.eventperiod_set.order_by('start').first()
+        if period is None:
+            return '-'
+        tz = zoneinfo.ZoneInfo(obj.timezone)
+        return period.start.astimezone(tz).strftime('%Y-%m-%d %H:%M %Z')
 
     def get_urls(self):
         urls = super().get_urls()
@@ -96,7 +128,7 @@ class EventAdmin(admin.ModelAdmin):
                     f"Added {duration}-hour period starting {local_start.strftime('%Y-%m-%d %H:%M %Z')}",
                     messages.SUCCESS,
                 )
-                return HttpResponseRedirect(f'../../{event_id}/change/')
+                return HttpResponseRedirect(f'../../{event_id}/generate-slots/')
             except (ValueError, KeyError) as e:
                 errors = str(e)
 
@@ -129,19 +161,21 @@ class EventAdmin(admin.ModelAdmin):
             except ValueError as e:
                 errors = str(e)
 
-        existing_count = event.signup_slots.count()
+        existing_slots = list(event.signup_slots.prefetch_related('roles').order_by('start'))
         context = {
             **self.admin_site.each_context(request),
             'event': event,
-            'existing_count': existing_count,
+            'existing_slots': existing_slots,
+            'existing_count': len(existing_slots),
             'errors': errors,
-            'title': f'Generate Slot Templates - {event.name}',
+            'title': f'Generate Signup Slots - {event.name}',
         }
         return render(request, 'admin/eventer/event/generate_slots.html', context)
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
-    pass
+    def response_add(self, request, obj, post_url_continue=None):
+        return HttpResponseRedirect(f'../../event/{obj.event_id}/setup-superstream/')
 
 
 @admin.register(EventSignupSlot)
