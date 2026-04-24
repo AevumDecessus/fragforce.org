@@ -5,7 +5,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
 from eventer.slot_generator import generate_slots
 
 SUPERSTREAM_ROLES = [
@@ -209,6 +209,22 @@ class EventSignupSlotAdmin(admin.ModelAdmin):
     @admin.display(description='Stop (UTC)', ordering='stop')
     def stop_utc(self, obj):
         return obj.stop
+
+
+@admin.register(EventScheduleSlot)
+class EventScheduleSlotAdmin(admin.ModelAdmin):
+    list_display = ['event', 'role', 'slot_label', 'slot_start_local', 'user']
+    list_filter = ['event', 'role']
+    raw_id_fields = ['user']
+
+    @admin.display(description='Slot', ordering='slot__start')
+    def slot_label(self, obj):
+        return obj.slot.label
+
+    @admin.display(description='Start (Local)', ordering='slot__start')
+    def slot_start_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.slot.start.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
 
 
 @admin.register(Game)
