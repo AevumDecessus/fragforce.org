@@ -78,9 +78,14 @@ class KeyAdmin(admin.ModelAdmin):
         return deleted_objects, {}, set(), []
 
     def get_readonly_fields(self, request, obj=None):
+        readonly = []
         if obj:
-            return ['stream_key']
-        return []
+            readonly.append('stream_key')
+        if not request.user.has_perm('ffstream.set_key_superstream'):
+            readonly.append('superstream')
+        if not request.user.has_perm('ffstream.set_key_livestream'):
+            readonly.append('livestream')
+        return readonly
 
     def get_exclude(self, request, obj=None):
         if not obj:
