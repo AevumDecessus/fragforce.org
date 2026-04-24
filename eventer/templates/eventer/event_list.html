@@ -1,0 +1,47 @@
+{% extends "ff/base.html" %}
+{% load fftz %}
+
+{% block title %}Upcoming Events - Fragforce{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+  <div class="col-lg-10 offset-lg-1">
+    <h2>Upcoming Events</h2>
+
+    {% if events %}
+    <div class="row">
+      {% for event in events %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h4 class="card-title">
+              <a href="{% url 'eventer-event-detail' event_slug=event.slug %}">{{ event.name }}</a>
+            </h4>
+            {% if event.description %}
+            <p class="card-text">{{ event.description }}</p>
+            {% endif %}
+            {% if event.start %}
+            <p class="card-text mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>
+            {% endif %}
+            {% if event.end %}
+            <p class="card-text mb-1"><strong>Ends:</strong> {{ event.end|date:"Y-m-d H:i:s"|localtime_short }}</p>
+            {% endif %}
+          </div>
+          <div class="card-footer">
+            <a href="{% url 'eventer-event-detail' event_slug=event.slug %}" class="btn btn-sm btn-outline-primary">Details</a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+      <div class="card-body text-muted">
+        No upcoming events at the moment. Check back soon!
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
