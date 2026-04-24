@@ -5,91 +5,78 @@
 
 {% block content %}
 <h1>Availability Summary for "{{ event.name }}"</h1>
-<p>
-  <a href="{% url 'admin:eventer_event_change' event.pk %}">&larr; Back to event</a>
-</p>
+<p><a href="{% url 'admin:eventer_event_change' event.pk %}">&larr; Back to event</a></p>
 
-{% if not slot_summary %}
-<p class="help">No signup slots found. Generate slots first.</p>
+{% if not rows %}
+<p class="help">No event periods or signup slots found.</p>
 {% else %}
 
 <style>
-  .avail-table { width: 100%; border-collapse: collapse; margin-bottom: 2em; }
-  .avail-table th, .avail-table td { padding: 6px 10px; border: 1px solid #ddd; vertical-align: top; }
-  .avail-table th { background: #f8f8f8; font-weight: bold; }
-  .slot-header { background: #417690; color: white; font-weight: bold; }
-  .assigned-badge { display: inline-block; background: #28a745; color: white; padding: 1px 6px; border-radius: 3px; font-size: 0.85em; }
-  .available-list { margin: 0; padding: 0; list-style: none; }
-  .available-list li { padding: 2px 0; }
-  .no-available { color: #999; font-style: italic; }
+  .avail-grid { border-collapse: collapse; font-size: 0.85em; width: 100%; }
+  .avail-grid th, .avail-grid td { border: 1px solid #ccc; padding: 4px 8px; vertical-align: top; }
+  .avail-grid th { background: #417690; color: white; text-align: center; position: sticky; top: 0; z-index: 2; }
+  .hour-col { white-space: nowrap; font-weight: bold; color: #555; background: #f8f8f8; text-align: right; width: 6em; }
+  .day-row td, .day-row th { background: #2c4a5a; color: white; font-weight: bold; padding: 3px 8px; }
+  .slot-cell { min-width: 10em; }
+  .slot-cell.has-available { background: #f0fff0; }
+  .slot-cell.no-available { background: #fff8f8; }
+  .slot-cell.assigned { background: #d4edda; }
+  .empty-cell { background: #f5f5f5; }
+  .assigned-badge { color: #155724; font-weight: bold; }
+  .available-list { margin: 2px 0 0 0; padding: 0; list-style: none; color: #333; }
+  .available-list li { padding: 1px 0; }
+  .no-one { color: #aaa; font-style: italic; font-size: 0.9em; }
+  .slot-label { font-size: 0.8em; color: #666; border-bottom: 1px solid #eee; margin-bottom: 3px; padding-bottom: 2px; }
 </style>
 
-<table class="avail-table">
+<div style="overflow-x: auto;">
+<table class="avail-grid">
   <thead>
     <tr>
-      <th style="width: 15%">Slot</th>
-      <th style="width: 17%">Role</th>
-      <th style="width: 30%">Assigned</th>
-      <th>Available</th>
+      <th>Hour</th>
+      {% for role in role_headers %}
+      <th>{{ role }}</th>
+      {% endfor %}
     </tr>
   </thead>
   <tbody>
-    {% for entry in slot_summary %}
-    {% if entry.roles %}
-    <tr>
-      <td rowspan="{{ entry.roles|length }}" class="slot-header">
-        {{ entry.slot.label }}<br>
-        <small>{{ entry.local_start }}</small>
-      </td>
-      {% with entry.roles.0 as first_role %}
-      <td>{{ first_role.role.name }}</td>
-      <td>
-        {% if first_role.assigned %}
-        <span class="assigned-badge">&#10003; {{ first_role.assigned.user.username }}</span>
-        {% else %}
-        <em style="color:#999">Unassigned</em>
-        {% endif %}
-      </td>
-      <td>
-        {% if first_role.available %}
-        <ul class="available-list">
-          {% for user in first_role.available %}
-          <li>{{ user.username }}</li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <span class="no-available">No one available</span>
-        {% endif %}
-      </td>
-      {% endwith %}
+    {% for row in rows %}
+    {% if row.is_day_start %}
+    <tr class="day-row">
+      <td colspan="{{ role_headers|length|add:1 }}">{{ row.day }}</td>
     </tr>
-    {% for role_entry in entry.roles|slice:"1:" %}
-    <tr>
-      <td>{{ role_entry.role.name }}</td>
-      <td>
-        {% if role_entry.assigned %}
-        <span class="assigned-badge">&#10003; {{ role_entry.assigned.user.username }}</span>
-        {% else %}
-        <em style="color:#999">Unassigned</em>
-        {% endif %}
-      </td>
-      <td>
-        {% if role_entry.available %}
-        <ul class="available-list">
-          {% for user in role_entry.available %}
-          <li>{{ user.username }}</li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <span class="no-available">No one available</span>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
     {% endif %}
+    <tr>
+      <td class="hour-col">{{ row.local }}</td>
+      {% for cell in row.cells %}
+      {% if cell.type == 'skip' %}
+        {# covered by rowspan above #}
+      {% elif cell.type == 'empty' %}
+        <td class="empty-cell"></td>
+      {% else %}
+        <td class="slot-cell {% if cell.assigned %}assigned{% elif cell.available %}has-available{% else %}no-available{% endif %}"
+            rowspan="{{ cell.rowspan }}">
+          <div class="slot-label">{{ cell.slot.label }}</div>
+          {% if cell.assigned %}
+            <span class="assigned-badge">&#10003; {{ cell.assigned.user.username }}</span>
+          {% endif %}
+          {% if cell.available %}
+            <ul class="available-list">
+              {% for user in cell.available %}
+              <li>{{ user.username }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <span class="no-one">none</span>
+          {% endif %}
+        </td>
+      {% endif %}
+      {% endfor %}
+    </tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endif %}
 
 {% endblock %}

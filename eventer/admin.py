@@ -177,65 +177,128 @@ class EventAdmin(admin.ModelAdmin):
         return render(request, 'admin/eventer/event/generate_slots.html', context)
 
     def availability_summary_view(self, request, event_id):
+        from datetime import timedelta
         from evtsignup.models import EventInterest
         event = get_object_or_404(Event, pk=event_id)
         tz = zoneinfo.ZoneInfo(event.timezone)
 
-        role_field_map = {
-            'participant': 'as_participant',
-            'streamer': 'as_streamer',
-            'moderator': 'as_moderator',
-            'tech-manager': 'as_tech',
-        }
+        ROLES = [
+            ('participant', 'as_participant', 'Participant'),
+            ('streamer', 'as_streamer', 'Streamer'),
+            ('moderator', 'as_moderator', 'Moderator'),
+            ('tech-manager', 'as_tech', 'Tech'),
+        ]
 
-        slots = event.signup_slots.prefetch_related('roles').order_by('start')
+        # All hours in the event
+        event_start = event.start
+        event_end = event.end
+        if not event_start or not event_end:
+            context = {
+                **self.admin_site.each_context(request),
+                'event': event,
+                'rows': [],
+                'role_headers': [r[2] for r in ROLES],
+                'title': f'Availability Summary - {event.name}',
+            }
+            return render(request, 'admin/eventer/event/availability_summary.html', context)
+
+        all_hours = []
+        cur = event_start.replace(minute=0, second=0, microsecond=0)
+        while cur < event_end:
+            all_hours.append(cur)
+            cur += timedelta(hours=1)
+
+        # Build hour → {role_slug: set of users} from availability interest
+        hour_role_users = {h: {slug: set() for slug, _, _ in ROLES} for h in all_hours}
         interests = (
             EventInterest.objects
             .filter(event=event)
             .select_related('user')
             .prefetch_related('eventavailabilityinterest_set')
         )
-
-        # Build hour → {role_slug: set of user_ids} lookup
-        hour_role_users = {}
         for interest in interests:
             for avail in interest.eventavailabilityinterest_set.all():
-                if avail.hour not in hour_role_users:
-                    hour_role_users[avail.hour] = {slug: set() for slug in role_field_map}
-                for slug, field in role_field_map.items():
-                    if getattr(avail, field):
-                        hour_role_users[avail.hour][slug].add(interest.user)
+                if avail.hour in hour_role_users:
+                    for slug, field, _ in ROLES:
+                        if getattr(avail, field):
+                            hour_role_users[avail.hour][slug].add(interest.user)
 
-        # For each slot, for each role the slot covers, find users available for all hours
-        slot_summary = []
-        for slot in slots:
-            slot_hours = list(_expand_to_hours(slot))
-            slot_roles = []
-            for role in slot.roles.order_by('name'):
-                field = role_field_map.get(role.slug)
-                if not field:
-                    continue
-                # User must be available for every hour in the slot
-                available_users = None
-                for hour in slot_hours:
-                    hour_users = hour_role_users.get(hour, {}).get(role.slug, set())
-                    available_users = hour_users if available_users is None else available_users & hour_users
-                assigned = EventScheduleSlot.objects.filter(slot=slot, role=role).select_related('user').first()
-                slot_roles.append({
-                    'role': role,
-                    'available': sorted(available_users or [], key=lambda u: u.username),
-                    'assigned': assigned,
-                })
-            slot_summary.append({
-                'slot': slot,
-                'local_start': slot.start.astimezone(tz).strftime('%a %b %-d %-I%p %Z'),
-                'roles': slot_roles,
+        # For each role, map each hour to its containing slot (if any)
+        role_hour_slot = {slug: {} for slug, _, _ in ROLES}
+        for slot in event.signup_slots.prefetch_related('roles').order_by('start'):
+            for role in slot.roles.all():
+                if role.slug in role_hour_slot:
+                    for hour in _expand_to_hours(slot):
+                        role_hour_slot[role.slug][hour] = slot
+
+        # For each role+slot, precompute available users (must cover all slot hours)
+        slot_role_available = {}  # (slot.pk, role_slug) -> sorted list of users
+        slot_role_assigned = {}   # (slot.pk, role_slug) -> EventScheduleSlot or None
+        seen = set()
+        for slug, _, _ in ROLES:
+            for hour in all_hours:
+                slot = role_hour_slot[slug].get(hour)
+                if slot and (slot.pk, slug) not in seen:
+                    seen.add((slot.pk, slug))
+                    slot_hours = list(_expand_to_hours(slot))
+                    available = None
+                    for sh in slot_hours:
+                        users = hour_role_users.get(sh, {}).get(slug, set())
+                        available = users if available is None else available & users
+                    role_obj = EventRole.objects.filter(slug=slug).first()
+                    assigned = None
+                    if role_obj:
+                        assigned = EventScheduleSlot.objects.filter(
+                            slot=slot, role=role_obj
+                        ).select_related('user').first()
+                    slot_role_available[(slot.pk, slug)] = sorted(available or [], key=lambda u: u.username)
+                    slot_role_assigned[(slot.pk, slug)] = assigned
+
+        # Build rows - one per hour, cells per role
+        # Each cell: {'rowspan': n, 'slot': slot, 'available': [...], 'assigned': ...} or None (skip - covered by rowspan)
+        rows = []
+        role_next_hour = {slug: None for slug, _, _ in ROLES}  # when current slot ends
+
+        for hour in all_hours:
+            local_hour = hour.astimezone(tz)
+            # Day boundary marker
+            is_day_start = local_hour.hour == 0 or hour == all_hours[0]
+
+            cells = []
+            for slug, _, _ in ROLES:
+                slot = role_hour_slot[slug].get(hour)
+                if slot is None:
+                    # No slot covers this hour for this role
+                    cells.append({'type': 'empty'})
+                elif role_next_hour[slug] == hour:
+                    # Still inside a previous slot's rowspan - skip
+                    cells.append({'type': 'skip'})
+                else:
+                    # First hour of this slot for this role - compute rowspan
+                    slot_hours = list(_expand_to_hours(slot))
+                    rowspan = len(slot_hours)
+                    role_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else hour + timedelta(hours=1)
+                    cells.append({
+                        'type': 'slot',
+                        'rowspan': rowspan,
+                        'slot': slot,
+                        'available': slot_role_available.get((slot.pk, slug), []),
+                        'assigned': slot_role_assigned.get((slot.pk, slug)),
+                    })
+
+            rows.append({
+                'hour': hour,
+                'local': local_hour.strftime('%-I%p'),
+                'day': local_hour.strftime('%a %b %-d'),
+                'is_day_start': is_day_start or (local_hour.hour == 0),
+                'cells': cells,
             })
 
         context = {
             **self.admin_site.each_context(request),
             'event': event,
-            'slot_summary': slot_summary,
+            'rows': rows,
+            'role_headers': [r[2] for r in ROLES],
             'title': f'Availability Summary - {event.name}',
         }
         return render(request, 'admin/eventer/event/availability_summary.html', context)
