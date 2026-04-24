@@ -28,6 +28,8 @@
   .empty-cell { background: #f5f5f5; }
   .slot-label { font-size: 0.8em; color: #666; border-bottom: 1px solid #eee; margin-bottom: 4px; padding-bottom: 2px; }
   .avail-hint { font-size: 0.75em; color: #888; margin-top: 2px; }
+  .available-list { margin: 2px 0 0 0; padding: 0; list-style: none; color: #333; font-size: 0.85em; }
+  .available-list li { padding: 1px 0; }
 </style>
 
 <form method="post">
@@ -63,7 +65,16 @@
           <td class="slot-cell {% if cell.available %}has-available{% else %}no-available{% endif %}"
               rowspan="{{ cell.rowspan }}">
             <div class="slot-label">{{ cell.slot.label }}</div>
-            <select name="assign_{{ cell.slot.pk }}_{{ cell.role_slug }}" style="width:100%;font-size:0.85em;">
+            {% if cell.available %}
+            <ul class="available-list">
+              {% for user in cell.available %}
+              <li>{{ user.username }}</li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <div class="avail-hint">No one available</div>
+            {% endif %}
+            <select name="assign_{{ cell.slot.pk }}_{{ cell.role_slug }}" style="width:100%;font-size:0.85em;margin-top:4px">
               <option value="">-- Unassigned --</option>
               {% for user in cell.available %}
               <option value="{{ user.pk }}"
@@ -72,9 +83,6 @@
               </option>
               {% endfor %}
             </select>
-            {% if not cell.available %}
-            <div class="avail-hint">No one available</div>
-            {% endif %}
           </td>
         {% endif %}
         {% endfor %}
