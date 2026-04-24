@@ -270,7 +270,7 @@ class EventAdmin(admin.ModelAdmin):
                 if slot is None:
                     # No slot covers this hour for this role
                     cells.append({'type': 'empty'})
-                elif role_next_hour[slug] == hour:
+                elif role_next_hour[slug] is not None and hour < role_next_hour[slug]:
                     # Still inside a previous slot's rowspan - skip
                     cells.append({'type': 'skip'})
                 else:
