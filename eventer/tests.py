@@ -417,3 +417,105 @@ class EventAdminCreateFlowTest(TestCase):
             f'/admin/eventer/event/{event.pk}/generate-slots/',
             fetch_redirect_response=False,
         )
+
+
+class EventListViewTest(TestCase):
+    def setUp(self):
+        self.now = datetime(2025, 4, 4, 12, 0, tzinfo=dt_timezone.utc)
+
+    def _make_event(self, name, slug, public=True, stop_offset_hours=48):
+        event = Event.objects.create(name=name, slug=slug, description='A test event', public=public)
+        EventPeriod.objects.create(
+            event=event,
+            start=self.now,
+            stop=self.now + timedelta(hours=stop_offset_hours),
+        )
+        return event
+
+    def test_lists_public_upcoming_events(self):
+        from unittest.mock import patch
+        self._make_event('Public Event', 'public-event')
+        with patch('django.utils.timezone.now', return_value=self.now):
+            response = self.client.get('/events/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Public Event')
+
+    def test_excludes_non_public_events(self):
+        from unittest.mock import patch
+        self._make_event('Private Event', 'private-event', public=False)
+        with patch('django.utils.timezone.now', return_value=self.now):
+            response = self.client.get('/events/')
+        self.assertNotContains(response, 'Private Event')
+
+    def test_excludes_past_events(self):
+        from unittest.mock import patch
+        self._make_event('Past Event', 'past-event', stop_offset_hours=-1)
+        future = self.now + timedelta(hours=2)
+        with patch('django.utils.timezone.now', return_value=future):
+            response = self.client.get('/events/')
+        self.assertNotContains(response, 'Past Event')
+
+    def test_empty_state_shown_when_no_events(self):
+        from unittest.mock import patch
+        with patch('django.utils.timezone.now', return_value=self.now):
+            response = self.client.get('/events/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No upcoming events')
+
+
+class EventDetailViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('tester', 'tester@example.com', 'pass')
+        self.event = Event.objects.create(
+            name='Detail Event', slug='detail-event', description='An event',
+            public=True, signups_open=True, edits_open=True,
+        )
+        EventPeriod.objects.create(
+            event=self.event,
+            start=datetime(2025, 4, 4, 12, tzinfo=dt_timezone.utc),
+            stop=datetime(2025, 4, 6, 4, tzinfo=dt_timezone.utc),
+        )
+
+    def test_detail_returns_200(self):
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Detail Event')
+
+    def test_non_public_event_detail_still_accessible(self):
+        self.event.public = False
+        self.event.save()
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_404_for_unknown_slug(self):
+        response = self.client.get('/events/does-not-exist/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_signup_link_shown_when_signups_open_and_no_existing_signup(self):
+        self.client.login(username='tester', password='pass')
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertTrue(response.context['show_signup_link'])
+        self.assertFalse(response.context['show_edit_link'])
+
+    def test_edit_link_shown_when_edits_open_and_existing_signup(self):
+        from evtsignup.models import EventInterest
+        self.client.login(username='tester', password='pass')
+        EventInterest.objects.create(user=self.user, event=self.event, acknowledged=True)
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertFalse(response.context['show_signup_link'])
+        self.assertTrue(response.context['show_edit_link'])
+
+    def test_no_links_when_locked(self):
+        self.event.locked = True
+        self.event.save()
+        self.client.login(username='tester', password='pass')
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertFalse(response.context['show_signup_link'])
+        self.assertFalse(response.context['show_edit_link'])
+
+    def test_no_signup_link_when_signups_closed(self):
+        self.event.signups_open = False
+        self.event.save()
+        self.client.login(username='tester', password='pass')
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertFalse(response.context['show_signup_link'])
