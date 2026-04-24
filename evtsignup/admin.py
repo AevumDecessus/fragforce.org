@@ -11,7 +11,7 @@ class EventAvailabilityInterestAdmin(admin.ModelAdmin):
 
 @admin.register(EventInterest)
 class EventInterestAdmin(admin.ModelAdmin):
-    pass
+    raw_id_fields = ['el_participant']
 
 
 @admin.register(GameInterestUserEvent)
