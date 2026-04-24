@@ -8,7 +8,7 @@
   .track-section { display: none; }
   .track-section.active { display: block; }
 
-  .slot-btn-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 0.4rem; }
+  .slot-btn-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: 0.4rem; }
   .slot-btn { position: relative; }
   .slot-btn input[type="checkbox"] {
     position: absolute;
@@ -49,9 +49,6 @@
     color: #fff;
   }
 
-  .track-toggle-btn {
-    min-width: 11rem;
-  }
 </style>
 {% endblock %}
 
@@ -151,34 +148,42 @@
       <div class="card mb-4">
         <div class="card-header"><strong>Which roles are you interested in?</strong> <small class="text-muted">Select all that apply</small></div>
         <div class="card-body">
-          <div class="d-flex flex-wrap" style="gap: 0.5rem;">
+          <div class="row">
             {% if participant_slots %}
-            <button type="button" class="btn btn-outline-primary track-toggle-btn
-                {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}"
-                data-track="participant">
-              Participant
-            </button>
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}"
+                  data-track="participant">
+                Participant
+              </button>
+            </div>
             {% endif %}
             {% if streamer_slots %}
-            <button type="button" class="btn btn-outline-primary track-toggle-btn
-                {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}"
-                data-track="streamer">
-              Streamer
-            </button>
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}"
+                  data-track="streamer">
+                Streamer
+              </button>
+            </div>
             {% endif %}
             {% if moderator_slots %}
-            <button type="button" class="btn btn-outline-primary track-toggle-btn
-                {% if selected_slot_ids.moderator %}active{% endif %}"
-                data-track="moderator">
-              Moderator
-            </button>
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.moderator %}active{% endif %}"
+                  data-track="moderator">
+                Moderator
+              </button>
+            </div>
             {% endif %}
             {% if tech_slots %}
-            <button type="button" class="btn btn-outline-primary track-toggle-btn
-                {% if selected_slot_ids.tech %}active{% endif %}"
-                data-track="tech">
-              Tech Manager
-            </button>
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.tech %}active{% endif %}"
+                  data-track="tech">
+                Tech Manager
+              </button>
+            </div>
             {% endif %}
           </div>
           <small class="text-muted d-block mt-2">Click a role to expand its availability section below.</small>
@@ -342,7 +347,7 @@
 
 {% block extra_js %}
 <script>
-  document.querySelectorAll('.track-toggle-btn').forEach(function(btn) {
+  document.querySelectorAll('[data-track]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var track = this.dataset.track;
       var section = document.getElementById('section-' + track);
