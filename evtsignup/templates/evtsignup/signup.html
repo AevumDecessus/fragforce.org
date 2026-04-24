@@ -21,9 +21,29 @@
     outline: none;
     box-shadow: none;
   }
-  [data-track]:focus {
-    outline: none;
-    box-shadow: none;
+  [data-track] {
+    transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+  }
+  [data-track]:focus,
+  [data-track]:active {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  [data-track].active,
+  [data-track].active:focus,
+  [data-track].active:active,
+  [data-track].active:hover {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: #fff !important;
+    box-shadow: none !important;
+  }
+  [data-track]:not(.active),
+  [data-track]:not(.active):focus,
+  [data-track]:not(.active):active {
+    background-color: transparent !important;
+    color: #007bff !important;
+    box-shadow: none !important;
   }
   .slot-btn label {
     display: block;
