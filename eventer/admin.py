@@ -262,7 +262,7 @@ class EventAdmin(admin.ModelAdmin):
         for hour in all_hours:
             local_hour = hour.astimezone(tz)
             # Day boundary marker
-            is_day_start = local_hour.hour == 0 or hour == all_hours[0]
+            is_day_start = hour == all_hours[0] or local_hour.hour == 0
 
             cells = []
             for slug, _, _ in ROLES:
