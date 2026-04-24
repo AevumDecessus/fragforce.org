@@ -344,6 +344,7 @@
       var isActive = this.classList.contains('active');
       this.classList.toggle('active', !isActive);
       if (section) section.classList.toggle('active', !isActive);
+      this.blur();
     });
   });
 </script>
