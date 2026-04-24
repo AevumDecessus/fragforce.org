@@ -140,11 +140,11 @@
             </div>
             {% endfor %}
           </div>
+          {% endif %}
           <div class="form-group mt-2">
             <label for="participant_notes">Other game preferences <small class="text-muted">(optional)</small></label>
             <textarea class="form-control" id="participant_notes" name="participant_notes" rows="2">{{ prefill.participant_notes|default:'' }}</textarea>
           </div>
-          {% endif %}
 
         </div>
       </div>
@@ -203,11 +203,11 @@
             </div>
             {% endfor %}
           </div>
+          {% endif %}
           <div class="form-group mt-2">
             <label for="streamer_notes">Other game preferences <small class="text-muted">(optional)</small></label>
             <textarea class="form-control" id="streamer_notes" name="streamer_notes" rows="2">{{ prefill.streamer_notes|default:'' }}</textarea>
           </div>
-          {% endif %}
 
         </div>
       </div>
