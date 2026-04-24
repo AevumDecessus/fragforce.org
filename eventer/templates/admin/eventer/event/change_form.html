@@ -19,6 +19,11 @@
         Availability Summary
       </a>
     </li>
+    <li>
+      <a href="{% url 'admin:eventer_event_build_schedule' original.pk %}" class="historylink">
+        Build Schedule
+      </a>
+    </li>
   </ul>
   {% endif %}
 {% endblock %}
