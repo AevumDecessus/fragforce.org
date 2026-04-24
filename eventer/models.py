@@ -111,6 +111,14 @@ class Event(models.Model):
     timezone = models.CharField(max_length=64, default='America/New_York', blank=False, null=False,
                                 choices=SUPERSTREAM_TIMEZONES,
                                 help_text="Timezone for coordinator-facing display. Public schedule uses browser local time via the |localtime template filter.")
+    public = models.BooleanField(default=False,
+                               help_text="Show this event on the public events listing.")
+    signups_open = models.BooleanField(default=False,
+                                       help_text="Allow new signups. Has no effect when locked.")
+    edits_open = models.BooleanField(default=False,
+                                     help_text="Allow existing signups to be edited. Has no effect when locked.")
+    locked = models.BooleanField(default=False,
+                                 help_text="Lock the event - disables all signups and edits regardless of other flags.")
 
     @property
     def start(self):

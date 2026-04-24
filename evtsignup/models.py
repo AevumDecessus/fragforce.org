@@ -31,15 +31,16 @@ class EventInterest(models.Model):
 
 
 class GameInterestUserEvent(models.Model):
-    """ User's pre-selected game checkbox for a particular event """
+    """ User's pre-selected game checkbox for a particular event and role track """
     event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
     game = models.ForeignKey('eventer.Game', on_delete=models.CASCADE, blank=False, null=False)
+    role = models.ForeignKey('eventer.EventRole', on_delete=models.CASCADE, blank=False, null=False)
 
     def __str__(self):
-        return f'{self.event_interest} - {self.game}'
+        return f'{self.event_interest} - {self.game} ({self.role})'
 
     class Meta:
-        unique_together = [["event_interest", "game"]]
+        unique_together = [["event_interest", "game", "role"]]
 
 
 class EventAvailabilityInterest(models.Model):

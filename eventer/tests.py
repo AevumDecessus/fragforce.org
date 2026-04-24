@@ -107,7 +107,7 @@ class SetupSuperstreamViewTest(TestCase):
             'start': '2025-04-04T08:00',
             'duration': '40',
         })
-        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/generate-slots/', fetch_redirect_response=False)
         self.assertEqual(EventPeriod.objects.filter(event=self.event).count(), 1)
         period = EventPeriod.objects.get(event=self.event)
         self.assertEqual(period.start.hour, 12)  # 8am EDT (UTC-4) = 12:00 UTC
@@ -118,7 +118,7 @@ class SetupSuperstreamViewTest(TestCase):
             'start': '2025-01-10T08:00',
             'duration': '40',
         })
-        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{self.event.pk}/generate-slots/', fetch_redirect_response=False)
         period = EventPeriod.objects.get(event=self.event)
         self.assertEqual(period.start.hour, 13)  # 8am EST (UTC-5) = 13:00 UTC
 
@@ -132,7 +132,7 @@ class SetupSuperstreamViewTest(TestCase):
             f'/admin/eventer/event/{pacific_event.pk}/setup-superstream/',
             {'start': '2025-04-04T08:00', 'duration': '40'},
         )
-        self.assertRedirects(response, f'/admin/eventer/event/{pacific_event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{pacific_event.pk}/generate-slots/', fetch_redirect_response=False)
         period = EventPeriod.objects.get(event=pacific_event)
         self.assertEqual(period.start.hour, 15)  # 8am PDT (UTC-7) = 15:00 UTC
 
@@ -146,7 +146,7 @@ class SetupSuperstreamViewTest(TestCase):
             f'/admin/eventer/event/{utc_event.pk}/setup-superstream/',
             {'start': '2025-04-04T08:00', 'duration': '40'},
         )
-        self.assertRedirects(response, f'/admin/eventer/event/{utc_event.pk}/change/', fetch_redirect_response=False)
+        self.assertRedirects(response, f'/admin/eventer/event/{utc_event.pk}/generate-slots/', fetch_redirect_response=False)
         period = EventPeriod.objects.get(event=utc_event)
         self.assertEqual(period.start.hour, 8)  # 8am UTC = 8:00 UTC
 
@@ -326,3 +326,196 @@ class GenerateSlotsTest(TestCase):
         result = generate_slots(self.event, replace=False)
         self.assertEqual(result['created'], 0)
         self.assertEqual(EventSignupSlot.objects.filter(event=self.event).count(), first_count)
+
+
+class EventAdminListTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+        self.event_with_period = Event.objects.create(
+            name='Scheduled Event', slug='scheduled-event', description='',
+            timezone='America/New_York',
+        )
+        EventPeriod.objects.create(
+            event=self.event_with_period,
+            start=datetime(2025, 4, 4, 12, 0, tzinfo=dt_timezone.utc),
+            stop=datetime(2025, 4, 6, 4, 0, tzinfo=dt_timezone.utc),
+        )
+        self.event_no_period = Event.objects.create(
+            name='Unscheduled Event', slug='unscheduled-event', description='',
+        )
+
+    def _url(self):
+        return '/admin/eventer/event/'
+
+    def test_has_period_filter_returns_scheduled_events(self):
+        response = self.client.get(self._url(), {'has_period': 'yes'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Scheduled Event')
+        self.assertNotContains(response, 'Unscheduled Event')
+
+    def test_no_period_filter_returns_unscheduled_events(self):
+        response = self.client.get(self._url(), {'has_period': 'no'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Unscheduled Event')
+        self.assertNotContains(response, 'Scheduled Event')
+
+    def test_event_start_shows_dash_when_no_period(self):
+        response = self.client.get(self._url())
+        self.assertContains(response, 'Unscheduled Event')
+        # The event_start column should show '-' for events with no period
+        self.assertContains(response, '<td class="field-event_start">-</td>')
+
+    def test_event_start_shows_local_time_when_period_exists(self):
+        response = self.client.get(self._url())
+        # 12:00 UTC on April 4 2025 = 8am EDT
+        self.assertContains(response, '2025-04-04 08:00 EDT')
+
+
+class EventAdminCreateFlowTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+
+    def test_create_event_redirects_to_slot_config_add(self):
+        response = self.client.post('/admin/eventer/event/add/', {
+            'name': 'New Event',
+            'slug': 'new-event',
+            'description': 'A new event',
+            'timezone': 'America/New_York',
+            'signups_open': False,
+            'edits_open': False,
+            'locked': False,
+            '_save': '1',
+        })
+        self.assertEqual(response.status_code, 302)
+        event = Event.objects.get(slug='new-event')
+        self.assertIn(f'eventsignupslotconfig/add/?event={event.pk}', response['Location'])
+
+    def test_create_slot_config_redirects_to_setup_superstream(self):
+        event = Event.objects.create(name='Flow Event', slug='flow-event', description='')
+        response = self.client.post('/admin/eventer/eventsignupslotconfig/add/', {
+            'event': event.pk,
+            'standard_block_hours': 3,
+            'prime_block_hours': 2,
+            'prime_time_start': '14:00:00',
+            'prime_time_end': '21:00:00',
+            'management_block_hours': 6,
+            'mod_first_block_hours': 3,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f'event/{event.pk}/setup-superstream/', response['Location'])
+
+    def test_setup_superstream_redirects_to_generate_slots(self):
+        event = Event.objects.create(name='Flow Event 2', slug='flow-event-2', description='')
+        response = self.client.post(
+            f'/admin/eventer/event/{event.pk}/setup-superstream/',
+            {'start': '2025-04-04T08:00', 'duration': '40'},
+        )
+        self.assertRedirects(
+            response,
+            f'/admin/eventer/event/{event.pk}/generate-slots/',
+            fetch_redirect_response=False,
+        )
+
+
+class EventListViewTest(TestCase):
+    def setUp(self):
+        self.now = datetime(2025, 4, 4, 12, 0, tzinfo=dt_timezone.utc)
+
+    def _make_event(self, name, slug, public=True, stop_offset_hours=48):
+        event = Event.objects.create(name=name, slug=slug, description='A test event', public=public)
+        EventPeriod.objects.create(
+            event=event,
+            start=self.now,
+            stop=self.now + timedelta(hours=stop_offset_hours),
+        )
+        return event
+
+    def test_lists_public_upcoming_events(self):
+        from unittest.mock import patch
+        self._make_event('Public Event', 'public-event')
+        with patch('django.utils.timezone.now', return_value=self.now):
+            response = self.client.get('/events/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Public Event')
+
+    def test_excludes_non_public_events(self):
+        from unittest.mock import patch
+        self._make_event('Private Event', 'private-event', public=False)
+        with patch('django.utils.timezone.now', return_value=self.now):
+            response = self.client.get('/events/')
+        self.assertNotContains(response, 'Private Event')
+
+    def test_excludes_past_events(self):
+        from unittest.mock import patch
+        self._make_event('Past Event', 'past-event', stop_offset_hours=-1)
+        future = self.now + timedelta(hours=2)
+        with patch('django.utils.timezone.now', return_value=future):
+            response = self.client.get('/events/')
+        self.assertNotContains(response, 'Past Event')
+
+    def test_empty_state_shown_when_no_events(self):
+        from unittest.mock import patch
+        with patch('django.utils.timezone.now', return_value=self.now):
+            response = self.client.get('/events/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No upcoming events')
+
+
+class EventDetailViewTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('tester', 'tester@example.com', 'pass')
+        self.event = Event.objects.create(
+            name='Detail Event', slug='detail-event', description='An event',
+            public=True, signups_open=True, edits_open=True,
+        )
+        EventPeriod.objects.create(
+            event=self.event,
+            start=datetime(2025, 4, 4, 12, tzinfo=dt_timezone.utc),
+            stop=datetime(2025, 4, 6, 4, tzinfo=dt_timezone.utc),
+        )
+
+    def test_detail_returns_200(self):
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Detail Event')
+
+    def test_non_public_event_detail_still_accessible(self):
+        self.event.public = False
+        self.event.save()
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_404_for_unknown_slug(self):
+        response = self.client.get('/events/does-not-exist/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_signup_link_shown_when_signups_open_and_no_existing_signup(self):
+        self.client.login(username='tester', password='pass')
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertTrue(response.context['show_signup_link'])
+        self.assertFalse(response.context['show_edit_link'])
+
+    def test_edit_link_shown_when_edits_open_and_existing_signup(self):
+        from evtsignup.models import EventInterest
+        self.client.login(username='tester', password='pass')
+        EventInterest.objects.create(user=self.user, event=self.event, acknowledged=True)
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertFalse(response.context['show_signup_link'])
+        self.assertTrue(response.context['show_edit_link'])
+
+    def test_no_links_when_locked(self):
+        self.event.locked = True
+        self.event.save()
+        self.client.login(username='tester', password='pass')
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertFalse(response.context['show_signup_link'])
+        self.assertFalse(response.context['show_edit_link'])
+
+    def test_no_signup_link_when_signups_closed(self):
+        self.event.signups_open = False
+        self.event.save()
+        self.client.login(username='tester', password='pass')
+        response = self.client.get(f'/events/{self.event.slug}/')
+        self.assertFalse(response.context['show_signup_link'])

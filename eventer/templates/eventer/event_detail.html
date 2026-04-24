@@ -1,0 +1,40 @@
+{% extends "ff/base.html" %}
+{% load fftz %}
+
+{% block title %}{{ event.name }} - Fragforce{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+  <div class="col-lg-8 offset-lg-2">
+
+    <h2>{{ event.name }}</h2>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        {% if event.description %}
+        <p>{{ event.description }}</p>
+        {% endif %}
+        {% if event.start %}
+        <p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>
+        {% endif %}
+        {% if event.end %}
+        <p class="mb-0"><strong>Ends:</strong> {{ event.end|date:"Y-m-d H:i:s"|localtime_short }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if show_signup_link %}
+    <a href="{% url 'evtsignup-signup' event_slug=event.slug %}" class="btn btn-primary btn-lg mb-4">Sign Up</a>
+    {% elif show_edit_link %}
+    <a href="{% url 'evtsignup-signup' event_slug=event.slug %}" class="btn btn-outline-primary btn-lg mb-4">Edit My Signup</a>
+    {% elif not user.is_authenticated %}
+    <p class="text-muted">
+      <a href="{% url 'social:begin' 'discord' %}?next={% url 'evtsignup-signup' event_slug=event.slug %}">Log in with Discord</a> to sign up.
+    </p>
+    {% endif %}
+
+    <p><a href="{% url 'eventer-event-list' %}">&larr; All events</a></p>
+
+  </div>
+</div>
+{% endblock %}
