@@ -55,7 +55,19 @@
         <td class="slot-cell {% if cell.assigned %}assigned{% elif cell.available %}has-available{% else %}no-available{% endif %}"
             rowspan="{{ cell.rowspan }}">
           <div class="slot-label">{{ cell.slot.label }}</div>
-          <form method="post" action="{% url 'admin:eventer_event_assign_slot' event.pk %}" style="margin:0">
+          {% if cell.assigned %}
+            <div class="assigned-badge">&#10003; {{ cell.assigned.user.username }}</div>
+          {% endif %}
+          {% if cell.available %}
+            <ul class="available-list">
+              {% for user in cell.available %}
+              <li>{{ user.username }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <span class="no-one">none</span>
+          {% endif %}
+          <form method="post" action="{% url 'admin:eventer_event_assign_slot' event.pk %}" style="margin:4px 0 0 0">
             {% csrf_token %}
             <input type="hidden" name="slot_pk" value="{{ cell.slot.pk }}">
             <input type="hidden" name="role_slug" value="{{ cell.role_slug }}">
@@ -67,7 +79,7 @@
               </option>
               {% endfor %}
             </select>
-            <button type="submit" style="font-size:0.75em;padding:1px 6px">Save</button>
+            <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Assign</button>
           </form>
         </td>
       {% endif %}
