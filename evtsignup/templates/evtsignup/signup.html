@@ -3,6 +3,79 @@
 
 {% block title %}Sign Up - {{ event.name }}{% endblock %}
 
+{% block head %}
+<style>
+  .track-section { display: none; }
+  .track-section.active { display: block; }
+
+  .slot-btn-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: 0.4rem; }
+  .slot-btn { position: relative; }
+  .slot-btn input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+  .slot-btn input[type="checkbox"]:focus + label {
+    outline: none;
+    box-shadow: none;
+  }
+  [data-track] {
+    transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+  }
+  [data-track]:focus,
+  [data-track]:active {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  [data-track].active,
+  [data-track].active:focus,
+  [data-track].active:active,
+  [data-track].active:hover {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: #fff !important;
+    box-shadow: none !important;
+  }
+  [data-track]:not(.active),
+  [data-track]:not(.active):focus,
+  [data-track]:not(.active):active {
+    background-color: transparent !important;
+    color: #007bff !important;
+    box-shadow: none !important;
+  }
+  .slot-btn label {
+    display: block;
+    width: 100%;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid #6c757d;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.875rem;
+    background: #fff;
+    color: #495057;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .slot-btn input[type="checkbox"]:checked + label {
+    background: #007bff;
+    border-color: #007bff;
+    color: #fff;
+  }
+  .slot-btn label:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+  }
+  .slot-btn input[type="checkbox"]:checked + label:hover {
+    background: #0069d9;
+    border-color: #0062cc;
+    color: #fff;
+  }
+
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="row mt-4">
   <div class="col-lg-10 offset-lg-1">
@@ -94,33 +167,70 @@
         </div>
       </div>
 
+      {# --- Track selection --- #}
+      {% if participant_slots or streamer_slots or moderator_slots or tech_slots %}
+      <div class="card mb-4">
+        <div class="card-header"><strong>Which roles are you interested in?</strong> <small class="text-muted">Select all that apply</small></div>
+        <div class="card-body">
+          <div class="row">
+            {% if participant_slots %}
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}"
+                  data-track="participant">
+                Participant
+              </button>
+            </div>
+            {% endif %}
+            {% if streamer_slots %}
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}"
+                  data-track="streamer">
+                Streamer
+              </button>
+            </div>
+            {% endif %}
+            {% if moderator_slots %}
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.moderator %}active{% endif %}"
+                  data-track="moderator">
+                Moderator
+              </button>
+            </div>
+            {% endif %}
+            {% if tech_slots %}
+            <div class="col-6 mb-2">
+              <button type="button" class="btn btn-outline-primary btn-block
+                  {% if selected_slot_ids.tech %}active{% endif %}"
+                  data-track="tech">
+                Tech Manager
+              </button>
+            </div>
+            {% endif %}
+          </div>
+          <small class="text-muted d-block mt-2">Click a role to expand its availability section below.</small>
+        </div>
+      </div>
+      {% endif %}
+
       {# --- Track: Participant --- #}
       {% if participant_slots %}
-      <div class="card mb-4">
-        <div class="card-header">
-          <div class="form-check mb-0">
-            <input class="form-check-input track-toggle" type="checkbox" id="track_participant"
-                   data-target="#participant-body"
-                   {% if selected_slot_ids.participant or selected_game_ids.participant %}checked{% endif %}>
-            <label class="form-check-label" for="track_participant">
-              <strong>Participant</strong> - Play games with a streamer
-            </label>
-          </div>
-        </div>
-        <div class="card-body {% if not selected_slot_ids.participant and not selected_game_ids.participant %}d-none{% endif %}" id="participant-body">
+      <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant">
+        <div class="card-header bg-primary text-white"><strong>Participant</strong> - Play games with a streamer</div>
+        <div class="card-body">
 
           <h6>Availability</h6>
           {% for day_label, day_slots in participant_slot_days %}
           <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="row">
+          <div class="slot-btn-group">
             {% for slot in day_slots %}
-            <div class="col-md-4 col-sm-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="participant_slots"
-                       id="pslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                       {% if slot.pk in selected_slot_ids.participant %}checked{% endif %}>
-                <label class="form-check-label" for="pslot_{{ slot.pk }}">{{ slot.label }}</label>
-              </div>
+            <div class="slot-btn">
+              <input type="checkbox" name="participant_slots"
+                     id="pslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                     {% if slot.pk in selected_slot_ids.participant %}checked{% endif %}>
+              <label for="pslot_{{ slot.pk }}">{{ slot.label }}</label>
             </div>
             {% endfor %}
           </div>
@@ -128,20 +238,18 @@
 
           {% if participant_games %}
           <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to play)</small></h6>
-          <div class="row">
+          <div class="slot-btn-group">
             {% for game in participant_games %}
-            <div class="col-md-4 col-sm-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="participant_games"
-                       id="pgame_{{ game.pk }}" value="{{ game.pk }}"
-                       {% if game.pk in selected_game_ids.participant %}checked{% endif %}>
-                <label class="form-check-label" for="pgame_{{ game.pk }}">{{ game.name }}</label>
-              </div>
+            <div class="slot-btn">
+              <input type="checkbox" name="participant_games"
+                     id="pgame_{{ game.pk }}" value="{{ game.pk }}"
+                     {% if game.pk in selected_game_ids.participant %}checked{% endif %}>
+              <label for="pgame_{{ game.pk }}">{{ game.name }}</label>
             </div>
             {% endfor %}
           </div>
           {% endif %}
-          <div class="form-group mt-2">
+          <div class="form-group mt-3">
             <label for="participant_notes">Other game preferences <small class="text-muted">(optional)</small></label>
             <textarea class="form-control" id="participant_notes" name="participant_notes" rows="2">{{ prefill.participant_notes|default:'' }}</textarea>
           </div>
@@ -152,18 +260,9 @@
 
       {# --- Track: Streamer --- #}
       {% if streamer_slots %}
-      <div class="card mb-4">
-        <div class="card-header">
-          <div class="form-check mb-0">
-            <input class="form-check-input track-toggle" type="checkbox" id="track_streamer"
-                   data-target="#streamer-body"
-                   {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}checked{% endif %}>
-            <label class="form-check-label" for="track_streamer">
-              <strong>Streamer</strong> - Lead a time slot on stream
-            </label>
-          </div>
-        </div>
-        <div class="card-body {% if not selected_slot_ids.streamer and not selected_game_ids.streamer and not prefill.fundraising_url %}d-none{% endif %}" id="streamer-body">
+      <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer">
+        <div class="card-header bg-primary text-white"><strong>Streamer</strong> - Lead a time slot on stream</div>
+        <div class="card-body">
 
           <div class="form-group">
             <label for="fundraising_url">Fundraising page URL <small class="text-muted">(Extra Life or hospital charity page - required for streamers)</small></label>
@@ -175,15 +274,13 @@
           <h6>Availability</h6>
           {% for day_label, day_slots in streamer_slot_days %}
           <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="row">
+          <div class="slot-btn-group">
             {% for slot in day_slots %}
-            <div class="col-md-4 col-sm-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="streamer_slots"
-                       id="sslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                       {% if slot.pk in selected_slot_ids.streamer %}checked{% endif %}>
-                <label class="form-check-label" for="sslot_{{ slot.pk }}">{{ slot.label }}</label>
-              </div>
+            <div class="slot-btn">
+              <input type="checkbox" name="streamer_slots"
+                     id="sslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                     {% if slot.pk in selected_slot_ids.streamer %}checked{% endif %}>
+              <label for="sslot_{{ slot.pk }}">{{ slot.label }}</label>
             </div>
             {% endfor %}
           </div>
@@ -191,20 +288,18 @@
 
           {% if streamer_games %}
           <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to stream)</small></h6>
-          <div class="row">
+          <div class="slot-btn-group">
             {% for game in streamer_games %}
-            <div class="col-md-4 col-sm-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="streamer_games"
-                       id="sgame_{{ game.pk }}" value="{{ game.pk }}"
-                       {% if game.pk in selected_game_ids.streamer %}checked{% endif %}>
-                <label class="form-check-label" for="sgame_{{ game.pk }}">{{ game.name }}</label>
-              </div>
+            <div class="slot-btn">
+              <input type="checkbox" name="streamer_games"
+                     id="sgame_{{ game.pk }}" value="{{ game.pk }}"
+                     {% if game.pk in selected_game_ids.streamer %}checked{% endif %}>
+              <label for="sgame_{{ game.pk }}">{{ game.name }}</label>
             </div>
             {% endfor %}
           </div>
           {% endif %}
-          <div class="form-group mt-2">
+          <div class="form-group mt-3">
             <label for="streamer_notes">Other game preferences <small class="text-muted">(optional)</small></label>
             <textarea class="form-control" id="streamer_notes" name="streamer_notes" rows="2">{{ prefill.streamer_notes|default:'' }}</textarea>
           </div>
@@ -215,31 +310,20 @@
 
       {# --- Track: Moderator --- #}
       {% if moderator_slots %}
-      <div class="card mb-4">
-        <div class="card-header">
-          <div class="form-check mb-0">
-            <input class="form-check-input track-toggle" type="checkbox" id="track_moderator"
-                   data-target="#moderator-body"
-                   {% if selected_slot_ids.moderator %}checked{% endif %}>
-            <label class="form-check-label" for="track_moderator">
-              <strong>Moderator</strong> - Moderate chat and support the streamer
-            </label>
-          </div>
-        </div>
-        <div class="card-body {% if not selected_slot_ids.moderator %}d-none{% endif %}" id="moderator-body">
+      <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator">
+        <div class="card-header bg-primary text-white"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
+        <div class="card-body">
 
           <h6>Availability</h6>
           {% for day_label, day_slots in moderator_slot_days %}
           <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="row">
+          <div class="slot-btn-group">
             {% for slot in day_slots %}
-            <div class="col-md-4 col-sm-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="moderator_slots"
-                       id="mslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                       {% if slot.pk in selected_slot_ids.moderator %}checked{% endif %}>
-                <label class="form-check-label" for="mslot_{{ slot.pk }}">{{ slot.label }}</label>
-              </div>
+            <div class="slot-btn">
+              <input type="checkbox" name="moderator_slots"
+                     id="mslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                     {% if slot.pk in selected_slot_ids.moderator %}checked{% endif %}>
+              <label for="mslot_{{ slot.pk }}">{{ slot.label }}</label>
             </div>
             {% endfor %}
           </div>
@@ -251,31 +335,20 @@
 
       {# --- Track: Tech Manager --- #}
       {% if tech_slots %}
-      <div class="card mb-4">
-        <div class="card-header">
-          <div class="form-check mb-0">
-            <input class="form-check-input track-toggle" type="checkbox" id="track_tech"
-                   data-target="#tech-body"
-                   {% if selected_slot_ids.tech %}checked{% endif %}>
-            <label class="form-check-label" for="track_tech">
-              <strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs
-            </label>
-          </div>
-        </div>
-        <div class="card-body {% if not selected_slot_ids.tech %}d-none{% endif %}" id="tech-body">
+      <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech">
+        <div class="card-header bg-primary text-white"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
+        <div class="card-body">
 
           <h6>Availability</h6>
           {% for day_label, day_slots in tech_slot_days %}
           <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="row">
+          <div class="slot-btn-group">
             {% for slot in day_slots %}
-            <div class="col-md-4 col-sm-6">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="tech_slots"
-                       id="tslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                       {% if slot.pk in selected_slot_ids.tech %}checked{% endif %}>
-                <label class="form-check-label" for="tslot_{{ slot.pk }}">{{ slot.label }}</label>
-              </div>
+            <div class="slot-btn">
+              <input type="checkbox" name="tech_slots"
+                     id="tslot_{{ slot.pk }}" value="{{ slot.pk }}"
+                     {% if slot.pk in selected_slot_ids.tech %}checked{% endif %}>
+              <label for="tslot_{{ slot.pk }}">{{ slot.label }}</label>
             </div>
             {% endfor %}
           </div>
@@ -298,12 +371,14 @@
 
 {% block extra_js %}
 <script>
-  document.querySelectorAll('.track-toggle').forEach(function(cb) {
-    cb.addEventListener('change', function() {
-      var target = document.querySelector(this.dataset.target);
-      if (target) {
-        target.classList.toggle('d-none', !this.checked);
-      }
+  document.querySelectorAll('[data-track]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var track = this.dataset.track;
+      var section = document.getElementById('section-' + track);
+      var isActive = this.classList.contains('active');
+      this.classList.toggle('active', !isActive);
+      if (section) section.classList.toggle('active', !isActive);
+      this.blur();
     });
   });
 </script>
