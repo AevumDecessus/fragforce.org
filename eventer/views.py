@@ -26,7 +26,7 @@ def event_list(request):
     now = timezone.now()
     events = (
         Event.objects
-        .filter(eventperiod__isnull=False, eventperiod__stop__gte=now)
+        .filter(public=True, eventperiod__isnull=False, eventperiod__stop__gte=now)
         .distinct()
         .prefetch_related('eventperiod_set')
         .order_by('eventperiod__start')
