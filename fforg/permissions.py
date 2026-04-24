@@ -37,8 +37,20 @@ COORDINATOR_PERMISSIONS = [
     ('evtsignup', 'gameinterestuserevent', ['view']),
 ]
 
+SUPERSTREAM_KEY_MANAGER_PERMISSIONS = [
+    ('ffstream', 'key', ['view', 'change']),
+    ('ffstream', 'key', ['set_key_superstream']),
+]
+
+LIVESTREAM_KEY_MANAGER_PERMISSIONS = [
+    ('ffstream', 'key', ['view', 'change']),
+    ('ffstream', 'key', ['set_key_livestream']),
+]
+
 GROUP_DEFINITIONS = {
     'Coordinator': COORDINATOR_PERMISSIONS,
+    'Superstream Key Manager': SUPERSTREAM_KEY_MANAGER_PERMISSIONS,
+    'Livestream Key Manager': LIVESTREAM_KEY_MANAGER_PERMISSIONS,
 }
 
 
