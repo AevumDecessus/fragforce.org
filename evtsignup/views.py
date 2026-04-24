@@ -77,7 +77,7 @@ def _build_hour_map(event, slot_field_pairs):
     return hour_map
 
 
-def _save_signup(request, event, participant_games, streamer_games):
+def _save_signup(request, event, participant_games, streamer_games, participant_role, streamer_role):
     """
     Validate and save a POST submission.
     Returns (interest, created, errors). On errors, interest/created are None.
@@ -118,16 +118,16 @@ def _save_signup(request, event, participant_games, streamer_games):
         for hour, flags in sorted(hour_map.items())
     ])
 
-    # Sync game selections
+    # Sync game selections - one row per (game, role)
     GameInterestUserEvent.objects.filter(event_interest=interest).delete()
-    selected_game_ids = (
-        set(participant_games.filter(pk__in=request.POST.getlist('participant_games')).values_list('pk', flat=True))
-        | set(streamer_games.filter(pk__in=request.POST.getlist('streamer_games')).values_list('pk', flat=True))
-    )
-    GameInterestUserEvent.objects.bulk_create([
-        GameInterestUserEvent(event_interest=interest, game_id=gid)
-        for gid in selected_game_ids
-    ])
+    game_role_rows = []
+    if participant_role:
+        for gid in participant_games.filter(pk__in=request.POST.getlist('participant_games')).values_list('pk', flat=True):
+            game_role_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=participant_role))
+    if streamer_role:
+        for gid in streamer_games.filter(pk__in=request.POST.getlist('streamer_games')).values_list('pk', flat=True):
+            game_role_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=streamer_role))
+    GameInterestUserEvent.objects.bulk_create(game_role_rows, ignore_conflicts=True)
 
     return interest, created, []
 
@@ -185,10 +185,19 @@ def _prefill_from_existing(existing, slot_qs_by_track, participant_games, stream
             if all(h in track_hours for h in _expand_to_hours(slot)):
                 selected_slot_ids[track].add(slot.pk)
 
-    existing_game_ids = set(existing.gameinterestuserevent_set.values_list('game_id', flat=True))
+    participant_game_ids = set(
+        existing.gameinterestuserevent_set
+        .filter(role__slug='participant')
+        .values_list('game_id', flat=True)
+    )
+    streamer_game_ids = set(
+        existing.gameinterestuserevent_set
+        .filter(role__slug='streamer')
+        .values_list('game_id', flat=True)
+    )
     selected_game_ids = {
-        'participant': existing_game_ids & set(participant_games.values_list('pk', flat=True)),
-        'streamer': existing_game_ids & set(streamer_games.values_list('pk', flat=True)),
+        'participant': participant_game_ids & set(participant_games.values_list('pk', flat=True)),
+        'streamer': streamer_game_ids & set(streamer_games.values_list('pk', flat=True)),
     }
 
     return prefill, selected_slot_ids, selected_game_ids
@@ -234,7 +243,7 @@ def signup_view(request, event_slug):
     errors = []
 
     if request.method == 'POST':
-        _, created, errors = _save_signup(request, event, participant_games, streamer_games)
+        _, created, errors = _save_signup(request, event, participant_games, streamer_games, participant_role, streamer_role)
         if not errors:
             if created:
                 messages.success(request, "Your signup has been received!")
