@@ -8,7 +8,7 @@
   .track-section { display: none; }
   .track-section.active { display: block; }
 
-  .slot-btn-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .slot-btn-group { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 0.4rem; }
   .slot-btn { position: relative; }
   .slot-btn input[type="checkbox"] {
     position: absolute;
@@ -17,7 +17,8 @@
     height: 0;
   }
   .slot-btn label {
-    display: inline-block;
+    display: block;
+    width: 100%;
     padding: 0.35rem 0.75rem;
     border: 1px solid #6c757d;
     border-radius: 0.25rem;
