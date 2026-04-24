@@ -55,7 +55,14 @@ GROUP_DEFINITIONS = {
 
 
 def _collect_permissions(permission_list):
-    """Resolve (app_label, model_name, actions) tuples to Permission objects."""
+    """
+    Resolve (app_label, model_name, actions) tuples to Permission objects.
+
+    For standard CRUD actions ('add', 'change', 'delete', 'view'), the codename
+    is built as '{action}_{model_name}'. For custom permissions the codename is
+    used as-is (e.g. 'set_key_superstream' stays 'set_key_superstream').
+    """
+    STANDARD_ACTIONS = {'add', 'change', 'delete', 'view'}
     permissions = []
     missing = []
     for app_label, model_name, actions in permission_list:
@@ -65,7 +72,7 @@ def _collect_permissions(permission_list):
             missing.append(f'{app_label}.{model_name}')
             continue
         for action in actions:
-            codename = f'{action}_{model_name}'
+            codename = f'{action}_{model_name}' if action in STANDARD_ACTIONS else action
             try:
                 permissions.append(Permission.objects.get(content_type=ct, codename=codename))
             except Permission.DoesNotExist:
