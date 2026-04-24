@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Availability Summary - {{ event.name }}{% endblock %}
+
+{% block content %}
+<h1>Availability Summary for "{{ event.name }}"</h1>
+<p>
+  <a href="{% url 'admin:eventer_event_change' event.pk %}">&larr; Back to event</a>
+</p>
+
+{% if not slot_summary %}
+<p class="help">No signup slots found. Generate slots first.</p>
+{% else %}
+
+<style>
+  .avail-table { width: 100%; border-collapse: collapse; margin-bottom: 2em; }
+  .avail-table th, .avail-table td { padding: 6px 10px; border: 1px solid #ddd; vertical-align: top; }
+  .avail-table th { background: #f8f8f8; font-weight: bold; }
+  .slot-header { background: #417690; color: white; font-weight: bold; }
+  .assigned-badge { display: inline-block; background: #28a745; color: white; padding: 1px 6px; border-radius: 3px; font-size: 0.85em; }
+  .available-list { margin: 0; padding: 0; list-style: none; }
+  .available-list li { padding: 2px 0; }
+  .no-available { color: #999; font-style: italic; }
+</style>
+
+<table class="avail-table">
+  <thead>
+    <tr>
+      <th style="width: 15%">Slot</th>
+      <th style="width: 17%">Role</th>
+      <th style="width: 30%">Assigned</th>
+      <th>Available</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in slot_summary %}
+    {% if entry.roles %}
+    <tr>
+      <td rowspan="{{ entry.roles|length }}" class="slot-header">
+        {{ entry.slot.label }}<br>
+        <small>{{ entry.local_start }}</small>
+      </td>
+      {% with entry.roles.0 as first_role %}
+      <td>{{ first_role.role.name }}</td>
+      <td>
+        {% if first_role.assigned %}
+        <span class="assigned-badge">&#10003; {{ first_role.assigned.user.username }}</span>
+        {% else %}
+        <em style="color:#999">Unassigned</em>
+        {% endif %}
+      </td>
+      <td>
+        {% if first_role.available %}
+        <ul class="available-list">
+          {% for user in first_role.available %}
+          <li>{{ user.username }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <span class="no-available">No one available</span>
+        {% endif %}
+      </td>
+      {% endwith %}
+    </tr>
+    {% for role_entry in entry.roles|slice:"1:" %}
+    <tr>
+      <td>{{ role_entry.role.name }}</td>
+      <td>
+        {% if role_entry.assigned %}
+        <span class="assigned-badge">&#10003; {{ role_entry.assigned.user.username }}</span>
+        {% else %}
+        <em style="color:#999">Unassigned</em>
+        {% endif %}
+      </td>
+      <td>
+        {% if role_entry.available %}
+        <ul class="available-list">
+          {% for user in role_entry.available %}
+          <li>{{ user.username }}</li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <span class="no-available">No one available</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% endblock %}

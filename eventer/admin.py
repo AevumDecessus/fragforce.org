@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
 from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.slot_generator import _expand_to_hours
 from eventer.slot_generator import generate_slots
 
 SUPERSTREAM_ROLES = [
@@ -100,6 +101,9 @@ class EventAdmin(admin.ModelAdmin):
             path('<int:event_id>/generate-slots/',
                  self.admin_site.admin_view(self.generate_slots_view),
                  name='eventer_event_generate_slots'),
+            path('<int:event_id>/availability/',
+                 self.admin_site.admin_view(self.availability_summary_view),
+                 name='eventer_event_availability_summary'),
         ]
         return custom + urls
 
@@ -171,6 +175,70 @@ class EventAdmin(admin.ModelAdmin):
             'title': f'Generate Signup Slots - {event.name}',
         }
         return render(request, 'admin/eventer/event/generate_slots.html', context)
+
+    def availability_summary_view(self, request, event_id):
+        from evtsignup.models import EventInterest
+        event = get_object_or_404(Event, pk=event_id)
+        tz = zoneinfo.ZoneInfo(event.timezone)
+
+        role_field_map = {
+            'participant': 'as_participant',
+            'streamer': 'as_streamer',
+            'moderator': 'as_moderator',
+            'tech-manager': 'as_tech',
+        }
+
+        slots = event.signup_slots.prefetch_related('roles').order_by('start')
+        interests = (
+            EventInterest.objects
+            .filter(event=event)
+            .select_related('user')
+            .prefetch_related('eventavailabilityinterest_set')
+        )
+
+        # Build hour → {role_slug: set of user_ids} lookup
+        hour_role_users = {}
+        for interest in interests:
+            for avail in interest.eventavailabilityinterest_set.all():
+                if avail.hour not in hour_role_users:
+                    hour_role_users[avail.hour] = {slug: set() for slug in role_field_map}
+                for slug, field in role_field_map.items():
+                    if getattr(avail, field):
+                        hour_role_users[avail.hour][slug].add(interest.user)
+
+        # For each slot, for each role the slot covers, find users available for all hours
+        slot_summary = []
+        for slot in slots:
+            slot_hours = list(_expand_to_hours(slot))
+            slot_roles = []
+            for role in slot.roles.order_by('name'):
+                field = role_field_map.get(role.slug)
+                if not field:
+                    continue
+                # User must be available for every hour in the slot
+                available_users = None
+                for hour in slot_hours:
+                    hour_users = hour_role_users.get(hour, {}).get(role.slug, set())
+                    available_users = hour_users if available_users is None else available_users & hour_users
+                assigned = EventScheduleSlot.objects.filter(slot=slot, role=role).select_related('user').first()
+                slot_roles.append({
+                    'role': role,
+                    'available': sorted(available_users or [], key=lambda u: u.username),
+                    'assigned': assigned,
+                })
+            slot_summary.append({
+                'slot': slot,
+                'local_start': slot.start.astimezone(tz).strftime('%a %b %-d %-I%p %Z'),
+                'roles': slot_roles,
+            })
+
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event,
+            'slot_summary': slot_summary,
+            'title': f'Availability Summary - {event.name}',
+        }
+        return render(request, 'admin/eventer/event/availability_summary.html', context)
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):

@@ -1,6 +1,5 @@
 import zoneinfo
 from collections import defaultdict
-from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -8,15 +7,8 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.http import require_http_methods
 
 from eventer.models import Event, EventSignupSlot, EventRole, Game
+from eventer.slot_generator import _expand_to_hours
 from evtsignup.models import EventInterest, EventAvailabilityInterest, GameInterestUserEvent
-
-
-def _expand_to_hours(slot):
-    """Yield each UTC hour datetime from slot.start up to (not including) slot.stop."""
-    current = slot.start.replace(minute=0, second=0, microsecond=0)
-    while current < slot.stop:
-        yield current
-        current += timedelta(hours=1)
 
 
 def _group_slots_by_day(slots_qs, tz):
