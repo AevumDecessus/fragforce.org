@@ -69,6 +69,7 @@
           {% else %}
             <span class="no-one">none</span>
           {% endif %}
+          {% if cell.available %}
           <form method="post" action="{% url 'admin:eventer_event_assign_slot' event.pk %}" style="margin:4px 0 0 0">
             {% csrf_token %}
             <input type="hidden" name="slot_pk" value="{{ cell.slot.pk }}">
@@ -83,6 +84,7 @@
             </select>
             <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Assign</button>
           </form>
+          {% endif %}
         </td>
       {% endif %}
       {% endfor %}

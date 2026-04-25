@@ -82,7 +82,8 @@
             {% else %}
             <div class="avail-hint">No one available</div>
             {% endif %}
-            <select name="assign_{{ cell.slot.pk }}_{{ cell.role_slug }}" style="width:100%;font-size:0.85em;margin-top:4px">
+            <select name="assign_{{ cell.slot.pk }}_{{ cell.role_slug }}" style="width:100%;font-size:0.85em;margin-top:4px"
+                {% if not cell.available %}disabled title="No one available"{% endif %}>
               <option value="">-- Unassigned --</option>
               {% for user in cell.available %}
               <option value="{{ user.pk }}"
