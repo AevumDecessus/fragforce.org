@@ -1,5 +1,6 @@
 import zoneinfo
 
+from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -127,9 +128,14 @@ def _build_schedule_grid(event):
             'cells': cells,
         })
 
+    role_headers = [
+        {'label': label, 'color': role_objects[slug].color if slug in role_objects else '#417690'}
+        for slug, _, label in SCHEDULE_ROLES
+    ]
+
     return {
         'rows': rows,
-        'role_headers': [r[2] for r in SCHEDULE_ROLES],
+        'role_headers': role_headers,
         'slot_role_available': slot_role_available,
         'slot_role_assigned': slot_role_assigned,
         'role_objects': role_objects,
@@ -149,9 +155,34 @@ class EventPeriodAdmin(admin.ModelAdmin):
     pass
 
 
+class EventRoleAdminForm(forms.ModelForm):
+    color = forms.CharField(
+        widget=forms.TextInput(attrs={'type': 'color', 'style': 'width:4em;height:2em;padding:0;cursor:pointer'}),
+        max_length=7,
+    )
+
+    class Meta:
+        model = EventRole
+        fields = '__all__'
+
+
 @admin.register(EventRole)
 class EventRoleAdmin(admin.ModelAdmin):
     change_list_template = 'admin/eventer/eventrole/change_list.html'
+    form = EventRoleAdminForm
+    list_display = ['name', 'slug', 'color_swatch']
+
+    @admin.display(description='Color')
+    def color_swatch(self, obj):
+        from django.utils.html import format_html
+        return format_html(
+            '<span style="display:inline-block;width:1.2em;height:1.2em;background:{};border:1px solid #ccc;vertical-align:middle;border-radius:2px;margin-right:4px"></span>{}',
+            obj.color, obj.color
+        )
+
+    class Media:
+        # Use browser native color input - no extra JS needed
+        pass
 
     def get_urls(self):
         urls = super().get_urls()
