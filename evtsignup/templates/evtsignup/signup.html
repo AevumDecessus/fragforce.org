@@ -33,28 +33,26 @@
     display: block;
     width: 100%;
     padding: 0.35rem 0.75rem;
-    border: 1px solid #6c757d;
+    border: 2px solid var(--role-color, #6c757d);
     border-radius: 0.25rem;
     cursor: pointer;
     user-select: none;
     font-size: 0.875rem;
-    background: #fff;
-    color: #495057;
+    font-weight: 600;
+    background: transparent;
+    color: var(--role-color, #6c757d);
     transition: background 0.1s, color 0.1s, border-color 0.1s;
   }
   .slot-btn input[type="checkbox"]:checked + label {
-    background: #007bff;
-    border-color: #007bff;
+    background: var(--role-color, #6c757d);
+    border-color: var(--role-color, #6c757d);
     color: #fff;
   }
   .slot-btn label:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
+    opacity: 0.85;
   }
   .slot-btn input[type="checkbox"]:checked + label:hover {
-    background: #0069d9;
-    border-color: #0062cc;
-    color: #fff;
+    opacity: 0.9;
   }
 
 </style>
@@ -205,7 +203,7 @@
 
       {# --- Track: Participant --- #}
       {% if participant_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant">
+      <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant" style="--role-color:{{ role_colors.participant }}">
         <div class="card-header text-white" style="background-color:{{ role_colors.participant }}"><strong>Participant</strong> - Play games with a streamer</div>
         <div class="card-body">
 
@@ -248,7 +246,7 @@
 
       {# --- Track: Streamer --- #}
       {% if streamer_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer">
+      <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer" style="--role-color:{{ role_colors.streamer }}">
         <div class="card-header text-white" style="background-color:{{ role_colors.streamer }}"><strong>Streamer</strong> - Lead a time slot on stream</div>
         <div class="card-body">
 
@@ -298,7 +296,7 @@
 
       {# --- Track: Moderator --- #}
       {% if moderator_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator">
+      <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator" style="--role-color:{{ role_colors.moderator }}">
         <div class="card-header text-white" style="background-color:{{ role_colors.moderator }}"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
         <div class="card-body">
 
@@ -323,7 +321,7 @@
 
       {# --- Track: Tech Manager --- #}
       {% if tech_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech">
+      <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech" style="--role-color:{{ role_colors.tech }}">
         <div class="card-header text-white" style="background-color:{{ role_colors.tech }}"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
         <div class="card-body">
 
