@@ -45,7 +45,7 @@
       <tr>
         <th>Hour</th>
         {% for role in role_headers %}
-        <th>{{ role }}</th>
+        <th style="background-color:{{ role.color }}">{{ role.label }}</th>
         {% endfor %}
       </tr>
     </thead>

@@ -261,6 +261,13 @@ def signup_view(request, event_slug):
         selected_slot_ids = {track: set() for track in slot_qs_by_track}
         selected_game_ids = {'participant': set(), 'streamer': set()}
 
+    role_colors = {
+        'participant': participant_role.color if participant_role else '#417690',
+        'streamer': streamer_role.color if streamer_role else '#417690',
+        'moderator': moderator_role.color if moderator_role else '#417690',
+        'tech': tech_role.color if tech_role else '#417690',
+    }
+
     context = {
         'event': event,
         'existing': existing,
@@ -279,5 +286,6 @@ def signup_view(request, event_slug):
         'streamer_games': streamer_games,
         'selected_slot_ids': selected_slot_ids,
         'selected_game_ids': selected_game_ids,
+        'role_colors': role_colors,
     }
     return render(request, 'evtsignup/signup.html', context)

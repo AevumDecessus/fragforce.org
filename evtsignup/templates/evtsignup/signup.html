@@ -21,30 +21,13 @@
     outline: none;
     box-shadow: none;
   }
-  [data-track] {
+  .role-btn {
+    display: block; width: 100%; padding: 0.375rem 0.75rem;
+    font-size: 1rem; border-radius: 0.25rem; cursor: pointer;
     transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+    border-width: 1px; border-style: solid;
   }
-  [data-track]:focus,
-  [data-track]:active {
-    outline: none !important;
-    box-shadow: none !important;
-  }
-  [data-track].active,
-  [data-track].active:focus,
-  [data-track].active:active,
-  [data-track].active:hover {
-    background-color: #007bff !important;
-    border-color: #007bff !important;
-    color: #fff !important;
-    box-shadow: none !important;
-  }
-  [data-track]:not(.active),
-  [data-track]:not(.active):focus,
-  [data-track]:not(.active):active {
-    background-color: transparent !important;
-    color: #007bff !important;
-    box-shadow: none !important;
-  }
+  .role-btn:focus, .role-btn:active { outline: none !important; box-shadow: none !important; }
   .slot-btn label {
     display: block;
     width: 100%;
@@ -175,36 +158,40 @@
           <div class="row">
             {% if participant_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}"
-                  data-track="participant">
+                  data-track="participant"
+                  data-color="{{ role_colors.participant|default:'#417690' }}">
                 Participant
               </button>
             </div>
             {% endif %}
             {% if streamer_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}"
-                  data-track="streamer">
+                  data-track="streamer"
+                  data-color="{{ role_colors.streamer|default:'#417690' }}">
                 Streamer
               </button>
             </div>
             {% endif %}
             {% if moderator_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.moderator %}active{% endif %}"
-                  data-track="moderator">
+                  data-track="moderator"
+                  data-color="{{ role_colors.moderator|default:'#417690' }}">
                 Moderator
               </button>
             </div>
             {% endif %}
             {% if tech_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.tech %}active{% endif %}"
-                  data-track="tech">
+                  data-track="tech"
+                  data-color="{{ role_colors.tech|default:'#417690' }}">
                 Tech Manager
               </button>
             </div>
@@ -218,7 +205,7 @@
       {# --- Track: Participant --- #}
       {% if participant_slots %}
       <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant">
-        <div class="card-header bg-primary text-white"><strong>Participant</strong> - Play games with a streamer</div>
+        <div class="card-header text-white" style="background-color:{{ role_colors.participant }}"><strong>Participant</strong> - Play games with a streamer</div>
         <div class="card-body">
 
           <h6>Availability</h6>
@@ -261,7 +248,7 @@
       {# --- Track: Streamer --- #}
       {% if streamer_slots %}
       <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer">
-        <div class="card-header bg-primary text-white"><strong>Streamer</strong> - Lead a time slot on stream</div>
+        <div class="card-header text-white" style="background-color:{{ role_colors.streamer }}"><strong>Streamer</strong> - Lead a time slot on stream</div>
         <div class="card-body">
 
           <div class="form-group">
@@ -311,7 +298,7 @@
       {# --- Track: Moderator --- #}
       {% if moderator_slots %}
       <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator">
-        <div class="card-header bg-primary text-white"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
+        <div class="card-header text-white" style="background-color:{{ role_colors.moderator }}"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
         <div class="card-body">
 
           <h6>Availability</h6>
@@ -336,7 +323,7 @@
       {# --- Track: Tech Manager --- #}
       {% if tech_slots %}
       <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech">
-        <div class="card-header bg-primary text-white"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
+        <div class="card-header text-white" style="background-color:{{ role_colors.tech }}"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
         <div class="card-body">
 
           <h6>Availability</h6>
@@ -371,13 +358,28 @@
 
 {% block extra_js %}
 <script>
+  function applyRoleButtonStyle(btn) {
+    var color = btn.dataset.color || '#417690';
+    if (btn.classList.contains('active')) {
+      btn.style.backgroundColor = color;
+      btn.style.borderColor = color;
+      btn.style.color = '#fff';
+    } else {
+      btn.style.backgroundColor = 'transparent';
+      btn.style.borderColor = color;
+      btn.style.color = color;
+    }
+  }
+
   document.querySelectorAll('[data-track]').forEach(function(btn) {
+    applyRoleButtonStyle(btn);
     btn.addEventListener('click', function() {
       var track = this.dataset.track;
       var section = document.getElementById('section-' + track);
       var isActive = this.classList.contains('active');
       this.classList.toggle('active', !isActive);
       if (section) section.classList.toggle('active', !isActive);
+      applyRoleButtonStyle(this);
       this.blur();
     });
   });
