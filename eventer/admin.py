@@ -96,6 +96,7 @@ def _build_schedule_grid(event):
 
     # build rows
     role_next_hour = {slug: None for slug, _, _ in SCHEDULE_ROLES}
+    role_alt = {slug: False for slug, _, _ in SCHEDULE_ROLES}
     rows = []
     for hour in all_hours:
         local_hour = hour.astimezone(tz)
@@ -113,12 +114,14 @@ def _build_schedule_grid(event):
                 from datetime import timedelta as _td
                 role_next_hour[slug] = slot_hours[-1] + _td(hours=1) if slot_hours else hour + _td(hours=1)
                 role_obj = role_objects.get(slug)
+                role_alt[slug] = not role_alt[slug]
                 cells.append({
                     'type': 'slot',
                     'rowspan': rowspan,
                     'slot': slot,
                     'role_slug': slug,
                     'role_color': role_obj.color if role_obj else '#417690',
+                    'alt': role_alt[slug],
                     'available': slot_role_available.get((slot.pk, slug), []),
                     'assigned': slot_role_assigned.get((slot.pk, slug)),
                 })
