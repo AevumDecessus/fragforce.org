@@ -155,11 +155,26 @@ class EventPeriodAdmin(admin.ModelAdmin):
     pass
 
 
+class ColorPickerWidget(forms.MultiWidget):
+    """Color picker + hex text input side by side."""
+    def __init__(self):
+        widgets = [
+            forms.TextInput(attrs={'type': 'color', 'style': 'width:3em;height:2em;padding:0;cursor:pointer;vertical-align:middle'}),
+            forms.TextInput(attrs={'style': 'width:7em;font-family:monospace;vertical-align:middle', 'maxlength': '7', 'placeholder': '#417690'}),
+        ]
+        super().__init__(widgets)
+
+    def decompress(self, value):
+        return [value, value] if value else ['#417690', '#417690']
+
+    def value_from_datadict(self, data, files, name):
+        # Text input (hex) takes precedence; sync both to the same value
+        values = super().value_from_datadict(data, files, name)
+        return values[1] if values[1] else values[0]
+
+
 class EventRoleAdminForm(forms.ModelForm):
-    color = forms.CharField(
-        widget=forms.TextInput(attrs={'type': 'color', 'style': 'width:4em;height:2em;padding:0;cursor:pointer'}),
-        max_length=7,
-    )
+    color = forms.CharField(widget=ColorPickerWidget(), max_length=7)
 
     class Meta:
         model = EventRole
@@ -181,8 +196,7 @@ class EventRoleAdmin(admin.ModelAdmin):
         )
 
     class Media:
-        # Use browser native color input - no extra JS needed
-        pass
+        js = ('admin/js/eventrole_color_sync.js',)
 
     def get_urls(self):
         urls = super().get_urls()
