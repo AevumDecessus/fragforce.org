@@ -78,15 +78,45 @@
       </div>
     </div>
 
-    {% if locked %}
-    <div class="alert alert-secondary">
-      Signups for this event are currently locked. Please check back later.
+    {% if profile_only %}
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="alert alert-info">
+      {% if locked %}Signups for this event are locked.{% else %}The window for editing signups has closed.{% endif %}
+      You can still update your display name and fundraising URL below.
     </div>
 
-    {% elif edits_closed %}
-    <div class="alert alert-info">
-      <strong>Your signup has been received.</strong>
-      The window for editing signups has closed. Contact a coordinator if you need to make changes.
+    <form method="post">
+      {% csrf_token %}
+      <div class="card mb-4">
+        <div class="card-header"><strong>Your Profile</strong></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="display_name">Display name <small class="text-muted">(shown on schedule and stream ads)</small></label>
+            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255"
+                   value="{{ prefill.display_name|default:'' }}">
+          </div>
+          <div class="form-group">
+            <label for="fundraising_url">Fundraising page URL <small class="text-muted">(Extra Life or hospital charity page)</small></label>
+            <input type="url" class="form-control" id="fundraising_url" name="fundraising_url"
+                   value="{{ prefill.fundraising_url|default:'' }}"
+                   placeholder="https://www.extra-life.org/participants/...">
+          </div>
+          <button type="submit" class="btn btn-lg text-white" style="background-color:#417690;border-color:#417690;">
+            Update profile
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% elif locked %}
+    <div class="alert alert-secondary">
+      Signups for this event are currently locked. Please check back later.
     </div>
 
     {% elif signups_closed %}

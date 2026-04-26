@@ -205,13 +205,27 @@ def signup_view(request, event_slug):
     can_signup = event.signups_open and not is_locked
     can_edit = event.edits_open and not is_locked
 
-    if is_locked:
-        return render(request, 'evtsignup/signup.html', {'event': event, 'locked': True})
-
-    if existing and not can_edit:
+    if existing and (is_locked or not can_edit):
+        # Allow editing display name and fundraising URL even when full edits are disabled
+        if request.method == 'POST':
+            existing.display_name = request.POST.get('display_name', '').strip()
+            existing.fundraising_url = request.POST.get('fundraising_url', '').strip() or None
+            existing.save(update_fields=['display_name', 'fundraising_url'])
+            messages.success(request, "Your profile has been updated.")
+            return redirect('evtsignup-signup', event_slug=event_slug)
         return render(request, 'evtsignup/signup.html', {
-            'event': event, 'locked': False, 'edits_closed': True, 'existing': existing,
+            'event': event,
+            'locked': is_locked,
+            'profile_only': True,
+            'existing': existing,
+            'prefill': {
+                'display_name': existing.display_name,
+                'fundraising_url': existing.fundraising_url or '',
+            },
         })
+
+    if not existing and is_locked:
+        return render(request, 'evtsignup/signup.html', {'event': event, 'locked': True})
 
     slots = EventSignupSlot.objects.filter(event=event).prefetch_related('roles').order_by('start')
     if not slots.exists():
