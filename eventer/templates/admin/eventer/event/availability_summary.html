@@ -85,6 +85,17 @@
             <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Assign</button>
           </form>
           {% endif %}
+          <form method="post" action="{% url 'admin:eventer_event_add_availability' event.pk %}" style="margin:4px 0 0 0">
+            {% csrf_token %}
+            <input type="hidden" name="slot_pk" value="{{ cell.slot.pk }}">
+            <input type="hidden" name="role_slug" value="{{ cell.role_slug }}">
+            {% if cell.available %}<input type="hidden" name="override" value="1">{% endif %}
+            <input type="text" name="username" placeholder="username"
+                   style="font-size:0.8em;width:100%;margin-bottom:2px;padding:1px 4px;">
+            <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4;{% if not cell.available %}background:#417690;color:#fff;border-color:#417690;{% endif %}">
+              {% if cell.available %}Override{% else %}Add signup &amp; assign{% endif %}
+            </button>
+          </form>
         </td>
       {% endif %}
       {% endfor %}

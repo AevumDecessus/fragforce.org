@@ -287,6 +287,9 @@ class EventAdmin(admin.ModelAdmin):
             path('<int:event_id>/assign-slot/',
                  self.admin_site.admin_view(self.assign_slot_view),
                  name='eventer_event_assign_slot'),
+            path('<int:event_id>/add-availability/',
+                 self.admin_site.admin_view(self.add_availability_view),
+                 name='eventer_event_add_availability'),
         ]
         return custom + urls
 
@@ -427,6 +430,69 @@ class EventAdmin(admin.ModelAdmin):
                 self.message_user(request, f"Cleared assignment for {slot.label} ({role.name}).", messages.INFO)
         except Exception as e:
             self.message_user(request, f"Error: {e}", messages.ERROR)
+        return HttpResponseRedirect(f'../../{event_id}/availability/')
+
+    def add_availability_view(self, request, event_id):
+        """
+        Coordinator tool: add a user's availability for a slot and immediately assign them.
+        Always creates EventInterest + EventAvailabilityInterest rows + EventScheduleSlot.
+        Works identically for both "no signups" and "override" cases.
+        """
+        from datetime import timedelta
+        from django_workflow_engine.executor import User
+        from evtsignup.models import EventInterest, EventAvailabilityInterest
+
+        if request.method != 'POST':
+            return HttpResponseRedirect(f'../../{event_id}/availability/')
+
+        event = get_object_or_404(Event, pk=event_id)
+        slot_pk = request.POST.get('slot_pk')
+        role_slug = request.POST.get('role_slug')
+        username = request.POST.get('username', '').strip()
+        override = request.POST.get('override') == '1'
+
+        FIELD_MAP = {
+            'participant': 'as_participant',
+            'streamer': 'as_streamer',
+            'moderator': 'as_moderator',
+            'tech-manager': 'as_tech',
+        }
+
+        try:
+            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
+            role = EventRole.objects.get(slug=role_slug)
+            user = User.objects.get(username=username)
+
+            interest, _ = EventInterest.objects.get_or_create(
+                user=user, event=event,
+                defaults={'acknowledged': True},
+            )
+
+            field = FIELD_MAP.get(role.slug)
+            if field:
+                hour = slot.start.replace(minute=0, second=0, microsecond=0)
+                while hour < slot.stop:
+                    avail, _ = EventAvailabilityInterest.objects.get_or_create(
+                        event_interest=interest, hour=hour,
+                        defaults={f: False for f in FIELD_MAP.values()},
+                    )
+                    setattr(avail, field, True)
+                    avail.save(update_fields=[field])
+                    hour += timedelta(hours=1)
+
+            EventScheduleSlot.objects.filter(slot=slot, role=role).delete()
+            EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user)
+            action = "Override assigned" if override else "Added signup and assigned"
+            self.message_user(
+                request,
+                f"{action} {user.username} to {slot.label} ({role.name}).",
+                messages.SUCCESS,
+            )
+        except User.DoesNotExist:
+            self.message_user(request, f"User '{username}' not found.", messages.ERROR)
+        except Exception as e:
+            self.message_user(request, f"Error: {e}", messages.ERROR)
+
         return HttpResponseRedirect(f'../../{event_id}/availability/')
 
 @admin.register(EventSignupSlotConfig)
