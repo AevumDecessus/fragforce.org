@@ -370,12 +370,36 @@
     }
   }
 
+  function checkedSlotsInSection(section) {
+    if (!section) return 0;
+    return section.querySelectorAll('input[type="checkbox"]:checked').length;
+  }
+
+  function uncheckSlotsInSection(section) {
+    if (!section) return;
+    section.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      cb.checked = false;
+    });
+  }
+
   document.querySelectorAll('[data-track]').forEach(function(btn) {
     applyRoleButtonStyle(btn);
     btn.addEventListener('click', function() {
       var track = this.dataset.track;
       var section = document.getElementById('section-' + track);
       var isActive = this.classList.contains('active');
+
+      if (isActive && checkedSlotsInSection(section) > 0) {
+        var confirmed = window.confirm(
+          'You have slots selected for this role. Deselecting it will clear all those selections. Continue?'
+        );
+        if (!confirmed) {
+          this.blur();
+          return;
+        }
+        uncheckSlotsInSection(section);
+      }
+
       this.classList.toggle('active', !isActive);
       if (section) section.classList.toggle('active', !isActive);
       applyRoleButtonStyle(this);
