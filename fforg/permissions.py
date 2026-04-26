@@ -34,6 +34,9 @@ COORDINATOR_PERMISSIONS = [
     ('evtsignup', 'eventinterest', ['view']),
     ('evtsignup', 'eventavailabilityinterest', ['view']),
     ('evtsignup', 'gameinterestuserevent', ['view']),
+
+    # auth - view users for autocomplete search in schedule tools
+    ('auth', 'user', ['view']),
 ]
 
 SUPERSTREAM_KEY_MANAGER_PERMISSIONS = [

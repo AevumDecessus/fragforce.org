@@ -448,7 +448,7 @@ class EventAdmin(admin.ModelAdmin):
         event = get_object_or_404(Event, pk=event_id)
         slot_pk = request.POST.get('slot_pk')
         role_slug = request.POST.get('role_slug')
-        username = request.POST.get('username', '').strip()
+        user_pk = request.POST.get('user_pk', '').strip()
         override = request.POST.get('override') == '1'
 
         FIELD_MAP = {
@@ -461,7 +461,7 @@ class EventAdmin(admin.ModelAdmin):
         try:
             slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
             role = EventRole.objects.get(slug=role_slug)
-            user = User.objects.get(username=username)
+            user = User.objects.get(pk=int(user_pk))
 
             interest, _ = EventInterest.objects.get_or_create(
                 user=user, event=event,
@@ -488,8 +488,8 @@ class EventAdmin(admin.ModelAdmin):
                 f"{action} {user.username} to {slot.label} ({role.name}).",
                 messages.SUCCESS,
             )
-        except User.DoesNotExist:
-            self.message_user(request, f"User '{username}' not found.", messages.ERROR)
+        except (User.DoesNotExist, ValueError):
+            self.message_user(request, "User not found.", messages.ERROR)
         except Exception as e:
             self.message_user(request, f"Error: {e}", messages.ERROR)
 
