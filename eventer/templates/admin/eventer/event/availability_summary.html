@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Availability Summary - {{ event.name }}{% endblock %}
+
+{% block content %}
+<h1>Availability Summary for "{{ event.name }}"</h1>
+<p><a href="{% url 'admin:eventer_event_change' event.pk %}">&larr; Back to event</a></p>
+
+{% if not rows %}
+<p class="help">No event periods or signup slots found.</p>
+{% else %}
+
+{% include "admin/eventer/event/_schedule_grid.html" with slot_cell_template="admin/eventer/event/_slot_cell_availability.html" %}
+
+{% endif %}
+
+{% endblock %}

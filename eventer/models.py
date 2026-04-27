@@ -74,6 +74,8 @@ class EventRole(models.Model):
     name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False)
     slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True)
     description = models.TextField(default='', blank=False, null=False)
+    color = models.CharField(max_length=7, default='#417690', blank=False, null=False,
+                             help_text="Hex color code for UI display (e.g. #417690)")
 
     def __str__(self):
         return self.name
@@ -119,6 +121,8 @@ class Event(models.Model):
                                      help_text="Allow existing signups to be edited. Has no effect when locked.")
     locked = models.BooleanField(default=False,
                                  help_text="Lock the event - disables all signups and edits regardless of other flags.")
+    schedule_published = models.BooleanField(default=False,
+                                             help_text="Publish the finalized schedule - enables the public schedule view.")
 
     @property
     def start(self):
@@ -211,3 +215,18 @@ class EventSignupSlot(models.Model):
 
     def __str__(self):
         return f'{self.event} - {self.label}'
+
+
+class EventScheduleSlot(models.Model):
+    """ A confirmed schedule assignment - one user per role per signup slot """
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='schedule_slots')
+    slot = models.ForeignKey(EventSignupSlot, on_delete=models.CASCADE, related_name='schedule_assignments')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    role = models.ForeignKey(EventRole, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = [['slot', 'role']]
+        ordering = ['slot__start', 'role__name']
+
+    def __str__(self):
+        return f'{self.event} - {self.slot.label} - {self.role} - {self.user}'

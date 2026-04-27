@@ -9,6 +9,14 @@ from datetime import timedelta
 from eventer.models import Event, EventRole, EventSignupSlotConfig, EventSignupSlot
 
 
+def _expand_to_hours(slot):
+    """Yield each UTC hour datetime from slot.start up to (not including) slot.stop."""
+    current = slot.start.replace(minute=0, second=0, microsecond=0)
+    while current < slot.stop:
+        yield current
+        current += timedelta(hours=1)
+
+
 def _format_label(start_local, stop_local):
     """
     Format a human-readable slot label.
