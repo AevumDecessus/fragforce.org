@@ -9,9 +9,9 @@
 
 <div style="max-width:40em;">
   <table class="form-table" style="margin-bottom:1em;">
-    <tr><th>Event:</th><td>{{ event.name }}</td></tr>
-    <tr><th>Slot:</th><td>{{ slot.label }}</td></tr>
-    <tr><th>Role:</th><td>{{ role.name }}</td></tr>
+    <tr><th scope="row">Event:</th><td>{{ event.name }}</td></tr>
+    <tr><th scope="row">Slot:</th><td>{{ slot.label }}</td></tr>
+    <tr><th scope="row">Role:</th><td>{{ role.name }}</td></tr>
     {% if override %}
     <tr><td colspan="2">
       <p class="help" style="color:#c0392b;">
