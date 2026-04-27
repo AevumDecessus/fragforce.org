@@ -23,9 +23,9 @@
       <div class="card-header text-white" style="background-color:#417690"><strong>Your Schedule</strong></div>
       <div class="card-body">
         <ul class="list-unstyled mb-0">
-          {% for assignment in my_slots %}
+          {% for slot in my_slots %}
           <li class="py-1">
-            <strong>{{ assignment.role.name }}</strong> &mdash; {{ assignment.slot.label }}
+            <strong>{{ slot.role.name }}</strong> &mdash; {{ slot.slot.label }}
           </li>
           {% endfor %}
         </ul>
@@ -44,7 +44,7 @@
           {% for assignment in streamer_assignments %}
           <tr>
             <td>{{ assignment.slot.label }}</td>
-            <td>{{ assignment.user.username }}</td>
+            <td>{{ assignment.display_name }}</td>
           </tr>
           {% endfor %}
         </tbody>

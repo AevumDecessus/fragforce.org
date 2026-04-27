@@ -96,6 +96,21 @@ def _assignments_by_slot(assignments, tz):
     return result, role_names_ordered
 
 
+def _display_name_map(event, user_ids):
+    """Return {user_id: display_name} using EventInterest.display_name, falling back to username."""
+    from evtsignup.models import EventInterest
+    interests = (
+        EventInterest.objects
+        .filter(event=event, user_id__in=user_ids)
+        .select_related('user')
+        .values('user_id', 'display_name', 'user__username')
+    )
+    return {
+        row['user_id']: row['display_name'] or row['user__username']
+        for row in interests
+    }
+
+
 @require_safe
 def public_schedule_view(request, event_slug):
     event = get_object_or_404(Event, slug=event_slug)
@@ -104,12 +119,18 @@ def public_schedule_view(request, event_slug):
 
     tz = zoneinfo.ZoneInfo(event.timezone)
 
-    streamer_assignments = (
+    streamer_assignments = list(
         EventScheduleSlot.objects
         .filter(event=event, role__slug='streamer')
         .select_related('slot', 'role', 'user')
         .order_by('slot__start')
     )
+
+    # Build display name map for all assigned users
+    user_ids = {a.user_id for a in streamer_assignments}
+    if request.user.is_authenticated:
+        user_ids.add(request.user.pk)
+    display_names = _display_name_map(event, user_ids)
 
     my_slots = []
     if request.user.is_authenticated:
@@ -119,6 +140,12 @@ def public_schedule_view(request, event_slug):
             .select_related('slot', 'role')
             .order_by('slot__start')
         )
+
+    # Annotate assignments with display names for the template
+    for a in streamer_assignments:
+        a.display_name = display_names.get(a.user_id, a.user.username)
+    for s in my_slots:
+        s.display_name = display_names.get(s.user_id, s.user.username) if hasattr(s, 'user') else ''
 
     context = {
         'event': event,
