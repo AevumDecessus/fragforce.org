@@ -37,6 +37,8 @@
 
     {% if event.schedule_published %}
     <a href="{% url 'eventer-public-schedule' event_slug=event.slug %}" class="btn btn-outline-secondary mb-4">View Schedule</a>
+    {% elif perms.eventer.view_coordinator_schedule %}
+    <a href="{% url 'eventer-public-schedule' event_slug=event.slug %}" class="btn btn-outline-secondary mb-4">Preview Schedule</a>
     {% endif %}
 
     {% if perms.eventer.view_coordinator_schedule %}

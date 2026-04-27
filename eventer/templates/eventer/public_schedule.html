@@ -10,6 +10,12 @@
     <h2>{{ event.name }} - Schedule</h2>
     <p><a href="{% url 'eventer-event-detail' event_slug=event.slug %}">&larr; Back to event</a></p>
 
+    {% if not event.schedule_published %}
+    <div class="alert alert-warning">
+      <strong>Preview:</strong> This schedule has not been published yet and is only visible to coordinators.
+    </div>
+    {% endif %}
+
     <div class="card mb-4">
       <div class="card-body">
         {% if event.description %}{{ event.description|markdownify }}{% endif %}

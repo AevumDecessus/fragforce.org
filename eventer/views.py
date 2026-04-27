@@ -118,7 +118,8 @@ def _display_name_map(event, user_ids):
 @require_safe
 def public_schedule_view(request, event_slug):
     event = get_object_or_404(Event, slug=event_slug)
-    if not event.schedule_published:
+    is_coordinator = request.user.has_perm('eventer.view_coordinator_schedule')
+    if not event.schedule_published and not is_coordinator:
         return render(request, 'eventer/schedule_not_published.html', {'event': event})
 
     tz = zoneinfo.ZoneInfo(event.timezone)
