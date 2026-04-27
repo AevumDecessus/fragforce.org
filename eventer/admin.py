@@ -261,11 +261,13 @@ class EventAdmin(admin.ModelAdmin):
     def availability_summary_view(self, request, event_id):
         event = get_object_or_404(Event, pk=event_id)
         grid = build_schedule_grid(event)
+        approved_games = Game.objects.filter(status='approved').order_by('name')
         context = {
             **self.admin_site.each_context(request),
             'event': event,
             'rows': grid['rows'],
             'role_headers': grid['role_headers'],
+            'approved_games': approved_games,
             'title': f'Availability Summary - {event.name}',
         }
         return render(request, 'admin/eventer/event/availability_summary.html', context)
@@ -318,13 +320,15 @@ class EventAdmin(admin.ModelAdmin):
         slot_pk = request.POST.get('slot_pk')
         role_slug = request.POST.get('role_slug')
         user_id = request.POST.get('user_id', '').strip()
+        game_id = request.POST.get('game_id', '').strip()
         try:
             slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
             role = EventRole.objects.get(slug=role_slug)
+            game = Game.objects.get(pk=int(game_id)) if game_id else None
             EventScheduleSlot.objects.filter(slot=slot, role=role).delete()
             if user_id:
                 user = User.objects.get(pk=int(user_id))
-                EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user)
+                EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user, game=game)
                 self.message_user(request, f"Assigned {user.username} to {slot.label} ({role.name}).", messages.SUCCESS)
             else:
                 self.message_user(request, f"Cleared assignment for {slot.label} ({role.name}).", messages.INFO)

@@ -2,6 +2,7 @@
 <div class="slot-label">{{ cell.slot.label }}</div>
 {% if cell.assigned %}
   <div class="assigned-badge" style="background-color:{{ cell.role_color }}">&#10003; {{ cell.assigned.user.username }}</div>
+  {% if cell.assigned.game %}<div style="font-size:0.8em;color:#555;margin:2px 0;">&#127918; {{ cell.assigned.game.name }}</div>{% endif %}
 {% endif %}
 {% if cell.available %}
   <ul class="available-list">
@@ -25,6 +26,16 @@
     </option>
     {% endfor %}
   </select>
+  {% if cell.role_slug == 'streamer' and approved_games %}
+  <select name="game_id" style="font-size:0.8em;width:100%;margin-bottom:2px">
+    <option value="">-- No game --</option>
+    {% for game in approved_games %}
+    <option value="{{ game.pk }}" {% if cell.assigned and cell.assigned.game and cell.assigned.game.pk == game.pk %}selected{% endif %}>
+      {{ game.name }}
+    </option>
+    {% endfor %}
+  </select>
+  {% endif %}
   <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Assign</button>
 </form>
 {% endif %}
