@@ -127,7 +127,7 @@ def public_schedule_view(request, event_slug):
     streamer_assignments = list(
         EventScheduleSlot.objects
         .filter(event=event, role__slug='streamer')
-        .select_related('slot', 'role', 'user')
+        .select_related('slot', 'role', 'user', 'game')
         .order_by('slot__start')
     )
 
