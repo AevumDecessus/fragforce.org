@@ -197,9 +197,14 @@ def coordinator_schedule_view(request, event_slug):
                     cell['game_cmd'] = game_cmd
                     cell['donate_cmd'] = donate_cmd
 
+    streamer_color = next(
+        (r['color'] for r in grid['role_headers'] if r['label'] == 'Streamer'),
+        '#417690'
+    )
     context = {
         'event': event,
         'rows': grid['rows'],
         'role_headers': grid['role_headers'],
+        'streamer_color': streamer_color,
     }
     return render(request, 'eventer/coordinator_schedule.html', context)
