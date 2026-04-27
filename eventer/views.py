@@ -161,6 +161,7 @@ def public_schedule_view(request, event_slug):
     return render(request, 'eventer/public_schedule.html', context)
 
 
+@require_safe
 @login_required
 @permission_required('eventer.view_coordinator_schedule', raise_exception=True)
 def coordinator_schedule_view(request, event_slug):
