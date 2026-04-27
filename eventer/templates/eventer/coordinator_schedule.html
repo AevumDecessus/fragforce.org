@@ -55,10 +55,10 @@
           {% for role in role_headers %}{% if role.label == 'Streamer' %}
           <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
           {% endif %}{% endfor %}
-          <th style="background-color:{{ streamer_color }};color:white;opacity:0.85;">Game</th>
-          <th style="background-color:{{ streamer_color }};color:white;opacity:0.85;">Title Command</th>
-          <th style="background-color:{{ streamer_color }};color:white;opacity:0.85;">Game Command</th>
-          <th style="background-color:{{ streamer_color }};color:white;opacity:0.85;">Donate Command</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Game</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Title Command</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Game Command</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Donate Command</th>
           {# Remaining role columns #}
           {% for role in role_headers %}{% if role.label != 'Streamer' %}
           <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
