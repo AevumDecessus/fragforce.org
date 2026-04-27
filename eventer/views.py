@@ -1,8 +1,12 @@
+import zoneinfo
+from collections import defaultdict
+
+from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_safe
 
-from eventer.models import Event
+from eventer.models import Event, EventScheduleSlot
 
 
 def _signup_link_context(event, user):
@@ -42,3 +46,108 @@ def event_detail(request, event_slug):
         **_signup_link_context(event, request.user),
     }
     return render(request, 'eventer/event_detail.html', context)
+
+
+def _assignments_by_slot(assignments, tz):
+    """
+    Group assignments by local day then slot.
+    Returns (days, role_names) where days is a list of
+    {day_label, rows: [{slot, local_label, assignments: {role_name: user_or_None}}]}
+    """
+    role_names_ordered = []
+    role_names_seen = set()
+    slot_role_user = defaultdict(dict)
+    slots_ordered = []
+    slots_seen = set()
+
+    for a in assignments:
+        if a.role.name not in role_names_seen:
+            role_names_seen.add(a.role.name)
+            role_names_ordered.append(a.role.name)
+        slot_role_user[a.slot.pk][a.role.name] = a.user
+        if a.slot.pk not in slots_seen:
+            slots_seen.add(a.slot.pk)
+            slots_ordered.append(a.slot)
+
+    days = defaultdict(list)
+    day_order = []
+    for slot in slots_ordered:
+        local_start = slot.start.astimezone(tz)
+        day_key = local_start.date()
+        if day_key not in days:
+            day_order.append(day_key)
+        days[day_key].append({
+            'slot': slot,
+            'local_label': local_start.strftime('%-I%p').lower(),
+            'assignments': {rn: slot_role_user[slot.pk].get(rn) for rn in role_names_ordered},
+        })
+
+    result = []
+    for day in day_order:
+        rows = []
+        for row in days[day]:
+            # Convert assignments dict to ordered list matching role_names_ordered
+            row['cells'] = [
+                row['assignments'].get(rn)
+                for rn in role_names_ordered
+            ]
+            rows.append(row)
+        result.append({'day_label': day.strftime('%A, %B %-d'), 'rows': rows})
+    return result, role_names_ordered
+
+
+@require_safe
+def public_schedule_view(request, event_slug):
+    event = get_object_or_404(Event, slug=event_slug)
+    if not event.schedule_published:
+        return render(request, 'eventer/schedule_not_published.html', {'event': event})
+
+    tz = zoneinfo.ZoneInfo(event.timezone)
+
+    streamer_assignments = (
+        EventScheduleSlot.objects
+        .filter(event=event, role__slug='streamer')
+        .select_related('slot', 'role', 'user')
+        .order_by('slot__start')
+    )
+
+    my_slots = []
+    if request.user.is_authenticated:
+        my_slots = list(
+            EventScheduleSlot.objects
+            .filter(event=event, user=request.user)
+            .select_related('slot', 'role')
+            .order_by('slot__start')
+        )
+
+    context = {
+        'event': event,
+        'tz': tz,
+        'streamer_assignments': streamer_assignments,
+        'my_slots': my_slots,
+    }
+    return render(request, 'eventer/public_schedule.html', context)
+
+
+@login_required
+@permission_required('eventer.view_coordinator_schedule', raise_exception=True)
+def coordinator_schedule_view(request, event_slug):
+    event = get_object_or_404(Event, slug=event_slug)
+    tz = zoneinfo.ZoneInfo(event.timezone)
+
+    assignments = (
+        EventScheduleSlot.objects
+        .filter(event=event)
+        .select_related('slot', 'role', 'user')
+        .order_by('slot__start', 'role__name')
+    )
+
+    days, role_names = _assignments_by_slot(assignments, tz)
+
+    context = {
+        'event': event,
+        'tz': tz,
+        'days': days,
+        'role_names': role_names,
+    }
+    return render(request, 'eventer/coordinator_schedule.html', context)
