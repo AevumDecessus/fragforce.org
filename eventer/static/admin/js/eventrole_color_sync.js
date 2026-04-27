@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     // Find the color picker and hex text input for the color field
-    var picker = document.querySelector('input[name="color_0"]');
-    var hex = document.querySelector('input[name="color_1"]');
+    const picker = document.querySelector('input[name="color_0"]');
+    const hex = document.querySelector('input[name="color_1"]');
     if (!picker || !hex) return;
 
     picker.addEventListener('input', function () {

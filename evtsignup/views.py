@@ -10,6 +10,8 @@ from eventer.models import Event, EventSignupSlot, EventRole, Game
 from eventer.slot_generator import _expand_to_hours
 from evtsignup.models import EventInterest, EventAvailabilityInterest, GameInterestUserEvent
 
+SIGNUP_TEMPLATE = 'evtsignup/signup.html'
+
 
 def _group_slots_by_day(slots_qs, tz):
     """Return an ordered list of (day_label, [slot, ...]) grouped by slot start day in tz."""
@@ -213,7 +215,7 @@ def signup_view(request, event_slug):
             existing.save(update_fields=['display_name', 'fundraising_url'])
             messages.success(request, "Your profile has been updated.")
             return redirect('evtsignup-signup', event_slug=event_slug)
-        return render(request, 'evtsignup/signup.html', {
+        return render(request, SIGNUP_TEMPLATE, {
             'event': event,
             'locked': is_locked,
             'profile_only': True,
@@ -225,14 +227,14 @@ def signup_view(request, event_slug):
         })
 
     if not existing and is_locked:
-        return render(request, 'evtsignup/signup.html', {'event': event, 'locked': True})
+        return render(request, SIGNUP_TEMPLATE, {'event': event, 'locked': True})
 
     slots = EventSignupSlot.objects.filter(event=event).prefetch_related('roles').order_by('start')
     if not slots.exists():
         can_signup = False
 
     if not existing and not can_signup:
-        return render(request, 'evtsignup/signup.html', {
+        return render(request, SIGNUP_TEMPLATE, {
             'event': event, 'locked': False, 'signups_closed': True,
         })
 
@@ -302,4 +304,4 @@ def signup_view(request, event_slug):
         'selected_game_ids': selected_game_ids,
         'role_colors': role_colors,
     }
-    return render(request, 'evtsignup/signup.html', context)
+    return render(request, SIGNUP_TEMPLATE, context)
