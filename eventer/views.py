@@ -11,17 +11,20 @@ from eventer.schedule import build_schedule_grid, generate_twitch_commands
 
 
 def _signup_link_context(event, user):
-    """Return show_signup_link and show_edit_link for an event given the current user."""
-    if event.locked:
-        return {'show_signup_link': False, 'show_edit_link': False}
-
+    """Return show_signup_link, show_edit_link, and show_profile_link for an event."""
     has_signup = (
         user.is_authenticated and
         event.eventinterest_set.filter(user=user).exists()
     )
+    is_locked = event.locked
+    can_signup = event.signups_open and not is_locked
+    can_edit = event.edits_open and not is_locked
+    # Profile link shown when user has a signup but full edits are unavailable
+    show_profile = has_signup and not can_edit
     return {
-        'show_signup_link': event.signups_open and not has_signup,
-        'show_edit_link': event.edits_open and has_signup,
+        'show_signup_link': can_signup and not has_signup,
+        'show_edit_link': can_edit and has_signup,
+        'show_profile_link': show_profile,
     }
 
 
