@@ -288,7 +288,9 @@ class EventAdmin(admin.ModelAdmin):
                         slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
                         role = EventRole.objects.get(slug=role_slug)
                         user = User.objects.get(pk=int(user_id))
-                        EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user)
+                        game_id = request.POST.get(f'game_{slot_pk}') or None
+                        game = Game.objects.get(pk=int(game_id)) if game_id else None
+                        EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user, game=game)
                         created += 1
                     except Exception:
                         continue
@@ -296,11 +298,13 @@ class EventAdmin(admin.ModelAdmin):
             return HttpResponseRedirect(f'../../{event_id}/build-schedule/')
 
         grid = build_schedule_grid(event)
+        approved_games = Game.objects.filter(status='approved').order_by('name')
         context = {
             **self.admin_site.each_context(request),
             'event': event,
             'rows': grid['rows'],
             'role_headers': grid['role_headers'],
+            'approved_games': approved_games,
             'title': f'Build Schedule - {event.name}',
         }
         return render(request, 'admin/eventer/event/build_schedule.html', context)

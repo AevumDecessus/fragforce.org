@@ -33,6 +33,9 @@
       .empty-cell { background: #f5f5f5; }
       .assigned-name { font-weight: 600; }
       .unassigned { color: #bbb; font-style: italic; font-size: 0.85em; }
+      .cmd-cell { vertical-align: middle; font-size: 0.8em; }
+      .cmd-text { display: block; white-space: nowrap; cursor: pointer; background: #f4f4f4; padding: 2px 4px; border-radius: 2px; }
+      .cmd-text:hover { background: #e0e0ff; }
     </style>
 
     <div style="overflow-x: auto;">
@@ -43,6 +46,10 @@
           {% for role in role_headers %}
           <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
           {% endfor %}
+          <th style="background:#417690;color:white;">Game</th>
+          <th style="background:#417690;color:white;">Title Command</th>
+          <th style="background:#417690;color:white;">Game Command</th>
+          <th style="background:#417690;color:white;">Donate Command</th>
         </tr>
       </thead>
       <tbody>
@@ -67,6 +74,30 @@
             </td>
           {% endif %}
           {% endfor %}
+          {# Command columns - only populated from the streamer cell, shown once per row #}
+          {% for cell in row.cells %}
+          {% if cell.type == 'slot' and cell.role_slug == 'streamer' %}
+          <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+            {% if cell.assigned and cell.assigned.game %}{{ cell.assigned.game.name }}{% else %}<span class="unassigned">—</span>{% endif %}
+          </td>
+          <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+            {% if cell.title_cmd %}<code class="cmd-text">{{ cell.title_cmd }}</code>{% endif %}
+          </td>
+          <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+            {% if cell.game_cmd %}<code class="cmd-text">{{ cell.game_cmd }}</code>{% else %}<span class="unassigned">—</span>{% endif %}
+          </td>
+          <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+            {% if cell.donate_cmd %}<code class="cmd-text">{{ cell.donate_cmd }}</code>{% endif %}
+          </td>
+          {% elif cell.type == 'skip' and cell.role_slug == 'streamer' %}
+            {# covered by rowspan #}
+          {% elif cell.type == 'empty' and cell.role_slug == 'streamer' %}
+          <td class="empty-cell"></td>
+          <td class="empty-cell"></td>
+          <td class="empty-cell"></td>
+          <td class="empty-cell"></td>
+          {% endif %}
+          {% endfor %}
         </tr>
         {% endfor %}
       </tbody>
@@ -77,4 +108,16 @@
 
   </div>
 </div>
+
+<script>
+  document.querySelectorAll('.cmd-text').forEach(function(el) {
+    el.title = 'Click to copy';
+    el.addEventListener('click', function() {
+      navigator.clipboard.writeText(this.textContent.trim()).then(function() {
+        el.style.background = '#c3e6cb';
+        setTimeout(function() { el.style.background = ''; }, 800);
+      });
+    });
+  });
+</script>
 {% endblock %}

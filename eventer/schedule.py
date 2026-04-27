@@ -114,6 +114,27 @@ def _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_avai
     return rows
 
 
+def slot_hour_range(event_start, slot):
+    """Return (start_hour, end_hour) 1-indexed relative to event start."""
+    start_hour = int((slot.start - event_start).total_seconds() // 3600) + 1
+    end_hour = int((slot.stop - event_start).total_seconds() // 3600)
+    return start_hour, end_hour
+
+
+def generate_twitch_commands(event, slot, streamer_display_name, game_name):
+    """Generate the three Twitch bot command strings for a streamer slot."""
+    if event.start:
+        h_start, h_end = slot_hour_range(event.start, slot)
+        hour_str = f'Hours {h_start}-{h_end}'
+    else:
+        hour_str = slot.label
+
+    title_cmd = f'!settitle {event.name} | {hour_str}'
+    game_cmd = f'!setgame {game_name}' if game_name else ''
+    donate_cmd = f'!setteam {streamer_display_name}' if streamer_display_name else ''
+    return title_cmd, game_cmd, donate_cmd
+
+
 def build_schedule_grid(event):
     """
     Build hourly grid data structure for schedule views.

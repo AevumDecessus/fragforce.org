@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_safe
 
 from eventer.models import Event, EventScheduleSlot
-from eventer.schedule import build_schedule_grid
+from eventer.schedule import build_schedule_grid, generate_twitch_commands
 
 
 def _signup_link_context(event, user):
@@ -181,7 +181,16 @@ def coordinator_schedule_view(request, event_slug):
         for cell in row['cells']:
             if cell['type'] == 'slot' and cell.get('assigned'):
                 a = cell['assigned']
-                cell['assigned_display'] = display_names.get(a.user_id, a.user.username)
+                display = display_names.get(a.user_id, a.user.username)
+                cell['assigned_display'] = display
+                if cell['role_slug'] == 'streamer':
+                    game_name = a.game.name if a.game else ''
+                    title_cmd, game_cmd, donate_cmd = generate_twitch_commands(
+                        event, cell['slot'], display, game_name
+                    )
+                    cell['title_cmd'] = title_cmd
+                    cell['game_cmd'] = game_cmd
+                    cell['donate_cmd'] = donate_cmd
 
     context = {
         'event': event,

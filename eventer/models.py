@@ -228,6 +228,8 @@ class EventScheduleSlot(models.Model):
     slot = models.ForeignKey(EventSignupSlot, on_delete=models.CASCADE, related_name='schedule_assignments')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.ForeignKey(EventRole, on_delete=models.CASCADE)
+    game = models.ForeignKey('Game', on_delete=models.SET_NULL, null=True, blank=True,
+                             help_text="Game being played this slot (streamer slots only)")
 
     class Meta:
         unique_together = [['slot', 'role']]
