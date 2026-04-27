@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_safe
 
 from eventer.models import Event, EventScheduleSlot
+from eventer.schedule import build_schedule_grid
 
 
 def _signup_link_context(event, user):
@@ -160,21 +161,31 @@ def public_schedule_view(request, event_slug):
 @permission_required('eventer.view_coordinator_schedule', raise_exception=True)
 def coordinator_schedule_view(request, event_slug):
     event = get_object_or_404(Event, slug=event_slug)
-    tz = zoneinfo.ZoneInfo(event.timezone)
+    grid = build_schedule_grid(event)
 
-    assignments = (
-        EventScheduleSlot.objects
-        .filter(event=event)
-        .select_related('slot', 'role', 'user')
-        .order_by('slot__start', 'role__name')
-    )
+    # Annotate assigned users with display names
+    from evtsignup.models import EventInterest
+    user_ids = {
+        a.user_id
+        for row in grid['rows']
+        for cell in row['cells']
+        if cell['type'] == 'slot' and cell.get('assigned')
+        for a in [cell['assigned']]
+    }
+    display_names = {}
+    if user_ids:
+        for row in EventInterest.objects.filter(event=event, user_id__in=user_ids).values('user_id', 'display_name', 'user__username'):
+            display_names[row['user_id']] = row['display_name'] or row['user__username']
 
-    days, role_names = _assignments_by_slot(assignments, tz)
+    for row in grid['rows']:
+        for cell in row['cells']:
+            if cell['type'] == 'slot' and cell.get('assigned'):
+                a = cell['assigned']
+                cell['assigned_display'] = display_names.get(a.user_id, a.user.username)
 
     context = {
         'event': event,
-        'tz': tz,
-        'days': days,
-        'role_names': role_names,
+        'rows': grid['rows'],
+        'role_headers': grid['role_headers'],
     }
     return render(request, 'eventer/coordinator_schedule.html', context)

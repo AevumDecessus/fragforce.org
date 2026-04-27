@@ -18,46 +18,56 @@
       {% endif %}
     </p>
 
-    {% if not days %}
+    {% if not rows %}
     <p class="text-muted">No assignments have been made yet.</p>
     {% else %}
 
     <style>
-      .sched-table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
-      .sched-table th, .sched-table td { border: 1px solid #dee2e6; padding: 6px 10px; vertical-align: middle; }
-      .sched-table th { background: #417690; color: white; text-align: center; }
-      .sched-table td.slot-time { white-space: nowrap; font-weight: bold; color: #555; background: #f8f8f8; }
-      .sched-table td.empty-cell { color: #ccc; font-style: italic; text-align: center; }
-      .day-header { background: #2c4a5a; color: white; font-weight: bold; padding: 6px 10px; }
+      .coord-grid { border-collapse: collapse; font-size: 0.85em; width: 100%; }
+      .coord-grid th, .coord-grid td { border: 1px solid #ccc; padding: 4px 8px; vertical-align: middle; }
+      .coord-grid th { text-align: center; position: sticky; top: 0; z-index: 2; }
+      .hour-col { white-space: nowrap; font-weight: bold; color: #555; background: #f8f8f8; text-align: right; width: 5em; }
+      .day-label { font-weight: bold; padding: 2px 4px; margin: -4px -8px 0 -8px; font-size: 0.85em; color: white; background: #2c4a5a; display: block; }
+      .slot-cell { vertical-align: middle; text-align: center; }
+      .slot-cell.alt-slot { filter: brightness(0.95); }
+      .empty-cell { background: #f5f5f5; }
+      .assigned-name { font-weight: 600; }
+      .unassigned { color: #bbb; font-style: italic; font-size: 0.85em; }
     </style>
 
-    <div class="table-responsive">
-    <table class="sched-table">
+    <div style="overflow-x: auto;">
+    <table class="coord-grid">
       <thead>
         <tr>
-          <th>Slot</th>
-          {% for role_name in role_names %}
-          <th>{{ role_name }}</th>
+          <th style="background:#417690;color:white;">Hour</th>
+          {% for role in role_headers %}
+          <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
           {% endfor %}
         </tr>
       </thead>
       <tbody>
-        {% for day in days %}
+        {% for row in rows %}
         <tr>
-          <td colspan="{{ role_names|length|add:1 }}" class="day-header">{{ day.day_label }}</td>
-        </tr>
-        {% for row in day.rows %}
-        <tr>
-          <td class="slot-time">{{ row.slot.label }}</td>
-          {% for user in row.cells %}
-          {% if user %}
-          <td>{{ user.username }}</td>
+          <td class="hour-col">
+            {% if row.is_day_start %}<span class="day-label">{{ row.day }}</span>{% endif %}
+            {{ row.local }}
+          </td>
+          {% for cell in row.cells %}
+          {% if cell.type == 'skip' %}
+            {# covered by rowspan #}
+          {% elif cell.type == 'empty' %}
+            <td class="empty-cell"></td>
           {% else %}
-          <td class="empty-cell">&mdash;</td>
+            <td class="slot-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.assigned %}
+              <span class="assigned-name">{{ cell.assigned_display }}</span>
+              {% else %}
+              <span class="unassigned">—</span>
+              {% endif %}
+            </td>
           {% endif %}
           {% endfor %}
         </tr>
-        {% endfor %}
         {% endfor %}
       </tbody>
     </table>
