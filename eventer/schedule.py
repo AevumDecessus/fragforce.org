@@ -10,8 +10,8 @@ from eventer.slot_generator import _expand_to_hours
 LOCAL_TIME_FMT = '%a %b %-d %-I%p %Z'
 
 SCHEDULE_ROLES = [
-    ('participant', 'as_participant', 'Participant'),
     ('streamer', 'as_streamer', 'Streamer'),
+    ('participant', 'as_participant', 'Participant'),
     ('moderator', 'as_moderator', 'Moderator'),
     ('tech-manager', 'as_tech', 'Tech'),
 ]
