@@ -36,6 +36,7 @@ whitenoise = "*"
 
 social-auth-app-django = "*"
 "py-cord" = ">=2,<3"
+"django-markdownify" = "*"
 
 [dev-packages]
 pyflakes = "*"

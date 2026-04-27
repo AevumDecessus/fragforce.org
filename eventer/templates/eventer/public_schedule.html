@@ -1,5 +1,5 @@
 {% extends "ff/base.html" %}
-{% load fftz %}
+{% load fftz markdownify %}
 
 {% block title %}Schedule - {{ event.name }}{% endblock %}
 
@@ -12,7 +12,7 @@
 
     <div class="card mb-4">
       <div class="card-body">
-        {% if event.description %}<p>{{ event.description }}</p>{% endif %}
+        {% if event.description %}{{ event.description|markdownify }}{% endif %}
         {% if event.start %}<p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>{% endif %}
         {% if event.end %}<p class="mb-0"><strong>Ends:</strong> {{ event.end|date:"Y-m-d H:i:s"|localtime_short }}</p>{% endif %}
       </div>
