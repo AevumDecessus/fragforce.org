@@ -39,6 +39,14 @@ COORDINATOR_PERMISSIONS = [
     ('auth', 'user', ['view']),
 ]
 
+SUPERSTREAM_MODERATOR_PERMISSIONS = [
+    ('eventer', 'event', ['view_coordinator_schedule']),
+]
+
+SUPERSTREAM_TECH_MANAGER_PERMISSIONS = [
+    ('eventer', 'event', ['view_coordinator_schedule']),
+]
+
 SUPERSTREAM_KEY_MANAGER_PERMISSIONS = [
     ('ffstream', 'key', ['view', 'change']),
     ('ffstream', 'key', ['set_key_superstream']),
@@ -51,6 +59,8 @@ LIVESTREAM_KEY_MANAGER_PERMISSIONS = [
 
 GROUP_DEFINITIONS = {
     'Coordinator': COORDINATOR_PERMISSIONS,
+    'Superstream Moderator': SUPERSTREAM_MODERATOR_PERMISSIONS,
+    'Superstream Tech Manager': SUPERSTREAM_TECH_MANAGER_PERMISSIONS,
     'Superstream Key Manager': SUPERSTREAM_KEY_MANAGER_PERMISSIONS,
     'Livestream Key Manager': LIVESTREAM_KEY_MANAGER_PERMISSIONS,
 }
