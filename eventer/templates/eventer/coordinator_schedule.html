@@ -1,0 +1,70 @@
+{% extends "ff/base.html" %}
+{% load fftz %}
+
+{% block title %}Coordinator Schedule - {{ event.name }}{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+  <div class="col-lg-12">
+
+    <h2>{{ event.name }} - Coordinator Schedule</h2>
+    <p>
+      <a href="{% url 'eventer-event-detail' event_slug=event.slug %}">&larr; Back to event</a>
+      {% if user.is_staff %}
+      &nbsp;|&nbsp;
+      <a href="{% url 'admin:eventer_event_availability_summary' event.pk %}">Availability Summary</a>
+      &nbsp;|&nbsp;
+      <a href="{% url 'admin:eventer_event_build_schedule' event.pk %}">Build Schedule</a>
+      {% endif %}
+    </p>
+
+    {% if not days %}
+    <p class="text-muted">No assignments have been made yet.</p>
+    {% else %}
+
+    <style>
+      .sched-table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+      .sched-table th, .sched-table td { border: 1px solid #dee2e6; padding: 6px 10px; vertical-align: middle; }
+      .sched-table th { background: #417690; color: white; text-align: center; }
+      .sched-table td.slot-time { white-space: nowrap; font-weight: bold; color: #555; background: #f8f8f8; }
+      .sched-table td.empty-cell { color: #ccc; font-style: italic; text-align: center; }
+      .day-header { background: #2c4a5a; color: white; font-weight: bold; padding: 6px 10px; }
+    </style>
+
+    <div class="table-responsive">
+    <table class="sched-table">
+      <thead>
+        <tr>
+          <th>Slot</th>
+          {% for role_name in role_names %}
+          <th>{{ role_name }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for day in days %}
+        <tr>
+          <td colspan="{{ role_names|length|add:1 }}" class="day-header">{{ day.day_label }}</td>
+        </tr>
+        {% for row in day.rows %}
+        <tr>
+          <td class="slot-time">{{ row.slot.label }}</td>
+          {% for user in row.cells %}
+          {% if user %}
+          <td>{{ user.username }}</td>
+          {% else %}
+          <td class="empty-cell">&mdash;</td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
