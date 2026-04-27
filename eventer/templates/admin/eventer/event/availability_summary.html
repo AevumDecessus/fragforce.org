@@ -85,19 +85,10 @@
             <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Assign</button>
           </form>
           {% endif %}
-          <form method="post" action="{% url 'admin:eventer_event_add_availability' event.pk %}" class="add-avail-form" style="margin:4px 0 0 0">
-            {% csrf_token %}
-            <input type="hidden" name="slot_pk" value="{{ cell.slot.pk }}">
-            <input type="hidden" name="role_slug" value="{{ cell.role_slug }}">
-            {% if cell.available %}<input type="hidden" name="override" value="1">{% endif %}
-            <input type="hidden" name="user_pk" class="user-pk-input">
-            <input type="text" class="user-search-input" placeholder="Search user..."
-                   style="font-size:0.8em;width:100%;margin-bottom:2px;padding:1px 4px;"
-                   autocomplete="off">
-            <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4;{% if not cell.available %}background:#417690;color:#fff;border-color:#417690;{% endif %}">
-              {% if cell.available %}Override{% else %}Add signup &amp; assign{% endif %}
-            </button>
-          </form>
+          <a href="{% url 'admin:eventer_event_add_availability' event.pk %}?slot={{ cell.slot.pk }}&role={{ cell.role_slug }}{% if cell.available %}&override=1{% endif %}"
+             style="font-size:0.72em;display:inline-block;margin-top:4px;padding:1px 5px;line-height:1.4;border:1px solid;border-radius:2px;text-decoration:none;{% if not cell.available %}background:#417690;color:#fff;border-color:#417690;{% else %}color:#555;border-color:#aaa;{% endif %}">
+            {% if cell.available %}Override{% else %}Add &amp; assign{% endif %}
+          </a>
         </td>
       {% endif %}
       {% endfor %}
@@ -107,66 +98,5 @@
 </table>
 </div>
 {% endif %}
-
-<script>
-(function($) {
-  // Wire each user search input to the admin autocomplete endpoint
-  document.querySelectorAll('.add-avail-form').forEach(function(form) {
-    var searchInput = form.querySelector('.user-search-input');
-    var pkInput = form.querySelector('.user-pk-input');
-    var dropdown = null;
-
-    function clearDropdown() {
-      if (dropdown) { dropdown.remove(); dropdown = null; }
-    }
-
-    searchInput.addEventListener('input', function() {
-      var q = this.value.trim();
-      pkInput.value = '';
-      clearDropdown();
-      if (q.length < 2) return;
-
-      fetch('/admin/auth/user/autocomplete/?term=' + encodeURIComponent(q) + '&app_label=auth&model_name=user&field_name=user', {
-        headers: {'X-Requested-With': 'XMLHttpRequest'}
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        clearDropdown();
-        if (!data.results || !data.results.length) return;
-        dropdown = document.createElement('ul');
-        dropdown.style.cssText = 'position:absolute;z-index:9999;background:#fff;border:1px solid #ccc;margin:0;padding:0;list-style:none;max-height:150px;overflow-y:auto;font-size:0.8em;min-width:12em;';
-        data.results.forEach(function(item) {
-          var li = document.createElement('li');
-          li.textContent = item.text;
-          li.style.cssText = 'padding:3px 8px;cursor:pointer;color:#333;';
-          li.addEventListener('mouseenter', function() { this.style.background = '#e8f0fe'; });
-          li.addEventListener('mouseleave', function() { this.style.background = ''; });
-          li.addEventListener('mousedown', function(e) {
-            e.preventDefault();
-            pkInput.value = item.id;
-            searchInput.value = item.text;
-            clearDropdown();
-          });
-          dropdown.appendChild(li);
-        });
-        searchInput.parentNode.style.position = 'relative';
-        searchInput.insertAdjacentElement('afterend', dropdown);
-      });
-    });
-
-    searchInput.addEventListener('blur', function() {
-      setTimeout(clearDropdown, 150);
-    });
-
-    form.addEventListener('submit', function(e) {
-      if (!pkInput.value) {
-        e.preventDefault();
-        searchInput.style.borderColor = 'red';
-        searchInput.placeholder = 'Select a user first';
-      }
-    });
-  });
-})(django.jQuery || window.jQuery);
-</script>
 
 {% endblock %}

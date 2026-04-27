@@ -1,0 +1,51 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+<p><a href="{% url 'admin:eventer_event_availability_summary' event.pk %}">&larr; Back to availability summary</a></p>
+
+<div style="max-width:40em;">
+  <table class="form-table" style="margin-bottom:1em;">
+    <tr><th>Event:</th><td>{{ event.name }}</td></tr>
+    <tr><th>Slot:</th><td>{{ slot.label }}</td></tr>
+    <tr><th>Role:</th><td>{{ role.name }}</td></tr>
+    {% if override %}
+    <tr><td colspan="2">
+      <p class="help" style="color:#c0392b;">
+        <strong>Override mode:</strong> The selected user will be assigned regardless of whether they signed up.
+        An EventInterest and availability record will still be created so their display name appears on the schedule.
+      </p>
+    </td></tr>
+    {% endif %}
+  </table>
+
+  {% if errors %}
+  <p class="errornote">{{ errors }}</p>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="slot_pk" value="{{ slot.pk }}">
+    <input type="hidden" name="role_slug" value="{{ role.slug }}">
+    {% if override %}<input type="hidden" name="override" value="1">{% endif %}
+
+    <fieldset class="module aligned">
+      <div class="form-row">
+        <label for="{{ form.user.id_for_label }}">User:</label>
+        {{ form.user }}
+        {% if form.user.errors %}
+        <p class="errornote">{{ form.user.errors }}</p>
+        {% endif %}
+      </div>
+    </fieldset>
+
+    <div class="submit-row">
+      <input type="submit" value="{% if override %}Override Assign{% else %}Add Signup &amp; Assign{% endif %}" class="default">
+      <a href="{% url 'admin:eventer_event_availability_summary' event.pk %}" class="deletelink" style="float:none;margin-left:1em;">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
