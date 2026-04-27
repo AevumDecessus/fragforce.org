@@ -136,6 +136,11 @@ class Event(models.Model):
         period = self.eventperiod_set.order_by('stop').last()
         return period.stop if period else None
 
+    class Meta:
+        permissions = [
+            ('view_coordinator_schedule', 'Can view the coordinator schedule for events'),
+        ]
+
     def __str__(self):
         return self.name
 

@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 # (app_label, model_name, [actions])
 COORDINATOR_PERMISSIONS = [
     # eventer - full access to event setup and schedule management
-    ('eventer', 'event', ['add', 'change', 'delete', 'view']),
+    ('eventer', 'event', ['add', 'change', 'delete', 'view', 'view_coordinator_schedule']),
     ('eventer', 'eventperiod', ['add', 'change', 'delete', 'view']),
     ('eventer', 'eventrole', ['add', 'change', 'delete', 'view']),
     ('eventer', 'eventsignupslotconfig', ['add', 'change', 'delete', 'view']),
