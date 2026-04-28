@@ -1,6 +1,6 @@
 # Base Image
 FROM python:3.10
-RUN pip install pipenv
+RUN pip install pipenv==2026.5.2
 
 # Having an editor is very nice
 RUN apt-get update && apt-get install -y \

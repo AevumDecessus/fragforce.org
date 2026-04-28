@@ -10,8 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3-lxml py
 FROM base AS python-deps
 
 # Install pipenv and compilation dependencies
-RUN pip install --upgrade pip
-RUN pip install pipenv asdf
+RUN pip install pipenv==2026.5.2
 RUN apt-get update && apt-get install -y --no-install-recommends gcc git python3-dev && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies in /.venv
