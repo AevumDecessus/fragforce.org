@@ -1,5 +1,5 @@
 {% extends "ff/base.html" %}
-{% load fftz %}
+{% load fftz markdownify %}
 
 {% block title %}Sign Up - {{ event.name }}{% endblock %}
 
@@ -21,56 +21,38 @@
     outline: none;
     box-shadow: none;
   }
-  [data-track] {
+  .role-btn {
+    display: block; width: 100%; padding: 0.375rem 0.75rem;
+    font-size: 1rem; border-radius: 0.25rem; cursor: pointer;
     transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+    border-width: 2px; border-style: solid;
+    font-weight: 600;
   }
-  [data-track]:focus,
-  [data-track]:active {
-    outline: none !important;
-    box-shadow: none !important;
-  }
-  [data-track].active,
-  [data-track].active:focus,
-  [data-track].active:active,
-  [data-track].active:hover {
-    background-color: #007bff !important;
-    border-color: #007bff !important;
-    color: #fff !important;
-    box-shadow: none !important;
-  }
-  [data-track]:not(.active),
-  [data-track]:not(.active):focus,
-  [data-track]:not(.active):active {
-    background-color: transparent !important;
-    color: #007bff !important;
-    box-shadow: none !important;
-  }
+  .role-btn:focus, .role-btn:active { outline: none !important; box-shadow: none !important; }
   .slot-btn label {
     display: block;
     width: 100%;
     padding: 0.35rem 0.75rem;
-    border: 1px solid #6c757d;
+    border: 2px solid var(--role-color, #6c757d);
     border-radius: 0.25rem;
     cursor: pointer;
     user-select: none;
     font-size: 0.875rem;
-    background: #fff;
-    color: #495057;
+    font-weight: 600;
+    background: transparent;
+    color: var(--role-color, #6c757d);
     transition: background 0.1s, color 0.1s, border-color 0.1s;
   }
   .slot-btn input[type="checkbox"]:checked + label {
-    background: #007bff;
-    border-color: #007bff;
+    background: var(--role-color, #6c757d);
+    border-color: var(--role-color, #6c757d);
     color: #fff;
   }
   .slot-btn label:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
+    opacity: 0.85;
   }
   .slot-btn input[type="checkbox"]:checked + label:hover {
-    background: #0069d9;
-    border-color: #0062cc;
-    color: #fff;
+    opacity: 0.9;
   }
 
 </style>
@@ -85,7 +67,7 @@
     <div class="card mb-4">
       <div class="card-body">
         {% if event.description %}
-        <p>{{ event.description }}</p>
+        {{ event.description|markdownify }}
         {% endif %}
         {% if event.start %}
         <p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>
@@ -96,15 +78,45 @@
       </div>
     </div>
 
-    {% if locked %}
-    <div class="alert alert-secondary">
-      Signups for this event are currently locked. Please check back later.
+    {% if profile_only %}
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="alert alert-info">
+      {% if locked %}Signups for this event are locked.{% else %}The window for editing signups has closed.{% endif %}
+      You can still update your display name and fundraising URL below.
     </div>
 
-    {% elif edits_closed %}
-    <div class="alert alert-info">
-      <strong>Your signup has been received.</strong>
-      The window for editing signups has closed. Contact a coordinator if you need to make changes.
+    <form method="post">
+      {% csrf_token %}
+      <div class="card mb-4">
+        <div class="card-header"><strong>Your Profile</strong></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="display_name">Display name <small class="text-muted">(shown on schedule and stream ads)</small></label>
+            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255"
+                   value="{{ prefill.display_name|default:'' }}">
+          </div>
+          <div class="form-group">
+            <label for="fundraising_url">Fundraising page URL <small class="text-muted">(Extra Life or hospital charity page)</small></label>
+            <input type="url" class="form-control" id="fundraising_url" name="fundraising_url"
+                   value="{{ prefill.fundraising_url|default:'' }}"
+                   placeholder="https://www.extra-life.org/participants/...">
+          </div>
+          <button type="submit" class="btn btn-lg text-white" style="background-color:#417690;border-color:#417690;">
+            Update profile
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% elif locked %}
+    <div class="alert alert-secondary">
+      Signups for this event are currently locked. Please check back later.
     </div>
 
     {% elif signups_closed %}
@@ -127,9 +139,9 @@
     {% endif %}
 
     {% if errors %}
-    <div class="alert alert-danger">
-      <ul class="mb-0">
-        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+    <div class="alert" style="background-color:#f8d7da !important;border-color:#f5c6cb;color:#721c24 !important;">
+      <ul class="mb-0" style="color:#721c24 !important;">
+        {% for error in errors %}<li style="color:#721c24 !important;">{{ error }}</li>{% endfor %}
       </ul>
     </div>
     {% endif %}
@@ -175,36 +187,40 @@
           <div class="row">
             {% if participant_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}"
-                  data-track="participant">
+                  data-track="participant"
+                  data-color="{{ role_colors.participant|default:'#417690' }}">
                 Participant
               </button>
             </div>
             {% endif %}
             {% if streamer_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}"
-                  data-track="streamer">
+                  data-track="streamer"
+                  data-color="{{ role_colors.streamer|default:'#417690' }}">
                 Streamer
               </button>
             </div>
             {% endif %}
             {% if moderator_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.moderator %}active{% endif %}"
-                  data-track="moderator">
+                  data-track="moderator"
+                  data-color="{{ role_colors.moderator|default:'#417690' }}">
                 Moderator
               </button>
             </div>
             {% endif %}
             {% if tech_slots %}
             <div class="col-6 mb-2">
-              <button type="button" class="btn btn-outline-primary btn-block
+              <button type="button" class="role-btn btn-block
                   {% if selected_slot_ids.tech %}active{% endif %}"
-                  data-track="tech">
+                  data-track="tech"
+                  data-color="{{ role_colors.tech|default:'#417690' }}">
                 Tech Manager
               </button>
             </div>
@@ -217,8 +233,8 @@
 
       {# --- Track: Participant --- #}
       {% if participant_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant">
-        <div class="card-header bg-primary text-white"><strong>Participant</strong> - Play games with a streamer</div>
+      <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant" style="--role-color:{{ role_colors.participant }}">
+        <div class="card-header text-white" style="background-color:{{ role_colors.participant }}"><strong>Participant</strong> - Play games with a streamer</div>
         <div class="card-body">
 
           <h6>Availability</h6>
@@ -260,8 +276,8 @@
 
       {# --- Track: Streamer --- #}
       {% if streamer_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer">
-        <div class="card-header bg-primary text-white"><strong>Streamer</strong> - Lead a time slot on stream</div>
+      <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer" style="--role-color:{{ role_colors.streamer }}">
+        <div class="card-header text-white" style="background-color:{{ role_colors.streamer }}"><strong>Streamer</strong> - Lead a time slot on stream</div>
         <div class="card-body">
 
           <div class="form-group">
@@ -310,8 +326,8 @@
 
       {# --- Track: Moderator --- #}
       {% if moderator_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator">
-        <div class="card-header bg-primary text-white"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
+      <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator" style="--role-color:{{ role_colors.moderator }}">
+        <div class="card-header text-white" style="background-color:{{ role_colors.moderator }}"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
         <div class="card-body">
 
           <h6>Availability</h6>
@@ -335,8 +351,8 @@
 
       {# --- Track: Tech Manager --- #}
       {% if tech_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech">
-        <div class="card-header bg-primary text-white"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
+      <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech" style="--role-color:{{ role_colors.tech }}">
+        <div class="card-header text-white" style="background-color:{{ role_colors.tech }}"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
         <div class="card-body">
 
           <h6>Availability</h6>
@@ -371,13 +387,52 @@
 
 {% block extra_js %}
 <script>
+  function applyRoleButtonStyle(btn) {
+    var color = btn.dataset.color || '#417690';
+    if (btn.classList.contains('active')) {
+      btn.style.backgroundColor = color;
+      btn.style.borderColor = color;
+      btn.style.color = '#fff';
+    } else {
+      btn.style.backgroundColor = 'transparent';
+      btn.style.borderColor = color;
+      btn.style.color = color;
+    }
+  }
+
+  function checkedSlotsInSection(section) {
+    if (!section) return 0;
+    return section.querySelectorAll('input[type="checkbox"]:checked').length;
+  }
+
+  function uncheckSlotsInSection(section) {
+    if (!section) return;
+    section.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      cb.checked = false;
+    });
+  }
+
   document.querySelectorAll('[data-track]').forEach(function(btn) {
+    applyRoleButtonStyle(btn);
     btn.addEventListener('click', function() {
       var track = this.dataset.track;
       var section = document.getElementById('section-' + track);
       var isActive = this.classList.contains('active');
+
+      if (isActive && checkedSlotsInSection(section) > 0) {
+        var confirmed = window.confirm(
+          'You have slots selected for this role. Deselecting it will clear all those selections. Continue?'
+        );
+        if (!confirmed) {
+          this.blur();
+          return;
+        }
+        uncheckSlotsInSection(section);
+      }
+
       this.classList.toggle('active', !isActive);
       if (section) section.classList.toggle('active', !isActive);
+      applyRoleButtonStyle(this);
       this.blur();
     });
   });

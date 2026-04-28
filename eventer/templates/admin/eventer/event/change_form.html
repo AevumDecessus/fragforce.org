@@ -14,6 +14,16 @@
         Generate Signup Slots
       </a>
     </li>
+    <li>
+      <a href="{% url 'admin:eventer_event_availability_summary' original.pk %}" class="historylink">
+        Availability Summary
+      </a>
+    </li>
+    <li>
+      <a href="{% url 'admin:eventer_event_build_schedule' original.pk %}" class="historylink">
+        Build Schedule
+      </a>
+    </li>
   </ul>
   {% endif %}
 {% endblock %}

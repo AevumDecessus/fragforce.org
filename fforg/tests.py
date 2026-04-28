@@ -3,9 +3,49 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.test import TestCase
 
 from .redisdb import HttpCacheDB, TimersDB
+from .permissions import seed_permission_groups, GROUP_DEFINITIONS
+
+
+class SeedPermissionGroupsTest(TestCase):
+    def setUp(self):
+        seed_permission_groups()
+
+    def test_creates_all_defined_groups(self):
+        for name in GROUP_DEFINITIONS:
+            self.assertTrue(Group.objects.filter(name=name).exists(), f"Group '{name}' not created")
+
+    def test_all_defined_permissions_assigned(self):
+        standard = {'add', 'change', 'delete', 'view'}
+        for group_name, permission_list in GROUP_DEFINITIONS.items():
+            group = Group.objects.get(name=group_name)
+            codenames = set(group.permissions.values_list('codename', flat=True))
+            for app_label, model_name, actions in permission_list:
+                for action in actions:
+                    codename = f'{action}_{model_name}' if action in standard else action
+                    self.assertIn(
+                        codename, codenames,
+                        f"Group '{group_name}' missing permission '{app_label}.{codename}'"
+                    )
+
+    def test_idempotent_when_called_twice(self):
+        seed_permission_groups()
+        self.assertEqual(
+            Group.objects.filter(name__in=GROUP_DEFINITIONS).count(),
+            len(GROUP_DEFINITIONS),
+        )
+
+    def test_groups_do_not_share_key_field_permissions(self):
+        # Superstream and Livestream managers should not have each other's field permission
+        ss_group = Group.objects.get(name='Superstream Key Manager')
+        ls_group = Group.objects.get(name='Livestream Key Manager')
+        ss_codenames = set(ss_group.permissions.values_list('codename', flat=True))
+        ls_codenames = set(ls_group.permissions.values_list('codename', flat=True))
+        self.assertNotIn('set_key_livestream', ss_codenames)
+        self.assertNotIn('set_key_superstream', ls_codenames)
 
 
 class CeleryImportsTest(TestCase):

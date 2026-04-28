@@ -1,12 +1,47 @@
 import zoneinfo
 
+from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.schedule import build_schedule_grid, LOCAL_TIME_FMT
 from eventer.slot_generator import generate_slots
+
+def _save_coordinator_assignment(event, slot, role, user):
+    """Create EventInterest, availability rows, and schedule assignment for a coordinator-sourced signup."""
+    from datetime import timedelta
+    from evtsignup.models import EventInterest, EventAvailabilityInterest
+
+    FIELD_MAP = {
+        'participant': 'as_participant',
+        'streamer': 'as_streamer',
+        'moderator': 'as_moderator',
+        'tech-manager': 'as_tech',
+    }
+
+    interest, _ = EventInterest.objects.get_or_create(
+        user=user, event=event,
+        defaults={'acknowledged': True},
+    )
+    field = FIELD_MAP.get(role.slug)
+    if field:
+        hour = slot.start.replace(minute=0, second=0, microsecond=0)
+        while hour < slot.stop:
+            avail, _ = EventAvailabilityInterest.objects.get_or_create(
+                event_interest=interest, hour=hour,
+                defaults={f: False for f in FIELD_MAP.values()},
+            )
+            setattr(avail, field, True)
+            avail.save(update_fields=[field])
+            hour += timedelta(hours=1)
+    EventScheduleSlot.objects.filter(slot=slot, role=role).delete()
+    EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user)
+
+
+
 
 SUPERSTREAM_ROLES = [
     {'name': 'Participant', 'slug': 'participant', 'description': 'Game participant - plays games with a streamer'},
@@ -21,9 +56,48 @@ class EventPeriodAdmin(admin.ModelAdmin):
     pass
 
 
+class ColorPickerWidget(forms.MultiWidget):
+    """Color picker + hex text input side by side."""
+    def __init__(self):
+        widgets = [
+            forms.TextInput(attrs={'type': 'color', 'style': 'width:3em;height:2em;padding:0;cursor:pointer;vertical-align:middle'}),
+            forms.TextInput(attrs={'style': 'width:7em;font-family:monospace;vertical-align:middle', 'maxlength': '7', 'placeholder': '#417690'}),
+        ]
+        super().__init__(widgets)
+
+    def decompress(self, value):
+        return [value, value] if value else ['#417690', '#417690']
+
+    def value_from_datadict(self, data, files, name):
+        # Text input (hex) takes precedence; sync both to the same value
+        values = super().value_from_datadict(data, files, name)
+        return values[1] if values[1] else values[0]
+
+
+class EventRoleAdminForm(forms.ModelForm):
+    color = forms.CharField(widget=ColorPickerWidget(), max_length=7)
+
+    class Meta:
+        model = EventRole
+        fields = ['name', 'slug', 'description', 'color']
+
+
 @admin.register(EventRole)
 class EventRoleAdmin(admin.ModelAdmin):
     change_list_template = 'admin/eventer/eventrole/change_list.html'
+    form = EventRoleAdminForm
+    list_display = ['name', 'slug', 'color_swatch']
+
+    @admin.display(description='Color')
+    def color_swatch(self, obj):
+        from django.utils.html import format_html
+        return format_html(
+            '<span style="display:inline-block;width:1.2em;height:1.2em;background:{};border:1px solid #ccc;vertical-align:middle;border-radius:2px;margin-right:4px"></span>{}',
+            obj.color, obj.color
+        )
+
+    class Media:
+        js = ('admin/js/eventrole_color_sync.js',)
 
     def get_urls(self):
         urls = super().get_urls()
@@ -100,6 +174,18 @@ class EventAdmin(admin.ModelAdmin):
             path('<int:event_id>/generate-slots/',
                  self.admin_site.admin_view(self.generate_slots_view),
                  name='eventer_event_generate_slots'),
+            path('<int:event_id>/availability/',
+                 self.admin_site.admin_view(self.availability_summary_view),
+                 name='eventer_event_availability_summary'),
+            path('<int:event_id>/build-schedule/',
+                 self.admin_site.admin_view(self.build_schedule_view),
+                 name='eventer_event_build_schedule'),
+            path('<int:event_id>/assign-slot/',
+                 self.admin_site.admin_view(self.assign_slot_view),
+                 name='eventer_event_assign_slot'),
+            path('<int:event_id>/add-availability/',
+                 self.admin_site.admin_view(self.add_availability_view),
+                 name='eventer_event_add_availability'),
         ]
         return custom + urls
 
@@ -172,6 +258,133 @@ class EventAdmin(admin.ModelAdmin):
         }
         return render(request, 'admin/eventer/event/generate_slots.html', context)
 
+    def availability_summary_view(self, request, event_id):
+        event = get_object_or_404(Event, pk=event_id)
+        grid = build_schedule_grid(event)
+        approved_games = Game.objects.filter(status='approved').order_by('name')
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event,
+            'rows': grid['rows'],
+            'role_headers': grid['role_headers'],
+            'approved_games': approved_games,
+            'title': f'Availability Summary - {event.name}',
+        }
+        return render(request, 'admin/eventer/event/availability_summary.html', context)
+
+    def build_schedule_view(self, request, event_id):
+        from django.db import transaction
+        from django_workflow_engine.executor import User
+        event = get_object_or_404(Event, pk=event_id)
+
+        if request.method == 'POST':
+            with transaction.atomic():
+                EventScheduleSlot.objects.filter(event=event).delete()
+                created = 0
+                for key, user_id in request.POST.items():
+                    if not key.startswith('assign_') or not user_id:
+                        continue
+                    # key format: assign_{slot_pk}_{role_slug}
+                    _, slot_pk, role_slug = key.split('_', 2)
+                    try:
+                        slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
+                        role = EventRole.objects.get(slug=role_slug)
+                        user = User.objects.get(pk=int(user_id))
+                        game_id = request.POST.get(f'game_{slot_pk}') or None
+                        game = Game.objects.get(pk=int(game_id)) if game_id else None
+                        EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                        created += 1
+                    except Exception:
+                        continue
+            self.message_user(request, f"Schedule saved: {created} assignment(s).", messages.SUCCESS)
+            return HttpResponseRedirect(f'../../{event_id}/build-schedule/')
+
+        grid = build_schedule_grid(event)
+        approved_games = Game.objects.filter(status='approved').order_by('name')
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event,
+            'rows': grid['rows'],
+            'role_headers': grid['role_headers'],
+            'approved_games': approved_games,
+            'title': f'Build Schedule - {event.name}',
+        }
+        return render(request, 'admin/eventer/event/build_schedule.html', context)
+
+    def assign_slot_view(self, request, event_id):
+        """Assign or unassign a single slot/role - inline fine-tuning from availability grid."""
+        from django_workflow_engine.executor import User
+        if request.method != 'POST':
+            return HttpResponseRedirect(f'../../{event_id}/availability/')
+        event = get_object_or_404(Event, pk=event_id)
+        slot_pk = request.POST.get('slot_pk')
+        role_slug = request.POST.get('role_slug')
+        user_id = request.POST.get('user_id', '').strip()
+        game_id = request.POST.get('game_id', '').strip()
+        try:
+            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
+            role = EventRole.objects.get(slug=role_slug)
+            game = Game.objects.get(pk=int(game_id)) if game_id else None
+            EventScheduleSlot.objects.filter(slot=slot, role=role).delete()
+            if user_id:
+                user = User.objects.get(pk=int(user_id))
+                EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                self.message_user(request, f"Assigned {user.username} to {slot.label} ({role.name}).", messages.SUCCESS)
+            else:
+                self.message_user(request, f"Cleared assignment for {slot.label} ({role.name}).", messages.INFO)
+        except Exception as e:
+            self.message_user(request, f"Error: {e}", messages.ERROR)
+        return HttpResponseRedirect(f'../../{event_id}/availability/')
+
+    def add_availability_view(self, request, event_id):
+        """
+        Dedicated page: coordinator assigns a user to a slot outside the normal signup flow.
+        GET: show form with slot/role pre-filled and user select.
+        POST: create EventInterest + EventAvailabilityInterest rows + EventScheduleSlot.
+        """
+        from django import forms as django_forms
+        from django_workflow_engine.executor import User
+
+        event = get_object_or_404(Event, pk=event_id)
+        slot_pk = request.POST.get('slot_pk') or request.GET.get('slot')
+        role_slug = request.POST.get('role_slug') or request.GET.get('role')
+        override = (request.POST.get('override') or request.GET.get('override')) == '1'
+        slot = get_object_or_404(EventSignupSlot, pk=slot_pk, event=event)
+        role = get_object_or_404(EventRole, slug=role_slug)
+
+        class AddAvailabilityForm(django_forms.Form):
+            user = django_forms.ModelChoiceField(
+                queryset=User.objects.all().order_by('username'),
+                widget=django_forms.Select(attrs={'style': 'width:100%'}),
+                empty_label='-- Select user --',
+            )
+
+        errors = None
+        if request.method == 'POST':
+            form = AddAvailabilityForm(request.POST)
+            if form.is_valid():
+                try:
+                    _save_coordinator_assignment(event, slot, role, form.cleaned_data['user'])
+                    action = "Override assigned" if override else "Added signup and assigned"
+                    self.message_user(
+                        request,
+                        f"{action} {form.cleaned_data['user'].username} to {slot.label} ({role.name}).",
+                        messages.SUCCESS,
+                    )
+                    return HttpResponseRedirect(f'../../{event_id}/availability/')
+                except Exception as e:
+                    errors = str(e)
+        else:
+            form = AddAvailabilityForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'event': event, 'slot': slot, 'role': role,
+            'override': override, 'form': form, 'errors': errors,
+            'title': f'{"Override Assign" if override else "Add Signup & Assign"} - {slot.label} ({role.name})',
+        }
+        return render(request, 'admin/eventer/event/add_availability.html', context)
+
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
     def response_add(self, request, obj, post_url_continue=None):
@@ -195,12 +408,12 @@ class EventSignupSlotAdmin(admin.ModelAdmin):
     @admin.display(description='Start (Local)', ordering='start')
     def start_local(self, obj):
         tz = zoneinfo.ZoneInfo(obj.event.timezone)
-        return obj.start.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
+        return obj.start.astimezone(tz).strftime(LOCAL_TIME_FMT)
 
     @admin.display(description='Stop (Local)', ordering='stop')
     def stop_local(self, obj):
         tz = zoneinfo.ZoneInfo(obj.event.timezone)
-        return obj.stop.astimezone(tz).strftime('%a %b %-d %-I%p %Z')
+        return obj.stop.astimezone(tz).strftime(LOCAL_TIME_FMT)
 
     @admin.display(description='Start (UTC)', ordering='start')
     def start_utc(self, obj):
@@ -209,6 +422,22 @@ class EventSignupSlotAdmin(admin.ModelAdmin):
     @admin.display(description='Stop (UTC)', ordering='stop')
     def stop_utc(self, obj):
         return obj.stop
+
+
+@admin.register(EventScheduleSlot)
+class EventScheduleSlotAdmin(admin.ModelAdmin):
+    list_display = ['event', 'role', 'slot_label', 'slot_start_local', 'user']
+    list_filter = ['event', 'role']
+    raw_id_fields = ['user']
+
+    @admin.display(description='Slot', ordering='slot__start')
+    def slot_label(self, obj):
+        return obj.slot.label
+
+    @admin.display(description='Start (Local)', ordering='slot__start')
+    def slot_start_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.slot.start.astimezone(tz).strftime(LOCAL_TIME_FMT)
 
 
 @admin.register(Game)

@@ -1,0 +1,149 @@
+{% extends "ff/base.html" %}
+{% load fftz %}
+
+{% block title %}Coordinator Schedule - {{ event.name }}{% endblock %}
+
+{% block body %}
+<div class="row mt-4">
+  <div class="col-lg-12">
+
+    <h2>{{ event.name }} - Coordinator Schedule</h2>
+    <p>
+      <a href="{% url 'eventer-event-detail' event_slug=event.slug %}">&larr; Back to event</a>
+      {% if user.is_staff %}
+      &nbsp;|&nbsp;
+      <a href="{% url 'admin:eventer_event_availability_summary' event.pk %}">Availability Summary</a>
+      &nbsp;|&nbsp;
+      <a href="{% url 'admin:eventer_event_build_schedule' event.pk %}">Build Schedule</a>
+      {% endif %}
+    </p>
+
+    {% if not rows %}
+    <p class="text-muted">No assignments have been made yet.</p>
+    {% else %}
+
+    <style>
+      .coord-grid { border-collapse: collapse; font-size: 0.85em; width: 100%; }
+      .coord-grid th, .coord-grid td { border: 1px solid #555; padding: 4px 8px; vertical-align: middle; }
+      .coord-grid th { text-align: center; position: sticky; top: 0; z-index: 2; }
+      .hour-col { white-space: nowrap; font-weight: bold; color: #aaa; background: #1e2a30; text-align: right; width: 5em; }
+      .day-label { font-weight: bold; padding: 2px 4px; margin: -4px -8px 0 -8px; font-size: 0.85em; color: white; background: #2c4a5a; display: block; }
+      .slot-cell { vertical-align: middle; text-align: center; }
+      .slot-cell.alt-slot { filter: brightness(0.85); }
+      .empty-cell { background: #1a2228; }
+      .assigned-name { font-weight: 600; }
+      .unassigned { color: #555; font-style: italic; font-size: 0.85em; }
+      .cmd-cell { vertical-align: middle; font-size: 0.8em; }
+      .cmd-cell.alt-slot { filter: brightness(0.85); }
+      .cmd-text {
+        display: block; white-space: nowrap; cursor: pointer;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+        color: #ddd;
+        padding: 2px 6px; border-radius: 3px; font-family: monospace;
+      }
+      .cmd-text:hover { background: rgba(255,255,255,0.18); }
+      .cmd-text.copied { background: rgba(100,200,100,0.2); border-color: rgba(100,200,100,0.4); }
+    </style>
+
+    <div style="overflow-x: auto;">
+    <table class="coord-grid">
+      <thead>
+        <tr>
+          <th style="background:#2c4a5a;color:white;">Hour</th>
+          {# Streamer + command columns first #}
+          {% for role in role_headers %}{% if role.label == 'Streamer' %}
+          <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
+          {% endif %}{% endfor %}
+          <th style="background-color:{{ streamer_color }};color:white;">Game</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Title Command</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Game Command</th>
+          <th style="background-color:{{ streamer_color }};color:white;">Donate Command</th>
+          {# Remaining role columns #}
+          {% for role in role_headers %}{% if role.label != 'Streamer' %}
+          <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
+          {% endif %}{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="hour-col">
+            {% if row.is_day_start %}<span class="day-label">{{ row.day }}</span>{% endif %}
+            {{ row.local }}
+          </td>
+          {# Streamer cell #}
+          {% for cell in row.cells %}
+          {% if cell.role_slug == 'streamer' %}
+            {% if cell.type == 'skip' %}{# rowspan #}
+            {% elif cell.type == 'empty' %}<td class="empty-cell"></td>
+            {% else %}
+            <td class="slot-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.assigned %}<span class="assigned-name">{{ cell.assigned_display }}</span>
+              {% else %}<span class="unassigned">—</span>{% endif %}
+            </td>
+            {% endif %}
+          {% endif %}
+          {% endfor %}
+          {# Command cells (follow streamer) #}
+          {% for cell in row.cells %}
+          {% if cell.role_slug == 'streamer' %}
+            {% if cell.type == 'skip' %}{# rowspan #}
+            {% elif cell.type == 'empty' %}
+            <td class="empty-cell"></td><td class="empty-cell"></td>
+            <td class="empty-cell"></td><td class="empty-cell"></td>
+            {% else %}
+            <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.assigned and cell.assigned.game %}{{ cell.assigned.game.name }}
+              {% else %}<span class="unassigned">—</span>{% endif %}
+            </td>
+            <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.title_cmd %}<code class="cmd-text">{{ cell.title_cmd }}</code>{% endif %}
+            </td>
+            <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.game_cmd %}<code class="cmd-text">{{ cell.game_cmd }}</code>
+              {% else %}<span class="unassigned">—</span>{% endif %}
+            </td>
+            <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.donate_cmd %}<code class="cmd-text">{{ cell.donate_cmd }}</code>{% endif %}
+            </td>
+            {% endif %}
+          {% endif %}
+          {% endfor %}
+          {# Non-streamer role cells #}
+          {% for cell in row.cells %}
+          {% if cell.role_slug != 'streamer' %}
+            {% if cell.type == 'skip' %}{# rowspan #}
+            {% elif cell.type == 'empty' %}<td class="empty-cell"></td>
+            {% else %}
+            <td class="slot-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
+              {% if cell.assigned %}<span class="assigned-name">{{ cell.assigned_display }}</span>
+              {% else %}<span class="unassigned">—</span>{% endif %}
+            </td>
+            {% endif %}
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% endif %}
+
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.cmd-text').forEach(function(el) {
+    el.title = 'Click to copy';
+    el.addEventListener('click', function() {
+      var self = this;
+      navigator.clipboard.writeText(this.textContent.trim()).then(function() {
+        self.classList.add('copied');
+        setTimeout(function() { self.classList.remove('copied'); }, 800);
+      });
+    });
+  });
+</script>
+{% endblock %}

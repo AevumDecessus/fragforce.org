@@ -1,0 +1,36 @@
+{# Slot cell interior for build_schedule.html #}
+<div class="slot-label">{{ cell.slot.label }}</div>
+{% if cell.assigned %}
+<div class="assigned-badge" style="background-color:{{ cell.role_color }}">&#10003; {{ cell.assigned.user.username }}</div>
+{% endif %}
+{% if cell.available %}
+<ul class="available-list">
+  {% for user in cell.available %}
+  <li>{{ user.username }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="avail-hint">No one available</div>
+{% endif %}
+{% if cell.available %}
+<select name="assign_{{ cell.slot.pk }}_{{ cell.role_slug }}" style="width:100%;font-size:0.85em;margin-top:4px">
+  <option value="">-- Unassigned --</option>
+  {% for user in cell.available %}
+  <option value="{{ user.pk }}"
+    {% if cell.assigned and cell.assigned.user.pk == user.pk %}selected{% endif %}>
+    {{ user.username }}
+  </option>
+  {% endfor %}
+</select>
+{% endif %}
+{% if cell.role_slug == 'streamer' and approved_games %}
+<select name="game_{{ cell.slot.pk }}" style="width:100%;font-size:0.85em;margin-top:4px">
+  <option value="">-- No game --</option>
+  {% for game in approved_games %}
+  <option value="{{ game.pk }}"
+    {% if cell.assigned and cell.assigned.game and cell.assigned.game.pk == game.pk %}selected{% endif %}>
+    {{ game.name }}
+  </option>
+  {% endfor %}
+</select>
+{% endif %}

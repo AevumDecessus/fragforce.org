@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Build Schedule - {{ event.name }}{% endblock %}
+
+{% block content %}
+<h1>Build Schedule for "{{ event.name }}"</h1>
+<p>
+  <a href="{% url 'admin:eventer_event_change' event.pk %}">&larr; Back to event</a>
+  &nbsp;|&nbsp;
+  <a href="{% url 'admin:eventer_event_availability_summary' event.pk %}">Availability Summary</a>
+</p>
+<p class="help">Select one user per slot/role. Leave blank to leave unassigned. Click <strong>Save Schedule</strong> to apply all assignments at once.</p>
+
+{% if not rows %}
+<p class="help">No event periods or signup slots found.</p>
+{% else %}
+
+<form method="post">
+  {% csrf_token %}
+  <div style="margin-bottom: 1em;">
+    <input type="submit" value="Save Schedule" class="default">
+    <span style="margin-left:1em; color:#666; font-size:0.9em;">This will replace all existing assignments for this event.</span>
+  </div>
+
+  {% include "admin/eventer/event/_schedule_grid.html" with slot_cell_template="admin/eventer/event/_slot_cell_build.html" %}
+
+  <div style="margin-top: 1em;">
+    <input type="submit" value="Save Schedule" class="default" style="font-size:1em;">
+  </div>
+</form>
+{% endif %}
+
+{% endblock %}

@@ -1,15 +1,71 @@
 import re
 
-from django.contrib.auth.models import User
+from django.contrib.admin.sites import AdminSite
+from django.contrib.auth.models import User, Permission
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.urls import reverse
 
+from ffstream.admin import KeyAdmin
 from ffstream.models import Key, Stream
 from ffstream.wordlist import WORDS, generate_stream_key
 
 # Test credentials - not real secrets
 TEST_PASSWORD = 'pass'
+
+
+class KeyAdminReadonlyFieldsTest(TestCase):
+    def setUp(self):
+        self.admin = KeyAdmin(model=Key, admin_site=AdminSite())
+        self.factory = RequestFactory()
+        self.existing_key = Key.objects.create(name='test-key')
+
+    def _user_with_perms(self, *codenames):
+        user = User.objects.create_user(f'u{id(codenames)}', password='pass')
+        for codename in codenames:
+            user.user_permissions.add(Permission.objects.get(codename=codename))
+        return User.objects.get(pk=user.pk)  # refresh to clear permission cache
+
+    def _request(self, user):
+        request = self.factory.get('/')
+        request.user = user
+        return request
+
+    def test_superstream_readonly_without_permission(self):
+        request = self._request(self._user_with_perms())
+        fields = self.admin.get_readonly_fields(request, obj=self.existing_key)
+        self.assertIn('superstream', fields)
+
+    def test_livestream_readonly_without_permission(self):
+        request = self._request(self._user_with_perms())
+        fields = self.admin.get_readonly_fields(request, obj=self.existing_key)
+        self.assertIn('livestream', fields)
+
+    def test_superstream_editable_with_permission(self):
+        request = self._request(self._user_with_perms('set_key_superstream'))
+        fields = self.admin.get_readonly_fields(request, obj=self.existing_key)
+        self.assertNotIn('superstream', fields)
+
+    def test_livestream_editable_with_permission(self):
+        request = self._request(self._user_with_perms('set_key_livestream'))
+        fields = self.admin.get_readonly_fields(request, obj=self.existing_key)
+        self.assertNotIn('livestream', fields)
+
+    def test_both_editable_with_both_permissions(self):
+        request = self._request(self._user_with_perms('set_key_superstream', 'set_key_livestream'))
+        fields = self.admin.get_readonly_fields(request, obj=self.existing_key)
+        self.assertNotIn('superstream', fields)
+        self.assertNotIn('livestream', fields)
+
+    def test_stream_key_readonly_on_existing_object(self):
+        request = self._request(self._user_with_perms('set_key_superstream', 'set_key_livestream'))
+        fields = self.admin.get_readonly_fields(request, obj=self.existing_key)
+        self.assertIn('stream_key', fields)
+
+    def test_stream_key_not_readonly_on_new_object(self):
+        request = self._request(self._user_with_perms())
+        fields = self.admin.get_readonly_fields(request, obj=None)
+        self.assertNotIn('stream_key', fields)
 
 
 class MyKeysViewTest(TestCase):

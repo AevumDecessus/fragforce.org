@@ -1,6 +1,5 @@
 import zoneinfo
 from collections import defaultdict
-from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -8,15 +7,10 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.http import require_http_methods
 
 from eventer.models import Event, EventSignupSlot, EventRole, Game
+from eventer.slot_generator import _expand_to_hours
 from evtsignup.models import EventInterest, EventAvailabilityInterest, GameInterestUserEvent
 
-
-def _expand_to_hours(slot):
-    """Yield each UTC hour datetime from slot.start up to (not including) slot.stop."""
-    current = slot.start.replace(minute=0, second=0, microsecond=0)
-    while current < slot.stop:
-        yield current
-        current += timedelta(hours=1)
+SIGNUP_TEMPLATE = 'evtsignup/signup.html'
 
 
 def _group_slots_by_day(slots_qs, tz):
@@ -213,20 +207,34 @@ def signup_view(request, event_slug):
     can_signup = event.signups_open and not is_locked
     can_edit = event.edits_open and not is_locked
 
-    if is_locked:
-        return render(request, 'evtsignup/signup.html', {'event': event, 'locked': True})
-
-    if existing and not can_edit:
-        return render(request, 'evtsignup/signup.html', {
-            'event': event, 'locked': False, 'edits_closed': True, 'existing': existing,
+    if existing and (is_locked or not can_edit):
+        # Allow editing display name and fundraising URL even when full edits are disabled
+        if request.method == 'POST':
+            existing.display_name = request.POST.get('display_name', '').strip()
+            existing.fundraising_url = request.POST.get('fundraising_url', '').strip() or None
+            existing.save(update_fields=['display_name', 'fundraising_url'])
+            messages.success(request, "Your profile has been updated.")
+            return redirect('evtsignup-signup', event_slug=event_slug)
+        return render(request, SIGNUP_TEMPLATE, {
+            'event': event,
+            'locked': is_locked,
+            'profile_only': True,
+            'existing': existing,
+            'prefill': {
+                'display_name': existing.display_name,
+                'fundraising_url': existing.fundraising_url or '',
+            },
         })
+
+    if not existing and is_locked:
+        return render(request, SIGNUP_TEMPLATE, {'event': event, 'locked': True})
 
     slots = EventSignupSlot.objects.filter(event=event).prefetch_related('roles').order_by('start')
     if not slots.exists():
         can_signup = False
 
     if not existing and not can_signup:
-        return render(request, 'evtsignup/signup.html', {
+        return render(request, SIGNUP_TEMPLATE, {
             'event': event, 'locked': False, 'signups_closed': True,
         })
 
@@ -269,6 +277,13 @@ def signup_view(request, event_slug):
         selected_slot_ids = {track: set() for track in slot_qs_by_track}
         selected_game_ids = {'participant': set(), 'streamer': set()}
 
+    role_colors = {
+        'participant': participant_role.color if participant_role else '#417690',
+        'streamer': streamer_role.color if streamer_role else '#417690',
+        'moderator': moderator_role.color if moderator_role else '#417690',
+        'tech': tech_role.color if tech_role else '#417690',
+    }
+
     context = {
         'event': event,
         'existing': existing,
@@ -287,5 +302,6 @@ def signup_view(request, event_slug):
         'streamer_games': streamer_games,
         'selected_slot_ids': selected_slot_ids,
         'selected_game_ids': selected_game_ids,
+        'role_colors': role_colors,
     }
-    return render(request, 'evtsignup/signup.html', context)
+    return render(request, SIGNUP_TEMPLATE, context)

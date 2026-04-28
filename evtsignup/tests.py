@@ -82,12 +82,12 @@ class SignupViewGetTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['signups_closed'])
 
-    def test_existing_signup_edits_not_open_shows_edits_closed(self):
+    def test_existing_signup_edits_not_open_shows_profile_only(self):
         event = _make_event(signups_open=False, edits_open=False)
         EventInterest.objects.create(user=self.user, event=event, acknowledged=True)
         response = self.client.get(f'/signup/{event.slug}/')
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context['edits_closed'])
+        self.assertTrue(response.context['profile_only'])
 
     def test_open_event_renders_form(self):
         event = _make_event()

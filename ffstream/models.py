@@ -29,6 +29,12 @@ class Key(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        permissions = [
+            ('set_key_livestream', 'Can set the livestream flag on stream keys'),
+            ('set_key_superstream', 'Can set the superstream flag on stream keys'),
+        ]
+
 
 class Stream(models.Model):
     guid = models.UUIDField(default=uuid.uuid4, primary_key=True)

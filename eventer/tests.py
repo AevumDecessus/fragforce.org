@@ -519,3 +519,200 @@ class EventDetailViewTest(TestCase):
         self.client.login(username='tester', password='pass')
         response = self.client.get(f'/events/{self.event.slug}/')
         self.assertFalse(response.context['show_signup_link'])
+
+
+def _make_schedule_event():
+    """Create a test event with periods, roles, and signup slots for schedule tests."""
+    event = Event.objects.create(
+        name='Schedule Test', slug='schedule-test', description='',
+        timezone='America/New_York',
+    )
+    EventPeriod.objects.create(
+        event=event,
+        start=dt(2025, 4, 4, 12),
+        stop=dt(2025, 4, 4, 18),
+    )
+    for slug, name in [('participant', 'Participant'), ('streamer', 'Streamer'),
+                       ('moderator', 'Moderator'), ('tech-manager', 'Tech Manager')]:
+        EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': ''})
+    participant_role = EventRole.objects.get(slug='participant')
+    slot = EventSignupSlot.objects.create(
+        event=event,
+        start=dt(2025, 4, 4, 12),
+        stop=dt(2025, 4, 4, 15),
+        label='Friday 8am - 11am',
+    )
+    slot.roles.set([participant_role])
+    return event, slot, participant_role
+
+
+class AvailabilitySummaryViewTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+        self.event, self.slot, self.role = _make_schedule_event()
+
+    def _url(self):
+        return f'/admin/eventer/event/{self.event.pk}/availability/'
+
+    def test_returns_200(self):
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+
+    def test_shows_no_data_message_when_no_periods(self):
+        event = Event.objects.create(name='No Period', slug='no-period', description='')
+        response = self.client.get(f'/admin/eventer/event/{event.pk}/availability/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['rows'], [])
+
+    def test_grid_has_correct_number_of_rows(self):
+        response = self.client.get(self._url())
+        # 6 hours (12:00-18:00 UTC)
+        self.assertEqual(len(response.context['rows']), 6)
+
+    def test_role_headers_present(self):
+        response = self.client.get(self._url())
+        labels = [h['label'] for h in response.context['role_headers']]
+        self.assertIn('Participant', labels)
+        self.assertIn('Streamer', labels)
+
+
+class BuildScheduleViewTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+        self.event, self.slot, self.role = _make_schedule_event()
+
+    def _url(self):
+        return f'/admin/eventer/event/{self.event.pk}/build-schedule/'
+
+    def test_get_returns_200(self):
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+
+    def test_post_creates_schedule_slots(self):
+        from eventer.models import EventScheduleSlot
+        user = User.objects.create_user('streamer', 'streamer@example.com', 'pass')
+        response = self.client.post(self._url(), {
+            f'assign_{self.slot.pk}_participant': str(user.pk),
+        })
+        self.assertRedirects(response, self._url(), fetch_redirect_response=False)
+        self.assertTrue(EventScheduleSlot.objects.filter(
+            event=self.event, slot=self.slot, role=self.role, user=user
+        ).exists())
+
+    def test_post_replaces_existing_assignments(self):
+        from eventer.models import EventScheduleSlot
+        user1 = User.objects.create_user('user1', 'u1@example.com', 'pass')
+        user2 = User.objects.create_user('user2', 'u2@example.com', 'pass')
+        EventScheduleSlot.objects.create(event=self.event, slot=self.slot, role=self.role, user=user1)
+        self.client.post(self._url(), {
+            f'assign_{self.slot.pk}_participant': str(user2.pk),
+        })
+        assignment = EventScheduleSlot.objects.get(event=self.event, slot=self.slot, role=self.role)
+        self.assertEqual(assignment.user, user2)
+
+    def test_post_clears_unsubmitted_slots(self):
+        from eventer.models import EventScheduleSlot
+        user = User.objects.create_user('user1', 'u1@example.com', 'pass')
+        EventScheduleSlot.objects.create(event=self.event, slot=self.slot, role=self.role, user=user)
+        # POST with no assignments - should clear all
+        self.client.post(self._url(), {})
+        self.assertEqual(EventScheduleSlot.objects.filter(event=self.event).count(), 0)
+
+
+class AssignSlotViewTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+        self.event, self.slot, self.role = _make_schedule_event()
+        self.user = User.objects.create_user('streamer', 'streamer@example.com', 'pass')
+
+    def _url(self):
+        return f'/admin/eventer/event/{self.event.pk}/assign-slot/'
+
+    def test_assigns_user_to_slot(self):
+        from eventer.models import EventScheduleSlot
+        self.client.post(self._url(), {
+            'slot_pk': self.slot.pk,
+            'role_slug': 'participant',
+            'user_id': self.user.pk,
+        })
+        self.assertTrue(EventScheduleSlot.objects.filter(
+            slot=self.slot, role=self.role, user=self.user
+        ).exists())
+
+    def test_clears_assignment_when_no_user(self):
+        from eventer.models import EventScheduleSlot
+        EventScheduleSlot.objects.create(event=self.event, slot=self.slot, role=self.role, user=self.user)
+        self.client.post(self._url(), {
+            'slot_pk': self.slot.pk,
+            'role_slug': 'participant',
+            'user_id': '',
+        })
+        self.assertFalse(EventScheduleSlot.objects.filter(slot=self.slot, role=self.role).exists())
+
+    def test_get_redirects_to_availability(self):
+        response = self.client.get(self._url())
+        self.assertRedirects(response,
+            f'/admin/eventer/event/{self.event.pk}/availability/',
+            fetch_redirect_response=False)
+
+
+class AddAvailabilityViewTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
+        self.client.login(username='admin', password='pass')
+        self.event, self.slot, self.role = _make_schedule_event()
+        self.user = User.objects.create_user('newcomer', 'newcomer@example.com', 'pass')
+
+    def _url(self):
+        return f'/admin/eventer/event/{self.event.pk}/add-availability/'
+
+    def test_get_renders_form(self):
+        response = self.client.get(
+            self._url(), {'slot': self.slot.pk, 'role': 'participant'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Friday 8am - 11am')
+
+    def test_post_creates_event_interest(self):
+        from evtsignup.models import EventInterest
+        self.client.post(self._url(), {
+            'slot_pk': self.slot.pk,
+            'role_slug': 'participant',
+            'user': self.user.pk,
+        })
+        self.assertTrue(EventInterest.objects.filter(user=self.user, event=self.event).exists())
+
+    def test_post_creates_availability_rows(self):
+        from evtsignup.models import EventAvailabilityInterest, EventInterest
+        self.client.post(self._url(), {
+            'slot_pk': self.slot.pk,
+            'role_slug': 'participant',
+            'user': self.user.pk,
+        })
+        interest = EventInterest.objects.get(user=self.user, event=self.event)
+        hours = EventAvailabilityInterest.objects.filter(event_interest=interest, as_participant=True)
+        self.assertEqual(hours.count(), 3)  # 12:00, 13:00, 14:00 UTC
+
+    def test_post_creates_schedule_slot(self):
+        from eventer.models import EventScheduleSlot
+        self.client.post(self._url(), {
+            'slot_pk': self.slot.pk,
+            'role_slug': 'participant',
+            'user': self.user.pk,
+        })
+        self.assertTrue(EventScheduleSlot.objects.filter(
+            event=self.event, slot=self.slot, role=self.role, user=self.user
+        ).exists())
+
+    def test_post_redirects_to_availability(self):
+        response = self.client.post(self._url(), {
+            'slot_pk': self.slot.pk,
+            'role_slug': 'participant',
+            'user': self.user.pk,
+        })
+        self.assertRedirects(response,
+            f'/admin/eventer/event/{self.event.pk}/availability/',
+            fetch_redirect_response=False)
