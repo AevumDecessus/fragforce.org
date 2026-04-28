@@ -1,5 +1,5 @@
 {% extends "ff/base.html" %}
-{% load fftz %}
+{% load fftz markdownify %}
 
 {% block title %}{{ event.name }} - Fragforce{% endblock %}
 
@@ -12,7 +12,7 @@
     <div class="card mb-4">
       <div class="card-body">
         {% if event.description %}
-        <p>{{ event.description }}</p>
+        {{ event.description|markdownify }}
         {% endif %}
         {% if event.start %}
         <p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>
@@ -27,10 +27,22 @@
     <a href="{% url 'evtsignup-signup' event_slug=event.slug %}" class="btn btn-primary btn-lg mb-4">Sign Up</a>
     {% elif show_edit_link %}
     <a href="{% url 'evtsignup-signup' event_slug=event.slug %}" class="btn btn-outline-primary btn-lg mb-4">Edit My Signup</a>
+    {% elif show_profile_link %}
+    <a href="{% url 'evtsignup-signup' event_slug=event.slug %}" class="btn btn-outline-primary btn-lg mb-4">Edit Profile</a>
     {% elif not user.is_authenticated %}
     <p class="text-muted">
       <a href="{% url 'social:begin' 'discord' %}?next={% url 'evtsignup-signup' event_slug=event.slug %}">Log in with Discord</a> to sign up.
     </p>
+    {% endif %}
+
+    {% if event.schedule_published %}
+    <a href="{% url 'eventer-public-schedule' event_slug=event.slug %}" class="btn btn-outline-secondary btn-lg mb-4">View Schedule</a>
+    {% elif perms.eventer.view_coordinator_schedule %}
+    <a href="{% url 'eventer-public-schedule' event_slug=event.slug %}" class="btn btn-outline-secondary btn-lg mb-4">Preview Schedule</a>
+    {% endif %}
+
+    {% if perms.eventer.view_coordinator_schedule %}
+    <a href="{% url 'eventer-coordinator-schedule' event_slug=event.slug %}" class="btn btn-outline-secondary btn-lg mb-4">Coordinator Schedule</a>
     {% endif %}
 
     <p><a href="{% url 'eventer-event-list' %}">&larr; All events</a></p>
