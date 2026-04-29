@@ -121,17 +121,12 @@ def sync_game_from_igdb(igdb_id):
     Returns (game, created).
     """
     from eventer.models import Game
-    from django.utils.text import slugify
 
     data = fetch_igdb_game(igdb_id)
     if not data:
         raise ValueError(f'IGDB game {igdb_id} not found')
 
     defaults = parse_igdb_game(data)
-
-    # Generate a slug from the name if we don't have an IGDB slug
-    if not defaults['igdb_slug']:
-        defaults['igdb_slug'] = slugify(defaults['name'])
 
     game, created = Game.objects.update_or_create(
         igdb_id=igdb_id,

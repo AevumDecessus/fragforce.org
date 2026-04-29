@@ -743,24 +743,19 @@ class AddAvailabilityViewTest(TestCase):
 
 
 class GameCoverUrlTest(TestCase):
-    def _make_game(self, **kwargs):
-        defaults = dict(name='Test Game', slug='test-game', igdb_id=1)
-        defaults.update(kwargs)
-        return type('Game', (), defaults)()
-
     def test_cover_url_returns_big_url(self):
         from eventer.models import Game
-        game = Game(name='Test', slug='test', igdb_id=1, igdb_cover_hash='abc123')
+        game = Game(name='Test', igdb_id=1, igdb_cover_hash='abc123')
         self.assertEqual(game.cover_url, '//images.igdb.com/igdb/image/upload/t_cover_big/abc123.jpg')
 
     def test_cover_url_thumb_returns_thumb_url(self):
         from eventer.models import Game
-        game = Game(name='Test', slug='test', igdb_id=1, igdb_cover_hash='abc123')
+        game = Game(name='Test', igdb_id=1, igdb_cover_hash='abc123')
         self.assertEqual(game.cover_url_thumb, '//images.igdb.com/igdb/image/upload/t_thumb/abc123.jpg')
 
     def test_cover_url_none_when_no_hash(self):
         from eventer.models import Game
-        game = Game(name='Test', slug='test', igdb_id=1, igdb_cover_hash=None)
+        game = Game(name='Test', igdb_id=1, igdb_cover_hash=None)
         self.assertIsNone(game.cover_url)
         self.assertIsNone(game.cover_url_thumb)
 
@@ -834,7 +829,7 @@ class SyncGameFromIgdbTest(TestCase):
         from unittest.mock import patch
         from eventer.igdb import sync_game_from_igdb
         from eventer.models import Game
-        Game.objects.create(name='Old Name', slug='mock-game', igdb_id=9999)
+        Game.objects.create(name='Old Name', igdb_id=9999)
         updated_data = {**self._mock_data(), 'name': 'Updated Name'}
         with patch('eventer.igdb.fetch_igdb_game', return_value=updated_data):
             game, created = sync_game_from_igdb(9999)
