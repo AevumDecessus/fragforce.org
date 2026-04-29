@@ -132,6 +132,13 @@ Copy `env.sample` to `.env` to get started. All optional variables have sensible
 | `TILTIFY_TIMEOUT` | `60` | API request timeout (seconds) |
 | `TILTIFY_APP_OWNER` | - | Tiltify app owner slug |
 
+### IGDB
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IGDB_CLIENT_ID` | - | Twitch app client ID (create at https://dev.twitch.tv/console/apps) |
+| `IGDB_CLIENT_SECRET` | - | Twitch app client secret |
+
 ### Twitch Bot Integration
 
 | Variable | Default | Description |
