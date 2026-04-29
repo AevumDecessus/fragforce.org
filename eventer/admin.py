@@ -186,6 +186,12 @@ class EventAdmin(admin.ModelAdmin):
             path('<int:event_id>/add-availability/',
                  self.admin_site.admin_view(self.add_availability_view),
                  name='eventer_event_add_availability'),
+            path('<int:event_id>/assign-multi-slot/',
+                 self.admin_site.admin_view(self.assign_multi_slot_view),
+                 name='eventer_event_assign_multi_slot'),
+            path('<int:event_id>/remove-multi-slot/',
+                 self.admin_site.admin_view(self.remove_multi_slot_view),
+                 name='eventer_event_remove_multi_slot'),
         ]
         return custom + urls
 
@@ -267,6 +273,7 @@ class EventAdmin(admin.ModelAdmin):
             'event': event,
             'rows': grid['rows'],
             'role_headers': grid['role_headers'],
+            'multi_role_headers': grid['multi_role_headers'],
             'approved_games': approved_games,
             'title': f'Availability Summary - {event.name}',
         }
@@ -278,24 +285,34 @@ class EventAdmin(admin.ModelAdmin):
         event = get_object_or_404(Event, pk=event_id)
 
         if request.method == 'POST':
+            from eventer.schedule import MULTI_ASSIGNMENT_ROLES
+            multi_slugs = {slug for slug, _, _ in MULTI_ASSIGNMENT_ROLES}
             with transaction.atomic():
                 EventScheduleAssignment.objects.filter(event=event).delete()
+                EventScheduleMultiAssignment.objects.filter(event=event).delete()
                 created = 0
-                for key, user_id in request.POST.items():
-                    if not key.startswith('assign_') or not user_id:
+                seen_keys = set()
+                for key in request.POST:
+                    if not key.startswith('assign_') or key in seen_keys:
                         continue
-                    # key format: assign_{slot_pk}_{role_slug}
+                    seen_keys.add(key)
                     _, slot_pk, role_slug = key.split('_', 2)
-                    try:
-                        slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
-                        role = EventRole.objects.get(slug=role_slug)
-                        user = User.objects.get(pk=int(user_id))
-                        game_id = request.POST.get(f'game_{slot_pk}') or None
-                        game = Game.objects.get(pk=int(game_id)) if game_id else None
-                        EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
-                        created += 1
-                    except Exception:
-                        continue
+                    for user_id in request.POST.getlist(key):
+                        if not user_id:
+                            continue
+                        try:
+                            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
+                            role = EventRole.objects.get(slug=role_slug)
+                            user = User.objects.get(pk=int(user_id))
+                            if role_slug in multi_slugs:
+                                EventScheduleMultiAssignment.objects.create(event=event, slot=slot, role=role, user=user)
+                            else:
+                                game_id = request.POST.get(f'game_{slot_pk}') or None
+                                game = Game.objects.get(pk=int(game_id)) if game_id else None
+                                EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                            created += 1
+                        except Exception:
+                            continue
             self.message_user(request, f"Schedule saved: {created} assignment(s).", messages.SUCCESS)
             return HttpResponseRedirect(f'../../{event_id}/build-schedule/')
 
@@ -306,6 +323,7 @@ class EventAdmin(admin.ModelAdmin):
             'event': event,
             'rows': grid['rows'],
             'role_headers': grid['role_headers'],
+            'multi_role_headers': grid['multi_role_headers'],
             'approved_games': approved_games,
             'title': f'Build Schedule - {event.name}',
         }
@@ -384,6 +402,44 @@ class EventAdmin(admin.ModelAdmin):
             'title': f'{"Override Assign" if override else "Add Signup & Assign"} - {slot.label} ({role.name})',
         }
         return render(request, 'admin/eventer/event/add_availability.html', context)
+
+    def assign_multi_slot_view(self, request, event_id):
+        """Add a user to a multi-assignment slot (e.g. participant)."""
+        from django_workflow_engine.executor import User
+        if request.method != 'POST':
+            return HttpResponseRedirect(f'../../{event_id}/availability/')
+        event = get_object_or_404(Event, pk=event_id)
+        slot_pk = request.POST.get('slot_pk')
+        role_slug = request.POST.get('role_slug')
+        user_id = request.POST.get('user_id', '').strip()
+        try:
+            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
+            role = EventRole.objects.get(slug=role_slug)
+            user = User.objects.get(pk=int(user_id))
+            EventScheduleMultiAssignment.objects.get_or_create(event=event, slot=slot, role=role, user=user)
+            self.message_user(request, f"Added {user.username} to {slot.label} ({role.name}).", messages.SUCCESS)
+        except Exception as e:
+            self.message_user(request, f"Error: {e}", messages.ERROR)
+        return HttpResponseRedirect(f'../../{event_id}/availability/')
+
+    def remove_multi_slot_view(self, request, event_id):
+        """Remove a user from a multi-assignment slot."""
+        from django_workflow_engine.executor import User
+        if request.method != 'POST':
+            return HttpResponseRedirect(f'../../{event_id}/availability/')
+        event = get_object_or_404(Event, pk=event_id)
+        slot_pk = request.POST.get('slot_pk')
+        role_slug = request.POST.get('role_slug')
+        user_id = request.POST.get('user_id', '').strip()
+        try:
+            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
+            role = EventRole.objects.get(slug=role_slug)
+            user = User.objects.get(pk=int(user_id))
+            EventScheduleMultiAssignment.objects.filter(event=event, slot=slot, role=role, user=user).delete()
+            self.message_user(request, f"Removed {user.username} from {slot.label} ({role.name}).", messages.INFO)
+        except Exception as e:
+            self.message_user(request, f"Error: {e}", messages.ERROR)
+        return HttpResponseRedirect(f'../../{event_id}/availability/')
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):

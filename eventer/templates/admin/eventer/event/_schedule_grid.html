@@ -37,6 +37,9 @@
       {% for role in role_headers %}
       <th style="background-color:{{ role.color }}">{{ role.label }}</th>
       {% endfor %}
+      {% for role in multi_role_headers %}
+      <th style="background-color:{{ role.color }};border-left:3px solid #fff;">{{ role.label }}</th>
+      {% endfor %}
     </tr>
   </thead>
   <tbody>
@@ -55,6 +58,18 @@
         <td class="slot-cell {% if cell.assigned %}assigned{% elif cell.available %}has-available{% else %}no-available{% endif %} {% if cell.alt %}alt-slot{% endif %}"
             rowspan="{{ cell.rowspan }}">
           {% include slot_cell_template %}
+        </td>
+      {% endif %}
+      {% endfor %}
+      {% for mcell in row.multi_cells_list %}
+      {% if mcell.type == 'skip' %}
+        {# covered by rowspan above #}
+      {% elif mcell.type == 'empty' %}
+        <td class="empty-cell" style="border-left:3px solid #ccc;"></td>
+      {% else %}
+        <td class="slot-cell {% if mcell.assigned %}assigned{% elif mcell.available %}has-available{% else %}no-available{% endif %} {% if mcell.alt %}alt-slot{% endif %}"
+            rowspan="{{ mcell.rowspan }}" style="border-left:3px solid #ccc;">
+          {% include multi_cell_template|default:"admin/eventer/event/_slot_cell_multi.html" %}
         </td>
       {% endif %}
       {% endfor %}

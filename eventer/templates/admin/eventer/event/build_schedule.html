@@ -23,7 +23,7 @@
     <span style="margin-left:1em; color:#666; font-size:0.9em;">This will replace all existing assignments for this event.</span>
   </div>
 
-  {% include "admin/eventer/event/_schedule_grid.html" with slot_cell_template="admin/eventer/event/_slot_cell_build.html" %}
+  {% include "admin/eventer/event/_schedule_grid.html" with slot_cell_template="admin/eventer/event/_slot_cell_build.html" multi_cell_template="admin/eventer/event/_slot_cell_multi_build.html" %}
 
   <div style="margin-top: 1em;">
     <input type="submit" value="Save Schedule" class="default" style="font-size:1em;">
