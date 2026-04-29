@@ -740,3 +740,110 @@ class AddAvailabilityViewTest(TestCase):
         self.assertRedirects(response,
             f'/admin/eventer/event/{self.event.pk}/availability/',
             fetch_redirect_response=False)
+
+
+class GameCoverUrlTest(TestCase):
+    def _make_game(self, **kwargs):
+        defaults = dict(name='Test Game', slug='test-game', igdb_id=1)
+        defaults.update(kwargs)
+        return type('Game', (), defaults)()
+
+    def test_cover_url_returns_big_url(self):
+        from eventer.models import Game
+        game = Game(name='Test', slug='test', igdb_id=1, igdb_cover_hash='abc123')
+        self.assertEqual(game.cover_url, '//images.igdb.com/igdb/image/upload/t_cover_big/abc123.jpg')
+
+    def test_cover_url_thumb_returns_thumb_url(self):
+        from eventer.models import Game
+        game = Game(name='Test', slug='test', igdb_id=1, igdb_cover_hash='abc123')
+        self.assertEqual(game.cover_url_thumb, '//images.igdb.com/igdb/image/upload/t_thumb/abc123.jpg')
+
+    def test_cover_url_none_when_no_hash(self):
+        from eventer.models import Game
+        game = Game(name='Test', slug='test', igdb_id=1, igdb_cover_hash=None)
+        self.assertIsNone(game.cover_url)
+        self.assertIsNone(game.cover_url_thumb)
+
+
+class ParseIgdbGameTest(TestCase):
+    def test_parses_basic_fields(self):
+        from eventer.igdb import parse_igdb_game
+        data = {
+            'id': 1234,
+            'name': 'Going Medieval',
+            'slug': 'going-medieval',
+            'url': 'https://www.igdb.com/games/going-medieval',
+            'summary': 'A colony builder.',
+            'cover': {'image_id': 'hash001'},
+            'category': 0,
+        }
+        result = parse_igdb_game(data)
+        self.assertEqual(result['name'], 'Going Medieval')
+        self.assertEqual(result['igdb_slug'], 'going-medieval')
+        self.assertEqual(result['igdb_url'], 'https://www.igdb.com/games/going-medieval')
+        self.assertEqual(result['igdb_cover_hash'], 'hash001')
+        self.assertEqual(result['summary'], 'A colony builder.')
+        self.assertEqual(result['igdb_category'], 0)
+        self.assertIsNone(result['first_release_date'])
+        self.assertIsNone(result['multiplayer_max'])
+
+    def test_parses_release_date(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'first_release_date': 1609459200}  # 2021-01-01 UTC
+        result = parse_igdb_game(data)
+        from datetime import date
+        self.assertEqual(result['first_release_date'], date(2021, 1, 1))
+
+    def test_handles_missing_cover(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X'}
+        result = parse_igdb_game(data)
+        self.assertIsNone(result['igdb_cover_hash'])
+
+    def test_handles_empty_slug(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'slug': ''}
+        result = parse_igdb_game(data)
+        self.assertIsNone(result['igdb_slug'])
+
+
+class SyncGameFromIgdbTest(TestCase):
+    def _mock_data(self):
+        return {
+            'id': 9999,
+            'name': 'Mock Game',
+            'slug': 'mock-game',
+            'url': 'https://www.igdb.com/games/mock-game',
+            'summary': 'A mock game.',
+            'cover': {'image_id': 'mockhash'},
+            'category': 0,
+            'first_release_date': 1609459200,
+        }
+
+    def test_creates_game(self):
+        from unittest.mock import patch
+        from eventer.igdb import sync_game_from_igdb
+        with patch('eventer.igdb.fetch_igdb_game', return_value=self._mock_data()):
+            game, created = sync_game_from_igdb(9999)
+        self.assertTrue(created)
+        self.assertEqual(game.name, 'Mock Game')
+        self.assertEqual(game.igdb_id, 9999)
+        self.assertEqual(game.igdb_cover_hash, 'mockhash')
+
+    def test_updates_existing_game(self):
+        from unittest.mock import patch
+        from eventer.igdb import sync_game_from_igdb
+        from eventer.models import Game
+        Game.objects.create(name='Old Name', slug='mock-game', igdb_id=9999)
+        updated_data = {**self._mock_data(), 'name': 'Updated Name'}
+        with patch('eventer.igdb.fetch_igdb_game', return_value=updated_data):
+            game, created = sync_game_from_igdb(9999)
+        self.assertFalse(created)
+        self.assertEqual(game.name, 'Updated Name')
+
+    def test_raises_on_not_found(self):
+        from unittest.mock import patch
+        from eventer.igdb import sync_game_from_igdb
+        with patch('eventer.igdb.fetch_igdb_game', return_value=None):
+            with self.assertRaises(ValueError):
+                sync_game_from_igdb(9999)
