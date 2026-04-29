@@ -1,12 +1,3 @@
-{# Shared schedule grid: styles + table.
-   Required context variables:
-     rows         - list of row dicts (same structure as availability_summary / build_schedule views)
-     role_headers - list of role dicts with .color and .label
-     slot_cell_template - path to the partial that renders the interior of a slot cell
-                          (available as a context variable; use with-syntax when including this file)
-   The slot_cell_template partial receives the same context, plus `cell` for the current cell.
-#}
-
 <style>
   .avail-grid { border-collapse: collapse; font-size: 0.85em; width: 100%; }
   .avail-grid th, .avail-grid td { border: 1px solid #ccc; padding: 4px 8px; vertical-align: top; }
