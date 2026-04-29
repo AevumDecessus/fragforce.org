@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_safe
 
-from eventer.models import Event, EventScheduleSlot
+from eventer.models import Event, EventScheduleAssignment
 from eventer.schedule import build_schedule_grid, generate_twitch_commands
 
 
@@ -125,7 +125,7 @@ def public_schedule_view(request, event_slug):
     tz = zoneinfo.ZoneInfo(event.timezone)
 
     streamer_assignments = list(
-        EventScheduleSlot.objects
+        EventScheduleAssignment.objects
         .filter(event=event, role__slug='streamer')
         .select_related('slot', 'role', 'user', 'game')
         .order_by('slot__start')
@@ -140,7 +140,7 @@ def public_schedule_view(request, event_slug):
     my_slots = []
     if request.user.is_authenticated:
         my_slots = list(
-            EventScheduleSlot.objects
+            EventScheduleAssignment.objects
             .filter(event=event, user=request.user)
             .select_related('slot', 'role')
             .order_by('slot__start')
@@ -176,6 +176,12 @@ def coordinator_schedule_view(request, event_slug):
         for cell in row['cells']
         if cell['type'] == 'slot' and cell.get('assigned')
         for a in [cell['assigned']]
+    } | {
+        a.user_id
+        for row in grid['rows']
+        for mcell in row.get('multi_cells_list', [])
+        if mcell.get('type') == 'slot'
+        for a in mcell.get('assigned', [])
     }
     display_names = {}
     if user_ids:
@@ -197,6 +203,13 @@ def coordinator_schedule_view(request, event_slug):
                     cell['game_cmd'] = game_cmd
                     cell['donate_cmd'] = donate_cmd
 
+    # Annotate multi-assignment cells with display names
+    for row in grid['rows']:
+        for mcell in row.get('multi_cells_list', []):
+            if mcell.get('type') == 'slot' and mcell.get('assigned'):
+                for a in mcell['assigned']:
+                    a.display_name = display_names.get(a.user_id, a.user.username)
+
     streamer_color = next(
         (r['color'] for r in grid['role_headers'] if r['label'] == 'Streamer'),
         '#417690'
@@ -205,6 +218,7 @@ def coordinator_schedule_view(request, event_slug):
         'event': event,
         'rows': grid['rows'],
         'role_headers': grid['role_headers'],
+        'multi_role_headers': grid['multi_role_headers'],
         'streamer_color': streamer_color,
     }
     return render(request, 'eventer/coordinator_schedule.html', context)

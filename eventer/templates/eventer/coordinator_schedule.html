@@ -59,10 +59,14 @@
           <th style="background-color:{{ streamer_color }};color:white;">Title Command</th>
           <th style="background-color:{{ streamer_color }};color:white;">Game Command</th>
           <th style="background-color:{{ streamer_color }};color:white;">Donate Command</th>
-          {# Remaining role columns #}
+          {# Remaining single-assignment role columns #}
           {% for role in role_headers %}{% if role.label != 'Streamer' %}
           <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
           {% endif %}{% endfor %}
+          {# Multi-assignment role columns #}
+          {% for role in multi_role_headers %}
+          <th style="background-color:{{ role.color }};color:white;border-left:3px solid #fff;">{{ role.label }}</th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -110,7 +114,7 @@
             {% endif %}
           {% endif %}
           {% endfor %}
-          {# Non-streamer role cells #}
+          {# Non-streamer single-assignment role cells #}
           {% for cell in row.cells %}
           {% if cell.role_slug != 'streamer' %}
             {% if cell.type == 'skip' %}{# rowspan #}
@@ -121,6 +125,19 @@
               {% else %}<span class="unassigned">—</span>{% endif %}
             </td>
             {% endif %}
+          {% endif %}
+          {% endfor %}
+          {# Multi-assignment role cells (Participant) #}
+          {% for mcell in row.multi_cells_list %}
+          {% if mcell.type == 'skip' %}{# rowspan #}
+          {% elif mcell.type == 'empty' %}
+            <td class="empty-cell" style="border-left:3px solid #555;"></td>
+          {% else %}
+            <td class="slot-cell {% if mcell.alt %}alt-slot{% endif %}" rowspan="{{ mcell.rowspan }}" style="border-left:3px solid #555;">
+              {% if mcell.assigned %}
+                {% for a in mcell.assigned %}<span class="assigned-name">{{ a.display_name }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}
+              {% else %}<span class="unassigned">—</span>{% endif %}
+            </td>
           {% endif %}
           {% endfor %}
         </tr>

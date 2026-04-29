@@ -222,10 +222,10 @@ class EventSignupSlot(models.Model):
         return f'{self.event} - {self.label}'
 
 
-class EventScheduleSlot(models.Model):
-    """ A confirmed schedule assignment - one user per role per signup slot """
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='schedule_slots')
-    slot = models.ForeignKey(EventSignupSlot, on_delete=models.CASCADE, related_name='schedule_assignments')
+class EventScheduleAssignment(models.Model):
+    """ A confirmed schedule assignment - one user per role per signup slot (singular roles only) """
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='schedule_assignments')
+    slot = models.ForeignKey(EventSignupSlot, on_delete=models.CASCADE, related_name='schedule_slot_assignments')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.ForeignKey(EventRole, on_delete=models.CASCADE)
     game = models.ForeignKey('Game', on_delete=models.SET_NULL, null=True, blank=True,
@@ -233,6 +233,21 @@ class EventScheduleSlot(models.Model):
 
     class Meta:
         unique_together = [['slot', 'role']]
+        ordering = ['slot__start', 'role__name']
+
+    def __str__(self):
+        return f'{self.event} - {self.slot.label} - {self.role} - {self.user}'
+
+
+class EventScheduleMultiAssignment(models.Model):
+    """ A confirmed multi-user assignment for roles that allow multiple assignees per slot (e.g. Participant) """
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='schedule_multi_assignments')
+    slot = models.ForeignKey(EventSignupSlot, on_delete=models.CASCADE, related_name='multi_assignments')
+    role = models.ForeignKey(EventRole, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = [['slot', 'role', 'user']]
         ordering = ['slot__start', 'role__name']
 
     def __str__(self):
