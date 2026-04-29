@@ -1,5 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from ffbot.utils import get_or_create_stream_key, get_or_register_user
 from ffstream.models import Key
@@ -79,3 +81,26 @@ class GetOrCreateStreamKeyTest(TestCase):
             result = get_or_create_stream_key(self.user)
         self.assertNotEqual(result.stream_key, existing.stream_key)
         self.assertGreaterEqual(call_count['n'], 2)
+
+
+class AddDiscordCommandsSettingTest(TestCase):
+    def _run_handle(self):
+        """Run Command.handle() with Discord and bot token validation mocked out."""
+        from ffbot.management.commands.run_discord_bot import Command
+        mock_bot = MagicMock()
+        with patch('ffbot.management.commands.run_discord_bot.discord_bot_token_valid', return_value=True), \
+             patch('ffbot.management.commands.run_discord_bot.discord.Bot', return_value=mock_bot):
+            Command().handle()
+        return mock_bot
+
+    @override_settings(ADD_DISCORD_COMMANDS=True)
+    def test_slash_command_registered_when_enabled(self):
+        mock_bot = self._run_handle()
+        mock_bot.slash_command.assert_called_once()
+        _, kwargs = mock_bot.slash_command.call_args
+        self.assertEqual(kwargs.get('name'), 'stream-key')
+
+    @override_settings(ADD_DISCORD_COMMANDS=False)
+    def test_slash_command_not_registered_when_disabled(self):
+        mock_bot = self._run_handle()
+        mock_bot.slash_command.assert_not_called()
