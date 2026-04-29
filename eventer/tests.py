@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from eventer.admin import SUPERSTREAM_ROLES
 from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, HOUR_SECONDS
+from eventer.schedule import SINGLE_ASSIGNMENT_ROLES, MULTI_ASSIGNMENT_ROLES
 from eventer.slot_generator import _format_label, _variable_block_hours, generate_slots
 
 
@@ -573,8 +574,10 @@ class AvailabilitySummaryViewTest(TestCase):
     def test_role_headers_present(self):
         response = self.client.get(self._url())
         labels = [h['label'] for h in response.context['role_headers']]
-        self.assertIn('Participant', labels)
-        self.assertIn('Streamer', labels)
+        for _, _, label in SINGLE_ASSIGNMENT_ROLES:
+            self.assertIn(label, labels)
+        for _, _, label in MULTI_ASSIGNMENT_ROLES:
+            self.assertNotIn(label, labels)
 
 
 class BuildScheduleViewTest(TestCase):
@@ -591,34 +594,34 @@ class BuildScheduleViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_post_creates_schedule_slots(self):
-        from eventer.models import EventScheduleSlot
+        from eventer.models import EventScheduleAssignment
         user = User.objects.create_user('streamer', 'streamer@example.com', 'pass')
         response = self.client.post(self._url(), {
             f'assign_{self.slot.pk}_participant': str(user.pk),
         })
         self.assertRedirects(response, self._url(), fetch_redirect_response=False)
-        self.assertTrue(EventScheduleSlot.objects.filter(
+        self.assertTrue(EventScheduleAssignment.objects.filter(
             event=self.event, slot=self.slot, role=self.role, user=user
         ).exists())
 
     def test_post_replaces_existing_assignments(self):
-        from eventer.models import EventScheduleSlot
+        from eventer.models import EventScheduleAssignment
         user1 = User.objects.create_user('user1', 'u1@example.com', 'pass')
         user2 = User.objects.create_user('user2', 'u2@example.com', 'pass')
-        EventScheduleSlot.objects.create(event=self.event, slot=self.slot, role=self.role, user=user1)
+        EventScheduleAssignment.objects.create(event=self.event, slot=self.slot, role=self.role, user=user1)
         self.client.post(self._url(), {
             f'assign_{self.slot.pk}_participant': str(user2.pk),
         })
-        assignment = EventScheduleSlot.objects.get(event=self.event, slot=self.slot, role=self.role)
+        assignment = EventScheduleAssignment.objects.get(event=self.event, slot=self.slot, role=self.role)
         self.assertEqual(assignment.user, user2)
 
     def test_post_clears_unsubmitted_slots(self):
-        from eventer.models import EventScheduleSlot
+        from eventer.models import EventScheduleAssignment
         user = User.objects.create_user('user1', 'u1@example.com', 'pass')
-        EventScheduleSlot.objects.create(event=self.event, slot=self.slot, role=self.role, user=user)
+        EventScheduleAssignment.objects.create(event=self.event, slot=self.slot, role=self.role, user=user)
         # POST with no assignments - should clear all
         self.client.post(self._url(), {})
-        self.assertEqual(EventScheduleSlot.objects.filter(event=self.event).count(), 0)
+        self.assertEqual(EventScheduleAssignment.objects.filter(event=self.event).count(), 0)
 
 
 class AssignSlotViewTest(TestCase):
@@ -632,25 +635,25 @@ class AssignSlotViewTest(TestCase):
         return f'/admin/eventer/event/{self.event.pk}/assign-slot/'
 
     def test_assigns_user_to_slot(self):
-        from eventer.models import EventScheduleSlot
+        from eventer.models import EventScheduleAssignment
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
             'role_slug': 'participant',
             'user_id': self.user.pk,
         })
-        self.assertTrue(EventScheduleSlot.objects.filter(
+        self.assertTrue(EventScheduleAssignment.objects.filter(
             slot=self.slot, role=self.role, user=self.user
         ).exists())
 
     def test_clears_assignment_when_no_user(self):
-        from eventer.models import EventScheduleSlot
-        EventScheduleSlot.objects.create(event=self.event, slot=self.slot, role=self.role, user=self.user)
+        from eventer.models import EventScheduleAssignment
+        EventScheduleAssignment.objects.create(event=self.event, slot=self.slot, role=self.role, user=self.user)
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
             'role_slug': 'participant',
             'user_id': '',
         })
-        self.assertFalse(EventScheduleSlot.objects.filter(slot=self.slot, role=self.role).exists())
+        self.assertFalse(EventScheduleAssignment.objects.filter(slot=self.slot, role=self.role).exists())
 
     def test_get_redirects_to_availability(self):
         response = self.client.get(self._url())
@@ -697,13 +700,13 @@ class AddAvailabilityViewTest(TestCase):
         self.assertEqual(hours.count(), 3)  # 12:00, 13:00, 14:00 UTC
 
     def test_post_creates_schedule_slot(self):
-        from eventer.models import EventScheduleSlot
+        from eventer.models import EventScheduleAssignment
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
             'role_slug': 'participant',
             'user': self.user.pk,
         })
-        self.assertTrue(EventScheduleSlot.objects.filter(
+        self.assertTrue(EventScheduleAssignment.objects.filter(
             event=self.event, slot=self.slot, role=self.role, user=self.user
         ).exists())
 

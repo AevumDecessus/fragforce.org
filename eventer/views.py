@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_safe
 
-from eventer.models import Event, EventScheduleSlot
+from eventer.models import Event, EventScheduleAssignment
 from eventer.schedule import build_schedule_grid, generate_twitch_commands
 
 
@@ -125,7 +125,7 @@ def public_schedule_view(request, event_slug):
     tz = zoneinfo.ZoneInfo(event.timezone)
 
     streamer_assignments = list(
-        EventScheduleSlot.objects
+        EventScheduleAssignment.objects
         .filter(event=event, role__slug='streamer')
         .select_related('slot', 'role', 'user', 'game')
         .order_by('slot__start')
@@ -140,7 +140,7 @@ def public_schedule_view(request, event_slug):
     my_slots = []
     if request.user.is_authenticated:
         my_slots = list(
-            EventScheduleSlot.objects
+            EventScheduleAssignment.objects
             .filter(event=event, user=request.user)
             .select_related('slot', 'role')
             .order_by('slot__start')

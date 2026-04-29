@@ -6,7 +6,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleSlot, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleAssignment, EventScheduleMultiAssignment, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
 from eventer.schedule import build_schedule_grid, LOCAL_TIME_FMT
 from eventer.slot_generator import generate_slots
 
@@ -37,8 +37,8 @@ def _save_coordinator_assignment(event, slot, role, user):
             setattr(avail, field, True)
             avail.save(update_fields=[field])
             hour += timedelta(hours=1)
-    EventScheduleSlot.objects.filter(slot=slot, role=role).delete()
-    EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user)
+    EventScheduleAssignment.objects.filter(slot=slot, role=role).delete()
+    EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user)
 
 
 
@@ -279,7 +279,7 @@ class EventAdmin(admin.ModelAdmin):
 
         if request.method == 'POST':
             with transaction.atomic():
-                EventScheduleSlot.objects.filter(event=event).delete()
+                EventScheduleAssignment.objects.filter(event=event).delete()
                 created = 0
                 for key, user_id in request.POST.items():
                     if not key.startswith('assign_') or not user_id:
@@ -292,7 +292,7 @@ class EventAdmin(admin.ModelAdmin):
                         user = User.objects.get(pk=int(user_id))
                         game_id = request.POST.get(f'game_{slot_pk}') or None
                         game = Game.objects.get(pk=int(game_id)) if game_id else None
-                        EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                        EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
                         created += 1
                     except Exception:
                         continue
@@ -325,10 +325,10 @@ class EventAdmin(admin.ModelAdmin):
             slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
             role = EventRole.objects.get(slug=role_slug)
             game = Game.objects.get(pk=int(game_id)) if game_id else None
-            EventScheduleSlot.objects.filter(slot=slot, role=role).delete()
+            EventScheduleAssignment.objects.filter(slot=slot, role=role).delete()
             if user_id:
                 user = User.objects.get(pk=int(user_id))
-                EventScheduleSlot.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
                 self.message_user(request, f"Assigned {user.username} to {slot.label} ({role.name}).", messages.SUCCESS)
             else:
                 self.message_user(request, f"Cleared assignment for {slot.label} ({role.name}).", messages.INFO)
@@ -340,7 +340,7 @@ class EventAdmin(admin.ModelAdmin):
         """
         Dedicated page: coordinator assigns a user to a slot outside the normal signup flow.
         GET: show form with slot/role pre-filled and user select.
-        POST: create EventInterest + EventAvailabilityInterest rows + EventScheduleSlot.
+        POST: create EventInterest + EventAvailabilityInterest rows + EventScheduleAssignment.
         """
         from django import forms as django_forms
         from django_workflow_engine.executor import User
@@ -424,8 +424,24 @@ class EventSignupSlotAdmin(admin.ModelAdmin):
         return obj.stop
 
 
-@admin.register(EventScheduleSlot)
-class EventScheduleSlotAdmin(admin.ModelAdmin):
+@admin.register(EventScheduleAssignment)
+class EventScheduleAssignmentAdmin(admin.ModelAdmin):
+    list_display = ['event', 'role', 'slot_label', 'slot_start_local', 'user']
+    list_filter = ['event', 'role']
+    raw_id_fields = ['user']
+
+    @admin.display(description='Slot', ordering='slot__start')
+    def slot_label(self, obj):
+        return obj.slot.label
+
+    @admin.display(description='Start (Local)', ordering='slot__start')
+    def slot_start_local(self, obj):
+        tz = zoneinfo.ZoneInfo(obj.event.timezone)
+        return obj.slot.start.astimezone(tz).strftime(LOCAL_TIME_FMT)
+
+
+@admin.register(EventScheduleMultiAssignment)
+class EventScheduleMultiAssignmentAdmin(admin.ModelAdmin):
     list_display = ['event', 'role', 'slot_label', 'slot_start_local', 'user']
     list_filter = ['event', 'role']
     raw_id_fields = ['user']

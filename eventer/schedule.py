@@ -4,16 +4,21 @@ Shared schedule grid building utilities used by both admin views and public/coor
 import zoneinfo
 from datetime import timedelta
 
-from eventer.models import EventRole, EventScheduleSlot
+from eventer.models import EventRole, EventScheduleAssignment
 from eventer.slot_generator import _expand_to_hours
 
 LOCAL_TIME_FMT = '%a %b %-d %-I%p %Z'
 
-SCHEDULE_ROLES = [
+# Singular roles - enforced one user per (slot, role) via EventScheduleAssignment
+SINGLE_ASSIGNMENT_ROLES = [
     ('streamer', 'as_streamer', 'Streamer'),
-    ('participant', 'as_participant', 'Participant'),
     ('moderator', 'as_moderator', 'Moderator'),
     ('tech-manager', 'as_tech', 'Tech'),
+]
+
+# Multi-user roles - multiple users per slot via EventScheduleMultiAssignment
+MULTI_ASSIGNMENT_ROLES = [
+    ('participant', 'as_participant', 'Participant'),
 ]
 
 
@@ -28,7 +33,7 @@ def _event_all_hours(event_start, event_end):
 
 def _build_hour_role_users(event, all_hours):
     from evtsignup.models import EventInterest
-    hour_role_users = {h: {slug: set() for slug, _, _ in SCHEDULE_ROLES} for h in all_hours}
+    hour_role_users = {h: {slug: set() for slug, _, _ in SINGLE_ASSIGNMENT_ROLES} for h in all_hours}
     interests = (
         EventInterest.objects
         .filter(event=event)
@@ -38,14 +43,14 @@ def _build_hour_role_users(event, all_hours):
     for interest in interests:
         for avail in interest.eventavailabilityinterest_set.all():
             if avail.hour in hour_role_users:
-                for slug, field, _ in SCHEDULE_ROLES:
+                for slug, field, _ in SINGLE_ASSIGNMENT_ROLES:
                     if getattr(avail, field):
                         hour_role_users[avail.hour][slug].add(interest.user)
     return hour_role_users
 
 
 def _build_role_hour_slot(event):
-    role_hour_slot = {slug: {} for slug, _, _ in SCHEDULE_ROLES}
+    role_hour_slot = {slug: {} for slug, _, _ in SINGLE_ASSIGNMENT_ROLES}
     for slot in event.signup_slots.prefetch_related('roles').order_by('start'):
         for role in slot.roles.all():
             if role.slug in role_hour_slot:
@@ -58,7 +63,7 @@ def _build_slot_role_data(all_hours, role_hour_slot, hour_role_users, role_objec
     slot_role_available = {}
     slot_role_assigned = {}
     seen = set()
-    for slug, _, _ in SCHEDULE_ROLES:
+    for slug, _, _ in SINGLE_ASSIGNMENT_ROLES:
         for hour in all_hours:
             slot = role_hour_slot[slug].get(hour)
             if not slot or (slot.pk, slug) in seen:
@@ -69,7 +74,7 @@ def _build_slot_role_data(all_hours, role_hour_slot, hour_role_users, role_objec
                 users = hour_role_users.get(sh, {}).get(slug, set())
                 available = users if available is None else available & users
             role_obj = role_objects.get(slug)
-            assigned = EventScheduleSlot.objects.filter(
+            assigned = EventScheduleAssignment.objects.filter(
                 slot=slot, role=role_obj
             ).select_related('user').first() if role_obj else None
             slot_role_available[(slot.pk, slug)] = sorted(available or [], key=lambda u: u.username)
@@ -78,14 +83,14 @@ def _build_slot_role_data(all_hours, role_hour_slot, hour_role_users, role_objec
 
 
 def _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_available, slot_role_assigned):
-    role_next_hour = {slug: None for slug, _, _ in SCHEDULE_ROLES}
-    role_alt = {slug: False for slug, _, _ in SCHEDULE_ROLES}
+    role_next_hour = {slug: None for slug, _, _ in SINGLE_ASSIGNMENT_ROLES}
+    role_alt = {slug: False for slug, _, _ in SINGLE_ASSIGNMENT_ROLES}
     rows = []
     for hour in all_hours:
         local_hour = hour.astimezone(tz)
         is_day_start = hour == all_hours[0] or local_hour.hour == 0
         cells = []
-        for slug, _, _ in SCHEDULE_ROLES:
+        for slug, _, _ in SINGLE_ASSIGNMENT_ROLES:
             slot = role_hour_slot[slug].get(hour)
             if slot is None:
                 cells.append({'type': 'empty'})
@@ -143,21 +148,21 @@ def build_schedule_grid(event):
     tz = zoneinfo.ZoneInfo(event.timezone)
     if not event.start or not event.end:
         return {
-            'rows': [], 'role_headers': [{'label': r[2], 'color': '#417690'} for r in SCHEDULE_ROLES],
+            'rows': [], 'role_headers': [{'label': r[2], 'color': '#417690'} for r in SINGLE_ASSIGNMENT_ROLES],
             'slot_role_available': {}, 'slot_role_assigned': {}, 'role_objects': {},
         }
 
     all_hours = _event_all_hours(event.start, event.end)
     hour_role_users = _build_hour_role_users(event, all_hours)
     role_hour_slot = _build_role_hour_slot(event)
-    role_objects = {r.slug: r for r in EventRole.objects.filter(slug__in=[s for s, _, _ in SCHEDULE_ROLES])}
+    role_objects = {r.slug: r for r in EventRole.objects.filter(slug__in=[s for s, _, _ in SINGLE_ASSIGNMENT_ROLES])}
     slot_role_available, slot_role_assigned = _build_slot_role_data(
         all_hours, role_hour_slot, hour_role_users, role_objects
     )
     rows = _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_available, slot_role_assigned)
     role_headers = [
         {'label': label, 'color': role_objects[slug].color if slug in role_objects else '#417690'}
-        for slug, _, label in SCHEDULE_ROLES
+        for slug, _, label in SINGLE_ASSIGNMENT_ROLES
     ]
     return {
         'rows': rows, 'role_headers': role_headers,
