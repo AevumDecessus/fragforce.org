@@ -467,6 +467,7 @@ SOCIAL_AUTH_DISCORD_SCOPE = ['identify', 'email', 'guilds']
 SOCIAL_AUTH_DISCORD_AUTH_EXTRA_ARGUMENTS = {'prompt': 'consent'}
 DISCORD_REQUIRED_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '164136635762606081')
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
+ADD_DISCORD_COMMANDS = os.environ.get('ADD_DISCORD_COMMANDS', 'true').lower() not in ('false', '0', 'no')
 
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
