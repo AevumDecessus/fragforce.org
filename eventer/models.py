@@ -100,6 +100,20 @@ class Game(models.Model):
     igdb_cover_hash = models.CharField(max_length=255, null=True, blank=True, verbose_name="IGDB cover hash", help_text="IGDB image hash - use //images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg")
     summary = models.TextField(blank=True, verbose_name="IGDB summary", help_text="Short game description from IGDB")
     multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players", help_text="Maximum number of players; null=unknown, 1=single player only")
+    first_release_date = models.DateField(null=True, blank=True, verbose_name="First release date", help_text="Initial release date from IGDB")
+    igdb_category = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="IGDB category", help_text="IGDB game category: 0=main game, 1=DLC, 2=expansion, 3=bundle, 4=standalone expansion")
+
+    @property
+    def cover_url(self):
+        if not self.igdb_cover_hash:
+            return None
+        return f'//images.igdb.com/igdb/image/upload/t_cover_big/{self.igdb_cover_hash}.jpg'
+
+    @property
+    def cover_url_thumb(self):
+        if not self.igdb_cover_hash:
+            return None
+        return f'//images.igdb.com/igdb/image/upload/t_thumb/{self.igdb_cover_hash}.jpg'
 
     def __str__(self):
         return self.name
