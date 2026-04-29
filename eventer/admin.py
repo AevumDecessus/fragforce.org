@@ -403,8 +403,8 @@ class EventAdmin(admin.ModelAdmin):
         }
         return render(request, 'admin/eventer/event/add_availability.html', context)
 
-    def assign_multi_slot_view(self, request, event_id):
-        """Add a user to a multi-assignment slot (e.g. participant)."""
+    def _multi_slot_view(self, request, event_id, action):
+        """Add or remove a user from a multi-assignment slot. action: 'assign' or 'remove'."""
         from django_workflow_engine.executor import User
         if request.method != 'POST':
             return HttpResponseRedirect(f'../../{event_id}/availability/')
@@ -416,30 +416,21 @@ class EventAdmin(admin.ModelAdmin):
             slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
             role = EventRole.objects.get(slug=role_slug)
             user = User.objects.get(pk=int(user_id))
-            EventScheduleMultiAssignment.objects.get_or_create(event=event, slot=slot, role=role, user=user)
-            self.message_user(request, f"Added {user.username} to {slot.label} ({role.name}).", messages.SUCCESS)
+            if action == 'assign':
+                EventScheduleMultiAssignment.objects.get_or_create(event=event, slot=slot, role=role, user=user)
+                self.message_user(request, f"Added {user.username} to {slot.label} ({role.name}).", messages.SUCCESS)
+            else:
+                EventScheduleMultiAssignment.objects.filter(event=event, slot=slot, role=role, user=user).delete()
+                self.message_user(request, f"Removed {user.username} from {slot.label} ({role.name}).", messages.INFO)
         except Exception as e:
             self.message_user(request, f"Error: {e}", messages.ERROR)
         return HttpResponseRedirect(f'../../{event_id}/availability/')
 
+    def assign_multi_slot_view(self, request, event_id):
+        return self._multi_slot_view(request, event_id, 'assign')
+
     def remove_multi_slot_view(self, request, event_id):
-        """Remove a user from a multi-assignment slot."""
-        from django_workflow_engine.executor import User
-        if request.method != 'POST':
-            return HttpResponseRedirect(f'../../{event_id}/availability/')
-        event = get_object_or_404(Event, pk=event_id)
-        slot_pk = request.POST.get('slot_pk')
-        role_slug = request.POST.get('role_slug')
-        user_id = request.POST.get('user_id', '').strip()
-        try:
-            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
-            role = EventRole.objects.get(slug=role_slug)
-            user = User.objects.get(pk=int(user_id))
-            EventScheduleMultiAssignment.objects.filter(event=event, slot=slot, role=role, user=user).delete()
-            self.message_user(request, f"Removed {user.username} from {slot.label} ({role.name}).", messages.INFO)
-        except Exception as e:
-            self.message_user(request, f"Error: {e}", messages.ERROR)
-        return HttpResponseRedirect(f'../../{event_id}/availability/')
+        return self._multi_slot_view(request, event_id, 'remove')
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
@@ -480,8 +471,7 @@ class EventSignupSlotAdmin(admin.ModelAdmin):
         return obj.stop
 
 
-@admin.register(EventScheduleAssignment)
-class EventScheduleAssignmentAdmin(admin.ModelAdmin):
+class _ScheduleAssignmentAdminBase(admin.ModelAdmin):
     list_display = ['event', 'role', 'slot_label', 'slot_start_local', 'user']
     list_filter = ['event', 'role']
     raw_id_fields = ['user']
@@ -494,22 +484,16 @@ class EventScheduleAssignmentAdmin(admin.ModelAdmin):
     def slot_start_local(self, obj):
         tz = zoneinfo.ZoneInfo(obj.event.timezone)
         return obj.slot.start.astimezone(tz).strftime(LOCAL_TIME_FMT)
+
+
+@admin.register(EventScheduleAssignment)
+class EventScheduleAssignmentAdmin(_ScheduleAssignmentAdminBase):
+    pass
 
 
 @admin.register(EventScheduleMultiAssignment)
-class EventScheduleMultiAssignmentAdmin(admin.ModelAdmin):
-    list_display = ['event', 'role', 'slot_label', 'slot_start_local', 'user']
-    list_filter = ['event', 'role']
-    raw_id_fields = ['user']
-
-    @admin.display(description='Slot', ordering='slot__start')
-    def slot_label(self, obj):
-        return obj.slot.label
-
-    @admin.display(description='Start (Local)', ordering='slot__start')
-    def slot_start_local(self, obj):
-        tz = zoneinfo.ZoneInfo(obj.event.timezone)
-        return obj.slot.start.astimezone(tz).strftime(LOCAL_TIME_FMT)
+class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
+    pass
 
 
 @admin.register(Game)
