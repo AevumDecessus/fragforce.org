@@ -90,7 +90,6 @@ class Game(models.Model):
         REJECTED = 'rejected', 'Rejected - not allowed on stream (e.g. banned on Twitch)'
 
     name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False, verbose_name="Game name")
-    slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True, verbose_name="Fragforce slug", help_text="Internal URL slug for this app")
     coordinator_notes = models.TextField(blank=True, verbose_name="Coordinator notes", help_text="Internal notes for coordinators, e.g. hardware requirements or known issues")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True, verbose_name="Status", help_text="Moderation status - rejected games cannot be selected on signup forms")
     suggested = models.BooleanField(default=False, db_index=True, verbose_name="Suggested game", help_text="Show this game on the signup form game selection list (only applies when status=approved)")
