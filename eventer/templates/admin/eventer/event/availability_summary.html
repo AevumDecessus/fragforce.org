@@ -11,7 +11,7 @@
 <p class="help">No event periods or signup slots found.</p>
 {% else %}
 
-{% include "admin/eventer/event/_schedule_grid.html" with slot_cell_template="admin/eventer/event/_slot_cell_availability.html" %}
+{% include "admin/eventer/event/_schedule_grid.html" with slot_cell_template="admin/eventer/event/_slot_cell_availability.html" multi_cell_template="admin/eventer/event/_slot_cell_multi_availability.html" %}
 
 {% endif %}
 

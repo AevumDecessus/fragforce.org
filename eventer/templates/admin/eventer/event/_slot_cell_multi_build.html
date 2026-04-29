@@ -1,0 +1,12 @@
+{% include "admin/eventer/event/_slot_cell_multi_header.html" %}
+{% if mcell.available %}
+<select name="assign_{{ mcell.slot.pk }}_{{ mcell.role_slug }}" multiple
+        style="width:100%;font-size:0.85em;margin-top:4px;min-height:4em;">
+  {% for user in mcell.available %}
+  <option value="{{ user.pk }}"
+    {% for a in mcell.assigned %}{% if a.user.pk == user.pk %}selected{% endif %}{% endfor %}>
+    {{ user.username }}
+  </option>
+  {% endfor %}
+</select>
+{% endif %}

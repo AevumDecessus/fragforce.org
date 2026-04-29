@@ -1,0 +1,29 @@
+{% include "admin/eventer/event/_slot_cell_multi_header.html" %}
+{% if mcell.available %}
+<form method="post" action="{% url 'admin:eventer_event_assign_multi_slot' event.pk %}" style="margin:4px 0 0 0">
+  {% csrf_token %}
+  <input type="hidden" name="slot_pk" value="{{ mcell.slot.pk }}">
+  <input type="hidden" name="role_slug" value="{{ mcell.role_slug }}">
+  <select name="user_id" style="font-size:0.8em;width:100%;margin-bottom:2px">
+    <option value="">-- Add participant --</option>
+    {% for user in mcell.available %}
+    <option value="{{ user.pk }}">{{ user.username }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Add</button>
+</form>
+{% endif %}
+{% if mcell.assigned %}
+<form method="post" action="{% url 'admin:eventer_event_remove_multi_slot' event.pk %}" style="margin:2px 0 0 0">
+  {% csrf_token %}
+  <input type="hidden" name="slot_pk" value="{{ mcell.slot.pk }}">
+  <input type="hidden" name="role_slug" value="{{ mcell.role_slug }}">
+  <select name="user_id" style="font-size:0.8em;width:100%;margin-bottom:2px">
+    <option value="">-- Remove participant --</option>
+    {% for a in mcell.assigned %}
+    <option value="{{ a.user.pk }}">{{ a.user.username }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" style="font-size:0.72em;padding:1px 5px;line-height:1.4">Remove</button>
+</form>
+{% endif %}
