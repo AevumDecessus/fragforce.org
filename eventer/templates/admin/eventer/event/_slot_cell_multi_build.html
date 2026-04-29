@@ -1,19 +1,4 @@
-{# Multi-assignment slot cell interior for build_schedule.html (Participant) #}
-<div class="slot-label">{{ mcell.slot.label }}</div>
-{% if mcell.assigned %}
-  {% for a in mcell.assigned %}
-  <div class="assigned-badge" style="background-color:{{ mcell.role_color }}">&#10003; {{ a.user.username }}</div>
-  {% endfor %}
-{% endif %}
-{% if mcell.available %}
-<ul class="available-list">
-  {% for user in mcell.available %}
-  <li>{{ user.username }}</li>
-  {% endfor %}
-</ul>
-{% else %}
-<div class="avail-hint">No one available</div>
-{% endif %}
+{% include "admin/eventer/event/_slot_cell_multi_header.html" %}
 {% if mcell.available %}
 <select name="assign_{{ mcell.slot.pk }}_{{ mcell.role_slug }}" multiple
         style="width:100%;font-size:0.85em;margin-top:4px;min-height:4em;">

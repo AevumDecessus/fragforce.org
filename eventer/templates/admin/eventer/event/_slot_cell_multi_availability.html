@@ -1,19 +1,4 @@
-{# Multi-assignment slot cell interior for availability_summary.html (Participant) #}
-<div class="slot-label">{{ mcell.slot.label }}</div>
-{% if mcell.assigned %}
-  {% for a in mcell.assigned %}
-  <div class="assigned-badge" style="background-color:{{ mcell.role_color }}">&#10003; {{ a.user.username }}</div>
-  {% endfor %}
-{% endif %}
-{% if mcell.available %}
-  <ul class="available-list">
-    {% for user in mcell.available %}
-    <li>{{ user.username }}</li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <span class="no-one">none</span>
-{% endif %}
+{% include "admin/eventer/event/_slot_cell_multi_header.html" %}
 {% if mcell.available %}
 <form method="post" action="{% url 'admin:eventer_event_assign_multi_slot' event.pk %}" style="margin:4px 0 0 0">
   {% csrf_token %}

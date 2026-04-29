@@ -1,0 +1,15 @@
+<div class="slot-label">{{ mcell.slot.label }}</div>
+{% if mcell.assigned %}
+  {% for a in mcell.assigned %}
+  <div class="assigned-badge" style="background-color:{{ mcell.role_color }}">&#10003; {{ a.user.username }}</div>
+  {% endfor %}
+{% endif %}
+{% if mcell.available %}
+  <ul class="available-list">
+    {% for user in mcell.available %}
+    <li>{{ user.username }}</li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <span class="no-one">none</span>
+{% endif %}
