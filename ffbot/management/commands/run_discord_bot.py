@@ -28,29 +28,32 @@ class Command(BaseCommand):
         async def on_ready():
             log.info("Fragforce bot logged in as %s (ID: %s)", bot.user, bot.user.id)
 
-        @bot.slash_command(
-            name="stream-key",
-            description="Fetch your stream key",
-            guild_ids=guild_ids,
-        )
-        async def stream_key(ctx):
-            discord_id = str(ctx.author.id)
-            discord_username = ctx.author.name
-
-            role_ids = [str(r.id) for r in ctx.author.roles]
-
-            def get_key():
-                user = get_or_register_user(discord_id, discord_username)
-                sync_user_roles(user, role_ids)
-                return get_or_create_stream_key(user)
-
-            key = await sync_to_async(get_key)()
-
-            await ctx.respond(
-                f"**Your Stream Key:** `{key.stream_key}`\n"
-                f"Super Stream: {'Yes' if key.superstream else 'No'} | "
-                f"Direct Livestream: {'Yes' if key.livestream else 'No'}",
-                ephemeral=True,
+        if settings.ADD_DISCORD_COMMANDS:
+            @bot.slash_command(
+                name="stream-key",
+                description="Fetch your stream key",
+                guild_ids=guild_ids,
             )
+            async def stream_key(ctx):
+                discord_id = str(ctx.author.id)
+                discord_username = ctx.author.name
+
+                role_ids = [str(r.id) for r in ctx.author.roles]
+
+                def get_key():
+                    user = get_or_register_user(discord_id, discord_username)
+                    sync_user_roles(user, role_ids)
+                    return get_or_create_stream_key(user)
+
+                key = await sync_to_async(get_key)()
+
+                await ctx.respond(
+                    f"**Your Stream Key:** `{key.stream_key}`\n"
+                    f"Super Stream: {'Yes' if key.superstream else 'No'} | "
+                    f"Direct Livestream: {'Yes' if key.livestream else 'No'}",
+                    ephemeral=True,
+                )
+        else:
+            log.info("ADD_DISCORD_COMMANDS is disabled - skipping /stream-key registration")
 
         bot.run(settings.DISCORD_BOT_TOKEN)
