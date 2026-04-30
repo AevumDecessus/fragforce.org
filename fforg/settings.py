@@ -252,6 +252,8 @@ else:
     REDIS_URL_DJ_CACHE = os.environ.get('REDIS4_URL', REDIS_LOCALHOST) + "/0"
 
 CELERY_IMPORTS = [
+    'eventer.tasks',
+    'evtsignup.tasks',
     'ffdonations.tasks.donations',
     'ffdonations.tasks.participants',
     'ffdonations.tasks.sender',
@@ -422,6 +424,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ffdiscord.tasks.sync_all_guild_members',
         'schedule': timedelta(minutes=int(os.environ.get('DISCORD_MEMBER_SYNC_MINUTES', 15))),
     },
+    'sync-all-igdb-games': {
+        'task': 'eventer.tasks.sync_all_igdb_games',
+        'schedule': timedelta(days=int(os.environ.get('IGDB_SYNC_INTERVAL_DAYS', 7))),
+    },
 }
 
 LOGGING = {
@@ -473,6 +479,7 @@ IGDB_CLIENT_ID = os.environ.get('IGDB_CLIENT_ID', '')
 IGDB_CLIENT_SECRET = os.environ.get('IGDB_CLIENT_SECRET', '')
 IGDB_RATE_LIMIT_RETRIES = int(os.environ.get('IGDB_RATE_LIMIT_RETRIES', 3))
 IGDB_RATE_LIMIT_RETRY_AFTER = float(os.environ.get('IGDB_RATE_LIMIT_RETRY_AFTER', 1.0))
+IGDB_BULK_SYNC_DELAY = float(os.environ.get('IGDB_BULK_SYNC_DELAY', 0.5))
 
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
