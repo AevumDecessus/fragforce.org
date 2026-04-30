@@ -117,6 +117,11 @@ class Game(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        permissions = [
+            ('search_igdb', 'Can search IGDB and sync games'),
+        ]
+
 
 class Event(models.Model):
     """ A gaming event """
