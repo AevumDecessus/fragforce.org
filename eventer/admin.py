@@ -498,7 +498,11 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['name', 'status', 'suggested', 'multiplayer_max']
+    list_display = ['game_name', 'status', 'suggested', 'multiplayer_max']
+
+    @admin.display(description='Game', ordering='name')
+    def game_name(self, obj):
+        return str(obj)
     list_filter = ['status', 'suggested']
     search_fields = ['name', 'igdb_slug']
     change_list_template = 'admin/eventer/game/change_list.html'

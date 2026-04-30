@@ -89,7 +89,7 @@ class Game(models.Model):
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected - not allowed on stream (e.g. banned on Twitch)'
 
-    name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False, verbose_name="Game name")
+    name = models.CharField(max_length=255, db_index=True, null=False, blank=False, verbose_name="Game name")
     coordinator_notes = models.TextField(blank=True, verbose_name="Coordinator notes", help_text="Internal notes for coordinators, e.g. hardware requirements or known issues")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True, verbose_name="Status", help_text="Moderation status - rejected games cannot be selected on signup forms")
     suggested = models.BooleanField(default=False, db_index=True, verbose_name="Suggested game", help_text="Show this game on the signup form game selection list (only applies when status=approved)")
@@ -115,6 +115,8 @@ class Game(models.Model):
         return f'//images.igdb.com/igdb/image/upload/t_thumb/{self.igdb_cover_hash}.jpg'
 
     def __str__(self):
+        if self.first_release_date:
+            return f'{self.name} ({self.first_release_date.year})'
         return self.name
 
     class Meta:
