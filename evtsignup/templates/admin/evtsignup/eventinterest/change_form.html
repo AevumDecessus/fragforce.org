@@ -38,7 +38,7 @@
       <input type="text" id="igdb-query" placeholder="Search by game name..." autocomplete="off">
       <select id="igdb-role-select">
         {% for role in event_roles %}
-        <option value="{{ role.pk }}">{{ role.name }}</option>
+        <option value="{{ role.pk }}" {% if role.slug == 'participant' %}selected{% endif %}>{{ role.name }}</option>
         {% endfor %}
       </select>
       <button type="button" class="button" id="igdb-search-btn">Search</button>
