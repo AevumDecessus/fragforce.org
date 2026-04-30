@@ -1234,3 +1234,143 @@ class SyncIgdbGameCommandTest(TestCase):
             with self.assertRaises(CommandError) as cm:
                 self._call_command(1)
         self.assertIn('not found', str(cm.exception))
+
+
+def _make_coordinator(username='coord'):
+    """Create a staff user with the Coordinator group and return them."""
+    from django.contrib.auth.models import Group
+    from fforg.permissions import seed_permission_groups
+    seed_permission_groups()
+    user = User.objects.create_user(username, f'{username}@example.com', 'pass', is_staff=True)
+    user.groups.add(Group.objects.get(name='Coordinator'))
+    return user
+
+
+class SearchIgdbViewTest(TestCase):
+    def setUp(self):
+        self.coordinator = _make_coordinator('coord_igdb')
+        self.client.login(username='coord_igdb', password='pass')
+
+    def _url(self):
+        return '/admin/eventer/game/search-igdb/'
+
+    def test_get_no_query_renders_form(self):
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Search IGDB')
+
+    def test_get_no_credentials_shows_error(self):
+        with self.settings(IGDB_CLIENT_ID='', IGDB_CLIENT_SECRET=''):
+            response = self.client.get(self._url() + '?q=fortnite')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'not configured')
+
+    def test_get_with_query_returns_results(self):
+        from unittest.mock import patch
+        from eventer.igdb import IGDBClient
+        mock_results = [{'id': 1905, 'name': 'Fortnite', 'slug': 'fortnite',
+                         'cover': {'image_id': 'hash'}, 'first_release_date': 1498780800, 'category': 0}]
+        with patch.object(IGDBClient, 'credentials_configured', return_value=True), \
+             patch.object(IGDBClient, 'search_games', return_value=mock_results), \
+             self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'):
+            response = self.client.get(self._url() + '?q=fortnite')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Fortnite')
+
+    def test_get_json_format_returns_json(self):
+        from unittest.mock import patch
+        from eventer.igdb import IGDBClient
+        with patch.object(IGDBClient, 'credentials_configured', return_value=True), \
+             patch.object(IGDBClient, 'search_games', return_value=[]), \
+             self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'):
+            response = self.client.get(self._url() + '?q=test&format=json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        data = response.json()
+        self.assertIn('results', data)
+
+    def test_post_syncs_games(self):
+        from unittest.mock import patch, MagicMock
+        mock_game = MagicMock()
+        mock_game.name = 'Fortnite'
+        with patch('eventer.igdb.sync_game_from_igdb', return_value=(mock_game, True)):
+            response = self.client.post(self._url(), {'igdb_id': ['1905'], 'q': 'fortnite'})
+        self.assertRedirects(response, self._url() + '?q=fortnite', fetch_redirect_response=False)
+
+    def test_requires_search_igdb_permission(self):
+        User.objects.create_user('nocoord', 'nc@example.com', 'pass', is_staff=True)
+        self.client.login(username='nocoord', password='pass')
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 403)
+
+
+class SyncAndLinkViewTest(TestCase):
+    def setUp(self):
+        from evtsignup.models import EventInterest
+        self.coordinator = _make_coordinator('coord_link')
+        self.client.login(username='coord_link', password='pass')
+        self.event = Event.objects.create(name='Link Test Event', slug='link-test-event', description='')
+        self.interest = EventInterest.objects.create(
+            user=self.coordinator, event=self.event, acknowledged=True
+        )
+        self.role = EventRole.objects.get_or_create(
+            slug='streamer', defaults={'name': 'Streamer', 'description': ''}
+        )[0]
+
+    def _url(self):
+        return '/admin/eventer/game/sync-and-link/'
+
+    def _post(self, igdb_id=1905):
+        return self.client.post(self._url(), {
+            'igdb_id': str(igdb_id),
+            'event_interest_id': str(self.interest.pk),
+            'role_id': str(self.role.pk),
+        })
+
+    def test_requires_post(self):
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 405)
+
+    def test_syncs_and_links_game(self):
+        from unittest.mock import patch
+        from eventer.models import Game
+        from evtsignup.models import GameInterestUserEvent
+        game = Game.objects.create(name='Fortnite', igdb_id=1905, status='approved')
+        with patch('eventer.igdb.sync_game_from_igdb', return_value=(game, False)):
+            response = self._post()
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertTrue(GameInterestUserEvent.objects.filter(
+            event_interest=self.interest, game=game, role=self.role
+        ).exists())
+
+    def test_auto_approves_pending_game(self):
+        from unittest.mock import patch
+        from eventer.models import Game
+        game = Game.objects.create(name='Fortnite Pending', igdb_id=19051, status='pending')
+        with patch('eventer.igdb.sync_game_from_igdb', return_value=(game, False)):
+            self._post(igdb_id=19051)
+        game.refresh_from_db()
+        self.assertEqual(game.status, 'approved')
+
+    def test_returns_404_for_missing_interest(self):
+        response = self.client.post(self._url(), {
+            'igdb_id': '1905',
+            'event_interest_id': '99999',
+            'role_id': str(self.role.pk),
+        })
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_404_for_not_found_game(self):
+        from unittest.mock import patch
+        with patch('eventer.igdb.sync_game_from_igdb', side_effect=ValueError('not found')):
+            response = self._post()
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('not found', response.json()['error'])
+
+    def test_requires_search_igdb_permission(self):
+        User.objects.create_user('nocoord2', 'nc2@example.com', 'pass', is_staff=True)
+        self.client.login(username='nocoord2', password='pass')
+        response = self.client.post(self._url(), {})
+        self.assertEqual(response.status_code, 403)
