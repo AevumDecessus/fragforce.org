@@ -1,19 +1,67 @@
-# Register your models here.
 from django.contrib import admin
 
 from evtsignup.models import EventAvailabilityInterest, EventInterest, GameInterestUserEvent
 
 
-@admin.register(EventAvailabilityInterest)
-class EventAvailabilityInterestAdmin(admin.ModelAdmin):
-    pass
+class GameInterestInline(admin.TabularInline):
+    model = GameInterestUserEvent
+    extra = 0
+    fields = ['game', 'role']
+    autocomplete_fields = ['game']
+    verbose_name = 'Game selection'
+    verbose_name_plural = 'Game selections'
 
 
 @admin.register(EventInterest)
 class EventInterestAdmin(admin.ModelAdmin):
+    list_display = [
+        'display_name_or_user', 'event', 'roles_summary',
+        'game_count', 'has_fundraising_url', 'acknowledged',
+    ]
+    list_filter = ['event', 'acknowledged']
+    search_fields = ['display_name', 'user__username', 'streamer_notes', 'participant_notes']
     raw_id_fields = ['el_participant']
+    readonly_fields = ['user', 'event']
+    inlines = [GameInterestInline]
+
+    @admin.display(description='Signup', ordering='display_name')
+    def display_name_or_user(self, obj):
+        return obj.display_name or obj.user.username
+
+    @admin.display(description='Roles')
+    def roles_summary(self, obj):
+        avail = obj.eventavailabilityinterest_set.first()
+        if not avail:
+            return '—'
+        roles = []
+        if avail.as_streamer:
+            roles.append('Streamer')
+        if avail.as_participant:
+            roles.append('Participant')
+        if avail.as_moderator:
+            roles.append('Moderator')
+        if avail.as_tech:
+            roles.append('Tech')
+        return ', '.join(roles) if roles else '—'
+
+    @admin.display(description='Games', ordering='gameinterestuserevent')
+    def game_count(self, obj):
+        count = obj.gameinterestuserevent_set.count()
+        return count if count else '—'
+
+    @admin.display(description='Fundraising', boolean=True)
+    def has_fundraising_url(self, obj):
+        return bool(obj.fundraising_url)
 
 
 @admin.register(GameInterestUserEvent)
 class GameInterestUserEventAdmin(admin.ModelAdmin):
+    list_display = ['event_interest', 'game', 'role']
+    list_filter = ['role', 'event_interest__event']
+    search_fields = ['event_interest__display_name', 'event_interest__user__username', 'game__name']
+    autocomplete_fields = ['game']
+
+
+@admin.register(EventAvailabilityInterest)
+class EventAvailabilityInterestAdmin(admin.ModelAdmin):
     pass
