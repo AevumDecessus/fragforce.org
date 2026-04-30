@@ -138,6 +138,8 @@ Copy `env.sample` to `.env` to get started. All optional variables have sensible
 |----------|---------|-------------|
 | `IGDB_CLIENT_ID` | - | Twitch app client ID (create at https://dev.twitch.tv/console/apps) |
 | `IGDB_CLIENT_SECRET` | - | Twitch app client secret |
+| `IGDB_RATE_LIMIT_RETRIES` | `3` | Max retries on IGDB 429 rate limit response |
+| `IGDB_RATE_LIMIT_RETRY_AFTER` | `1.0` | Default wait (seconds) between retries if no Retry-After header |
 
 ### Twitch Bot Integration
 
