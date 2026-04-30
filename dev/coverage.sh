@@ -23,8 +23,16 @@ COMMIT=$(git rev-parse --short HEAD)
 DATE=$(date +%Y-%m-%d)
 FENCE='```'
 
-# Run tests with coverage, capturing all output
-OUTPUT=$(docker compose exec -T web pipenv run coverage run manage.py test "$@" 2>&1)
+# Run tests with coverage, capturing all output.
+# When an app filter is given, pass --source=<app> so coverage tracks all files
+# in that app even if they aren't imported during the test run.
+COVERAGE_RUN_ARGS=()
+TEST_ARGS=("$@")
+if [[ -n "${1:-}" && "$1" != --* ]]; then
+    COVERAGE_RUN_ARGS+=("--source=$1")
+    TEST_ARGS+=("--keepdb")
+fi
+OUTPUT=$(docker compose exec -T web pipenv run coverage run "${COVERAGE_RUN_ARGS[@]}" manage.py test "${TEST_ARGS[@]}" 2>&1)
 EXIT_CODE=$?
 
 # Extract test summary

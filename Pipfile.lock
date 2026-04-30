@@ -1663,20 +1663,20 @@
         },
         "social-auth-app-django": {
             "hashes": [
-                "sha256:512d4a0f28f29d961badad14ed9b7247e4b3f870ed8f261035735a7ac69f4455",
-                "sha256:c4ecbbbb1fd42143aaa16e2b18a1d77d652939385bcc6a0ff53af3bacd65e5f4"
+                "sha256:5b79c53321f9528334d53ddb154452a3b7e598b7ff4c2c1302be9a76b1349e8d",
+                "sha256:80edf5c207d871f2225a0fc6bb414004c0342c30deb3a217eb38a63b66e749bb"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.10'",
-            "version": "==5.8.0"
+            "version": "==5.9.0"
         },
         "social-auth-core": {
             "hashes": [
-                "sha256:30f88822d5c72e07a3dd080daff81464e262b83794c75cf636fc81241d2a253c",
-                "sha256:c06d528bde0cf3d21e9e17af31c824c953985732123b005f54b20e67c9d0d8d8"
+                "sha256:463e8bb6f26ec0f5c264d19e351b1f1a5f929192bc38432cb9d44c6ae380cc17",
+                "sha256:df1d28346197fee37ac619cfa6615f011114c11fe56c4a9091c2a909cd3cc436"
             ],
             "markers": "python_version >= '3.10'",
-            "version": "==4.8.7"
+            "version": "==4.9.0"
         },
         "soupsieve": {
             "hashes": [

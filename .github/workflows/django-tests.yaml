@@ -1,0 +1,43 @@
+name: Django Tests
+
+on:
+  workflow_run:
+    workflows: ["Coverage"]
+    types:
+      - completed
+
+jobs:
+  report:
+    name: Django Tests
+    if: github.repository == 'fragforce/fragforce.org'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          client-id: ${{ secrets.FRAGFORCE_CI_APP_ID }}
+          private-key: ${{ secrets.FRAGFORCE_CI_PRIVATE_KEY }}
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: coverage-report
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Report test results
+        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386 # v6.4.0
+        with:
+          report_paths: TEST-*.xml
+          check_name: Django Tests
+          commit: ${{ github.event.workflow_run.head_sha }}
+          token: ${{ steps.app-token.outputs.token }}
+          fail_on_failure: true
+          include_passed: true
+          detailed_summary: true

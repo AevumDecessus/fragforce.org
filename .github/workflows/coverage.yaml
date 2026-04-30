@@ -54,6 +54,7 @@ jobs:
         run: pip install pipenv==2026.5.2 && pipenv install --dev
 
       - name: Run tests with coverage
+        continue-on-error: true
         env:
           DOCKER: "True"
           DATABASE_URL: postgres://postgres:insecure@localhost/fragforce_test
@@ -72,7 +73,7 @@ jobs:
           echo "${{ github.ref_name }}" > branch_name.txt
 
       - name: Upload coverage and test artifacts
-        if: success()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-report

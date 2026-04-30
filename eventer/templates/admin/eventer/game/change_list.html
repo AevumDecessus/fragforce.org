@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  {% if perms.eventer.search_igdb %}
+  <li>
+    <a href="{% url 'admin:eventer_game_search_igdb' %}" class="addlink">
+      Search IGDB
+    </a>
+  </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

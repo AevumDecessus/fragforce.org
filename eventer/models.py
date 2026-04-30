@@ -89,8 +89,7 @@ class Game(models.Model):
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected - not allowed on stream (e.g. banned on Twitch)'
 
-    name = models.CharField(max_length=255, unique=True, db_index=True, null=False, blank=False, verbose_name="Game name")
-    slug = models.SlugField(max_length=255, null=False, blank=False, db_index=True, unique=True, verbose_name="Fragforce slug", help_text="Internal URL slug for this app")
+    name = models.CharField(max_length=255, db_index=True, null=False, blank=False, verbose_name="Game name")
     coordinator_notes = models.TextField(blank=True, verbose_name="Coordinator notes", help_text="Internal notes for coordinators, e.g. hardware requirements or known issues")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True, verbose_name="Status", help_text="Moderation status - rejected games cannot be selected on signup forms")
     suggested = models.BooleanField(default=False, db_index=True, verbose_name="Suggested game", help_text="Show this game on the signup form game selection list (only applies when status=approved)")
@@ -99,10 +98,39 @@ class Game(models.Model):
     igdb_url = models.URLField(null=True, blank=True, verbose_name="IGDB URL", help_text="Full IGDB game page URL")
     igdb_cover_hash = models.CharField(max_length=255, null=True, blank=True, verbose_name="IGDB cover hash", help_text="IGDB image hash - use //images.igdb.com/igdb/image/upload/t_{size}/{hash}.jpg")
     summary = models.TextField(blank=True, verbose_name="IGDB summary", help_text="Short game description from IGDB")
-    multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players", help_text="Maximum number of players; null=unknown, 1=single player only")
+    multiplayer_max = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players (IGDB)", help_text="Maximum co-op party size from IGDB; null=unknown or single player")
+    multiplayer_max_override = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="Max players (override)", help_text="Manual override for max players; takes precedence over IGDB value when set")
+    first_release_date = models.DateField(null=True, blank=True, verbose_name="First release date", help_text="Initial release date from IGDB")
+    igdb_category = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name="IGDB category", help_text="IGDB game category: 0=main game, 1=DLC, 2=expansion, 3=bundle, 4=standalone expansion")
+
+    @property
+    def cover_url(self):
+        if not self.igdb_cover_hash:
+            return None
+        return f'//images.igdb.com/igdb/image/upload/t_cover_big/{self.igdb_cover_hash}.jpg'
+
+    @property
+    def cover_url_thumb(self):
+        if not self.igdb_cover_hash:
+            return None
+        return f'//images.igdb.com/igdb/image/upload/t_thumb/{self.igdb_cover_hash}.jpg'
+
+    @property
+    def effective_multiplayer_max(self):
+        """Returns the override if set, otherwise the IGDB value."""
+        if self.multiplayer_max_override is not None:
+            return self.multiplayer_max_override
+        return self.multiplayer_max
 
     def __str__(self):
+        if self.first_release_date:
+            return f'{self.name} ({self.first_release_date.year})'
         return self.name
+
+    class Meta:
+        permissions = [
+            ('search_igdb', 'Can search IGDB and sync games'),
+        ]
 
 
 class Event(models.Model):

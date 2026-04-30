@@ -25,7 +25,7 @@ COORDINATOR_PERMISSIONS = [
     ('eventer', 'eventrole', ['add', 'change', 'delete', 'view']),
     ('eventer', 'eventsignupslotconfig', ['add', 'change', 'delete', 'view']),
     ('eventer', 'eventsignupslot', ['add', 'change', 'delete', 'view']),
-    ('eventer', 'game', ['add', 'change', 'delete', 'view']),
+    ('eventer', 'game', ['add', 'change', 'delete', 'view', 'search_igdb']),
     ('eventer', 'team', ['add', 'change', 'view']),
     ('eventer', 'teamrole', ['view']),
     ('eventer', 'teammember', ['view']),
