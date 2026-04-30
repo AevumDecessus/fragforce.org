@@ -428,6 +428,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'eventer.tasks.sync_all_igdb_games',
         'schedule': timedelta(days=int(os.environ.get('IGDB_SYNC_INTERVAL_DAYS', 7))),
     },
+    'fetch-top-igdb-games-hypes': {
+        'task': 'eventer.tasks.fetch_top_games_by_hypes',
+        'schedule': timedelta(days=int(os.environ.get('IGDB_TOP_GAMES_INTERVAL_DAYS', 7))),
+    },
+    'fetch-top-igdb-games-rating': {
+        'task': 'eventer.tasks.fetch_top_games_by_rating',
+        'schedule': timedelta(days=int(os.environ.get('IGDB_TOP_GAMES_INTERVAL_DAYS', 7))),
+    },
 }
 
 LOGGING = {
