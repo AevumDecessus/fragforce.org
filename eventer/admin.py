@@ -499,12 +499,17 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
     list_display = ['game_name', 'status', 'suggested', 'multiplayer_max', 'igdb_link']
-    actions = ['approve_games']
+    actions = ['approve_games', 'mark_suggested']
 
     @admin.action(description='Approve selected games')
     def approve_games(self, request, queryset):
         updated = queryset.exclude(status='approved').update(status='approved')
         self.message_user(request, f'{updated} game{"s" if updated != 1 else ""} approved.', messages.SUCCESS)
+
+    @admin.action(description='Mark selected games as suggested')
+    def mark_suggested(self, request, queryset):
+        updated = queryset.filter(suggested=False).update(suggested=True)
+        self.message_user(request, f'{updated} game{"s" if updated != 1 else ""} marked as suggested.', messages.SUCCESS)
 
     @admin.display(description='Game', ordering='name')
     def game_name(self, obj):
