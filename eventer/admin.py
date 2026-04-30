@@ -526,7 +526,7 @@ class GameAdmin(admin.ModelAdmin):
                 game, created = sync_game_from_igdb(int(igdb_id))
                 action = 'Created' if created else 'Updated'
                 self.message_user(request, f'{action}: {game.name}', messages.SUCCESS)
-                return HttpResponseRedirect(f'../../{game.pk}/change/')
+                return HttpResponseRedirect(f'../../game/{game.pk}/change/')
             except Exception as e:
                 self.message_user(request, f'Error syncing game: {e}', messages.ERROR)
                 return HttpResponseRedirect('.')
