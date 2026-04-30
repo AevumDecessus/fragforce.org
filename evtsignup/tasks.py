@@ -36,10 +36,59 @@ def resolve_fundraising_url(event_interest_id):
             event_interest_id, interest.fundraising_url,
         )
     else:
+        # Try following redirects - may be a vanity link pointing to Extra Life
+        if _is_followable_url(interest.fundraising_url):
+            resolved = _follow_redirect(interest.fundraising_url)
+            if resolved and resolved != interest.fundraising_url:
+                redirected_result = parse_fundraising_url(resolved)
+                if redirected_result.is_participant:
+                    log.info(
+                        'resolve_fundraising_url: EventInterest %s resolved via redirect %s → %s',
+                        event_interest_id, interest.fundraising_url, resolved,
+                    )
+                    _resolve_participant(interest, redirected_result)
+                    return
+                elif redirected_result.is_team:
+                    log.info(
+                        'resolve_fundraising_url: EventInterest %s redirect resolves to team URL (%s) - flagged for coordinator review',
+                        event_interest_id, resolved,
+                    )
+                    return
         log.info(
             'resolve_fundraising_url: EventInterest %s has unrecognised URL (%s)',
             event_interest_id, interest.fundraising_url,
         )
+
+
+def _is_followable_url(url):
+    """Return True if the URL is a valid http/https URL worth attempting to follow."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url if '://' in url else f'https://{url}')
+        return (
+            parsed.scheme in ('http', 'https')
+            and bool(parsed.netloc)
+            and ' ' not in parsed.netloc
+            and '.' in parsed.netloc
+        )
+    except Exception:
+        return False
+
+
+def _follow_redirect(url):
+    """Follow HTTP redirects and return the final URL, or None on failure."""
+    import requests
+    try:
+        resp = requests.get(
+            url if '://' in url else f'https://{url}',
+            allow_redirects=True,
+            timeout=10,
+            headers={'User-Agent': 'Fragforce/1.0'},
+        )
+        return resp.url
+    except Exception as e:
+        log.debug('_follow_redirect: failed to follow %s: %s', url, e)
+        return None
 
 
 def _resolve_participant(interest, result):
