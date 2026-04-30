@@ -500,6 +500,16 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 class GameAdmin(admin.ModelAdmin):
     list_display = ['game_name', 'status_display', 'suggested', 'effective_players', 'igdb_link']
     actions = ['approve_games', 'mark_suggested']
+    readonly_fields = [
+        'igdb_id', 'igdb_slug', 'igdb_url', 'igdb_cover_hash',
+        'summary', 'first_release_date', 'igdb_category', 'multiplayer_max',
+    ]
+    fields = [
+        'name', 'status', 'suggested', 'coordinator_notes',
+        'multiplayer_max_override',
+        'igdb_id', 'igdb_slug', 'igdb_url', 'igdb_cover_hash',
+        'summary', 'first_release_date', 'igdb_category', 'multiplayer_max',
+    ]
 
     @admin.action(description='Approve selected games')
     def approve_games(self, request, queryset):
