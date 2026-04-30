@@ -37,16 +37,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 
-      - name: Report test results
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
-        with:
-          name: Django Tests
-          path: TEST-*.xml
-          reporter: java-junit
-          fail-on-error: false
-          use-actions-summary: false
-          token: ${{ steps.app-token.outputs.token }}
-
       - name: Set scan properties
         run: |
           # Read artifact files and sanitize values before writing to GITHUB_ENV
