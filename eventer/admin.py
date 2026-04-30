@@ -519,17 +519,23 @@ class GameAdmin(admin.ModelAdmin):
         from eventer.igdb import IGDBClient, IGDBError, sync_game_from_igdb
         from eventer.models import Game
 
-        # POST: sync a selected game
+        # POST: sync selected games
         if request.method == 'POST':
-            igdb_id = request.POST.get('igdb_id', '').strip()
-            try:
-                game, created = sync_game_from_igdb(int(igdb_id))
-                action = 'Created' if created else 'Updated'
-                self.message_user(request, f'{action}: {game.name}', messages.SUCCESS)
-                return HttpResponseRedirect(f'../../game/{game.pk}/change/')
-            except Exception as e:
-                self.message_user(request, f'Error syncing game: {e}', messages.ERROR)
-                return HttpResponseRedirect('.')
+            igdb_ids = request.POST.getlist('igdb_id')
+            created_names, updated_names, errors = [], [], []
+            for igdb_id in igdb_ids:
+                try:
+                    game, created = sync_game_from_igdb(int(igdb_id))
+                    (created_names if created else updated_names).append(game.name)
+                except Exception as e:
+                    errors.append(str(e))
+            if created_names:
+                self.message_user(request, f'Added: {", ".join(created_names)}', messages.SUCCESS)
+            if updated_names:
+                self.message_user(request, f'Updated: {", ".join(updated_names)}', messages.SUCCESS)
+            for error in errors:
+                self.message_user(request, f'Error: {error}', messages.ERROR)
+            return HttpResponseRedirect('.' + (f'?q={request.POST.get("q", "")}' if request.POST.get('q') else ''))
 
         # GET: search
         query = request.GET.get('q', '').strip()

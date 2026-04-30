@@ -21,41 +21,78 @@
   {% if results %}
   <style>
     .igdb-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1em; }
-    .igdb-card { border: 1px solid var(--border-color, #ccc); border-radius: 4px; padding: 8px; text-align: center; background: var(--darkened-bg, #f8f8f8); }
+    .igdb-card { border: 1px solid var(--border-color, #ccc); border-radius: 4px; padding: 8px; text-align: center; background: var(--darkened-bg, #f8f8f8); position: relative; cursor: pointer; }
+    .igdb-card.selected { border-color: var(--primary, #417690); box-shadow: 0 0 0 2px var(--primary, #417690); }
+    .igdb-card.exists { border-style: dashed; }
     .igdb-card img { width: 90px; height: 128px; object-fit: cover; display: block; margin: 0 auto 6px; }
     .igdb-card .no-cover { width: 90px; height: 128px; background: var(--darkened-bg, #eee); display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; color: var(--secondary, #888); font-size: 0.75em; border: 1px solid var(--border-color, #ccc); }
     .igdb-card .game-name { font-weight: bold; font-size: 0.85em; margin-bottom: 4px; color: var(--body-fg, #333); }
     .igdb-card .game-meta { font-size: 0.75em; color: var(--secondary, #666); margin-bottom: 6px; }
-    .igdb-card .exists-badge { font-size: 0.75em; color: var(--body-fg, #333); background: var(--darkened-bg, #e8f5e9); border: 1px solid var(--border-color, #a5d6a7); border-radius: 3px; padding: 1px 5px; margin-bottom: 6px; display: inline-block; }
-    .igdb-card form { margin: 0; }
+    .igdb-card .exists-badge { font-size: 0.72em; color: var(--secondary, #555); font-style: italic; display: block; margin-bottom: 4px; }
+    .igdb-card input[type=checkbox] { position: absolute; top: 6px; left: 6px; width: 16px; height: 16px; cursor: pointer; }
+    .igdb-toolbar { display: flex; align-items: center; gap: 1em; margin-bottom: 1em; }
+    .igdb-select-all { font-size: 0.85em; cursor: pointer; color: var(--link-fg, #417690); background: none; border: none; padding: 0; text-decoration: underline; }
   </style>
-  <p class="help">{{ results|length }} result{{ results|length|pluralize }} for &ldquo;{{ query }}&rdquo;</p>
-  <div class="igdb-results">
-    {% for game in results %}
-    <div class="igdb-card">
-      {% if game.cover_url_thumb %}
-      <img src="{{ game.cover_url_thumb }}" alt="{{ game.name }}">
-      {% else %}
-      <div class="no-cover">No cover</div>
-      {% endif %}
-      <div class="game-name">{{ game.name }}</div>
-      <div class="game-meta">
-        {% if game.release_year %}{{ game.release_year }}{% endif %}
-        {% if game.category == 4 %}&nbsp;&bull;&nbsp;Standalone{% endif %}
-      </div>
-      {% if game.already_exists %}
-      <div class="exists-badge">&#10003; In library</div>
-      {% endif %}
-      <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="igdb_id" value="{{ game.igdb_id }}">
-        <input type="submit" value="{% if game.already_exists %}Update{% else %}Add to library{% endif %}"
-               class="{% if game.already_exists %}default{% else %}addlink{% endif %}"
-               style="font-size: 0.8em; padding: 3px 8px;">
-      </form>
+
+  <form method="post" id="igdb-form">
+    {% csrf_token %}
+    <input type="hidden" name="q" value="{{ query }}">
+    <div class="igdb-toolbar">
+      <p class="help" style="margin: 0;">{{ results|length }} result{{ results|length|pluralize }} for &ldquo;{{ query }}&rdquo;</p>
+      <button type="button" class="igdb-select-all" id="select-all">Select all</button>
+      <input type="submit" value="Add / update selected" class="default" id="sync-btn" disabled>
     </div>
-    {% endfor %}
-  </div>
+    <div class="igdb-results">
+      {% for game in results %}
+      <label class="igdb-card {% if game.already_exists %}exists{% endif %}" for="igdb-{{ game.igdb_id }}">
+        <input type="checkbox" name="igdb_id" value="{{ game.igdb_id }}" id="igdb-{{ game.igdb_id }}">
+        {% if game.cover_url_thumb %}
+        <img src="{{ game.cover_url_thumb }}" alt="{{ game.name }}">
+        {% else %}
+        <div class="no-cover">No cover</div>
+        {% endif %}
+        <div class="game-name">{{ game.name }}</div>
+        <div class="game-meta">
+          {% if game.release_year %}{{ game.release_year }}{% endif %}
+          {% if game.category == 4 %}&nbsp;&bull;&nbsp;Standalone{% endif %}
+        </div>
+        {% if game.already_exists %}
+        <span class="exists-badge">&#10003; Already in library &mdash; will update</span>
+        {% endif %}
+      </label>
+      {% endfor %}
+    </div>
+  </form>
+
+  <script>
+    var checkboxes = document.querySelectorAll('#igdb-form input[type=checkbox]');
+    var syncBtn = document.getElementById('sync-btn');
+    var selectAllBtn = document.getElementById('select-all');
+    var allSelected = false;
+
+    function updateState() {
+      var checked = document.querySelectorAll('#igdb-form input[type=checkbox]:checked');
+      syncBtn.disabled = checked.length === 0;
+      syncBtn.value = checked.length > 0
+        ? 'Add / update selected (' + checked.length + ')'
+        : 'Add / update selected';
+      checkboxes.forEach(function(cb) {
+        cb.closest('label').classList.toggle('selected', cb.checked);
+      });
+    }
+
+    checkboxes.forEach(function(cb) {
+      cb.addEventListener('change', updateState);
+    });
+
+    selectAllBtn.addEventListener('click', function() {
+      allSelected = !allSelected;
+      checkboxes.forEach(function(cb) { cb.checked = allSelected; });
+      selectAllBtn.textContent = allSelected ? 'Deselect all' : 'Select all';
+      updateState();
+    });
+  </script>
+
   {% else %}
   <p class="help">No results found for &ldquo;{{ query }}&rdquo;.</p>
   {% endif %}
