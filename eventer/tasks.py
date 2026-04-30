@@ -5,12 +5,7 @@ from celery import shared_task
 
 log = logging.getLogger(__name__)
 
-# Rate limit for individual IGDB API tasks - stays under IGDB's 4 req/sec while
-# leaving headroom for interactive searches. Celery coordinates across all workers.
-IGDB_TASK_RATE_LIMIT = '2/s'
-
-
-@shared_task(rate_limit=IGDB_TASK_RATE_LIMIT)
+@shared_task(rate_limit='2/s')  # stays under IGDB's 4 req/sec, leaves headroom for interactive searches
 def sync_single_igdb_game(igdb_id):
     """
     Sync a single game from IGDB by ID.
