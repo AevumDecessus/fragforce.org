@@ -666,6 +666,9 @@ class GameAdmin(admin.ModelAdmin):
             event_interest = EventInterest.objects.get(pk=int(event_interest_id))
             role = EventRole.objects.get(pk=int(role_id))
             game, created = sync_game_from_igdb(int(igdb_id))
+            if game.status != 'approved':
+                game.status = 'approved'
+                game.save(update_fields=['status'])
             _, linked = GameInterestUserEvent.objects.get_or_create(
                 event_interest=event_interest,
                 game=game,
