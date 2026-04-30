@@ -498,7 +498,7 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['game_name', 'status_display', 'suggested', 'multiplayer_max', 'igdb_link']
+    list_display = ['game_name', 'status_display', 'suggested', 'effective_players', 'igdb_link']
     actions = ['approve_games', 'mark_suggested']
 
     @admin.action(description='Approve selected games')
@@ -525,6 +525,16 @@ class GameAdmin(admin.ModelAdmin):
         }
         icon, color = icons.get(obj.status, ('', 'inherit'))
         return format_html('<span style="color:{}">{} {}</span>', color, icon, obj.get_status_display())
+
+    @admin.display(description='Max players', ordering='multiplayer_max')
+    def effective_players(self, obj):
+        val = obj.effective_multiplayer_max
+        if val is None:
+            return '—'
+        if obj.multiplayer_max_override is not None:
+            from django.utils.html import format_html
+            return format_html('{} <span style="font-size:0.8em;color:var(--secondary,#888)">(override)</span>', val)
+        return val
 
     @admin.display(description='IGDB')
     def igdb_link(self, obj):
