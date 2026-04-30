@@ -498,11 +498,18 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['game_name', 'status', 'suggested', 'multiplayer_max']
+    list_display = ['game_name', 'status', 'suggested', 'multiplayer_max', 'igdb_link']
 
     @admin.display(description='Game', ordering='name')
     def game_name(self, obj):
         return str(obj)
+
+    @admin.display(description='IGDB')
+    def igdb_link(self, obj):
+        from django.utils.html import format_html
+        if obj.igdb_url:
+            return format_html('<a href="{}" target="_blank" rel="noopener">IGDB ↗</a>', obj.igdb_url)
+        return '-'
     list_filter = ['status', 'suggested']
     search_fields = ['name', 'igdb_slug']
     change_list_template = 'admin/eventer/game/change_list.html'
