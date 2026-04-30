@@ -245,8 +245,26 @@ def signup_view(request, event_slug):
     moderator_slots = _slot_qs_for_role(slots, moderator_role)
     tech_slots = _slot_qs_for_role(slots, tech_role)
 
-    participant_games = Game.objects.filter(status='approved', suggested=True).exclude(multiplayer_max=1).order_by('name')
-    streamer_games = Game.objects.filter(status='approved', suggested=True).order_by('name')
+    participant_games = Game.objects.filter(status='approved', suggested=True).exclude(multiplayer_max=1)
+    streamer_games = Game.objects.filter(status='approved', suggested=True)
+
+    # Include any coordinator-linked games already on this signup even if not suggested
+    if existing:
+        linked_participant_ids = existing.gameinterestuserevent_set.filter(
+            role=participant_role
+        ).values_list('game_id', flat=True)
+        linked_streamer_ids = existing.gameinterestuserevent_set.filter(
+            role=streamer_role
+        ).values_list('game_id', flat=True)
+        participant_games = (participant_games | Game.objects.filter(
+            pk__in=linked_participant_ids
+        ).exclude(status='rejected')).distinct()
+        streamer_games = (streamer_games | Game.objects.filter(
+            pk__in=linked_streamer_ids
+        ).exclude(status='rejected')).distinct()
+
+    participant_games = participant_games.order_by('name')
+    streamer_games = streamer_games.order_by('name')
 
     errors = []
 

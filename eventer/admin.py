@@ -1,6 +1,9 @@
+import logging
 import zoneinfo
 
 from django import forms
+
+log = logging.getLogger(__name__)
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -498,9 +501,200 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['name', 'status', 'suggested', 'multiplayer_max']
+    list_display = ['game_name', 'status_display', 'suggested', 'effective_players', 'igdb_link']
+    actions = ['approve_games', 'mark_suggested']
+    readonly_fields = [
+        'igdb_id', 'igdb_slug', 'igdb_url', 'igdb_cover_hash',
+        'summary', 'first_release_date', 'igdb_category', 'multiplayer_max',
+    ]
+    fields = [
+        'name', 'status', 'suggested', 'coordinator_notes',
+        'multiplayer_max_override',
+        'igdb_id', 'igdb_slug', 'igdb_url', 'igdb_cover_hash',
+        'summary', 'first_release_date', 'igdb_category', 'multiplayer_max',
+    ]
+
+    @admin.action(description='Approve selected games')
+    def approve_games(self, request, queryset):
+        updated = queryset.exclude(status='approved').update(status='approved')
+        self.message_user(request, f'{updated} game{"s" if updated != 1 else ""} approved.', messages.SUCCESS)
+
+    @admin.action(description='Mark selected games as suggested')
+    def mark_suggested(self, request, queryset):
+        updated = queryset.filter(suggested=False).update(suggested=True)
+        self.message_user(request, f'{updated} game{"s" if updated != 1 else ""} marked as suggested.', messages.SUCCESS)
+
+    @admin.display(description='Game', ordering='name')
+    def game_name(self, obj):
+        return str(obj)
+
+    @admin.display(description='Status', ordering='status')
+    def status_display(self, obj):
+        from django.utils.html import format_html
+        icons = {
+            'approved': ('✅', 'var(--body-fg, #333)'),
+            'pending':  ('⏳', 'var(--secondary, #888)'),
+            'rejected': ('🚫', 'var(--error-fg, #ba2121)'),
+        }
+        icon, color = icons.get(obj.status, ('', 'inherit'))
+        return format_html('<span style="color:{}">{} {}</span>', color, icon, obj.get_status_display())
+
+    @admin.display(description='Max players', ordering='multiplayer_max')
+    def effective_players(self, obj):
+        val = obj.effective_multiplayer_max
+        if val is None:
+            return '—'
+        if obj.multiplayer_max_override is not None:
+            from django.utils.html import format_html
+            return format_html('{} <span style="font-size:0.8em;color:var(--secondary,#888)">(override)</span>', val)
+        return val
+
+    @admin.display(description='IGDB')
+    def igdb_link(self, obj):
+        from django.utils.html import format_html
+        if obj.igdb_url:
+            return format_html('<a href="{}" target="_blank" rel="noopener">IGDB ↗</a>', obj.igdb_url)
+        return '-'
     list_filter = ['status', 'suggested']
     search_fields = ['name', 'igdb_slug']
+    change_list_template = 'admin/eventer/game/change_list.html'
+
+    def get_urls(self):
+        custom = [
+            path('search-igdb/',
+                 self.admin_site.admin_view(self.search_igdb_view),
+                 name='eventer_game_search_igdb'),
+            path('sync-and-link/',
+                 self.admin_site.admin_view(self.sync_and_link_view),
+                 name='eventer_game_sync_and_link'),
+        ]
+        return custom + super().get_urls()
+
+    def search_igdb_view(self, request):
+        if not request.user.has_perm('eventer.search_igdb'):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+
+        from eventer.igdb import IGDBClient, IGDBError, sync_game_from_igdb
+        from eventer.models import Game
+
+        # POST: sync selected games
+        if request.method == 'POST':
+            igdb_ids = request.POST.getlist('igdb_id')
+            created_names, updated_names, errors = [], [], []
+            for igdb_id in igdb_ids:
+                try:
+                    game, created = sync_game_from_igdb(int(igdb_id))
+                    (created_names if created else updated_names).append(game.name)
+                except Exception as e:
+                    errors.append(str(e))
+            if created_names:
+                self.message_user(request, f'Added: {", ".join(created_names)}', messages.SUCCESS)
+            if updated_names:
+                self.message_user(request, f'Updated: {", ".join(updated_names)}', messages.SUCCESS)
+            for error in errors:
+                self.message_user(request, f'Error: {error}', messages.ERROR)
+            return HttpResponseRedirect('.' + (f'?q={request.POST.get("q", "")}' if request.POST.get('q') else ''))
+
+        # GET: search
+        query = request.GET.get('q', '').strip()
+        results = []
+        error = None
+
+        if not IGDBClient.credentials_configured():
+            error = 'IGDB credentials are not configured. Set IGDB_CLIENT_ID and IGDB_CLIENT_SECRET.'
+        elif query:
+            try:
+                client = IGDBClient()
+                raw_results = client.search_games(query)
+                existing_ids = set(
+                    Game.objects.filter(
+                        igdb_id__in=[r['id'] for r in raw_results]
+                    ).values_list('igdb_id', flat=True)
+                )
+                for r in raw_results:
+                    cover_hash = (r.get('cover') or {}).get('image_id')
+                    release_year = None
+                    if r.get('first_release_date'):
+                        from datetime import datetime, timezone
+                        release_year = datetime.fromtimestamp(
+                            r['first_release_date'], tz=timezone.utc
+                        ).year
+                    results.append({
+                        'igdb_id': r['id'],
+                        'name': r['name'],
+                        'cover_url_thumb': f'//images.igdb.com/igdb/image/upload/t_thumb/{cover_hash}.jpg' if cover_hash else None,
+                        'release_year': release_year,
+                        'category': r.get('category'),
+                        'already_exists': r['id'] in existing_ids,
+                    })
+            except IGDBError as e:
+                log.warning('IGDB search failed: %s', e)
+                error = 'IGDB search failed. Check credentials and try again.'
+
+        if request.GET.get('format') == 'json':
+            from django.http import JsonResponse
+            return JsonResponse({'results': results, 'error': error})
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Search IGDB',
+            'query': query,
+            'results': results,
+            'error': error,
+        }
+        return render(request, 'admin/eventer/game/search_igdb.html', context)
+
+    def sync_and_link_view(self, request):
+        """
+        POST-only endpoint: sync a game from IGDB and link it to an EventInterest.
+        Used by the IGDB search panel on the EventInterest change form.
+        Returns JSON.
+        """
+        from django.http import JsonResponse
+        from django.core.exceptions import PermissionDenied
+        if not request.user.has_perm('eventer.search_igdb'):
+            raise PermissionDenied
+        if request.method != 'POST':
+            return JsonResponse({'error': 'POST required'}, status=405)
+
+        from eventer.igdb import IGDBError, sync_game_from_igdb
+        from evtsignup.models import EventInterest, GameInterestUserEvent
+        from eventer.models import EventRole
+
+        igdb_id = request.POST.get('igdb_id', '').strip()
+        event_interest_id = request.POST.get('event_interest_id', '').strip()
+        role_id = request.POST.get('role_id', '').strip()
+
+        try:
+            event_interest = EventInterest.objects.get(pk=int(event_interest_id))
+            role = EventRole.objects.get(pk=int(role_id))
+            game, created = sync_game_from_igdb(int(igdb_id))
+            if game.status != 'approved':
+                game.status = 'approved'
+                game.save(update_fields=['status'])
+            _, linked = GameInterestUserEvent.objects.get_or_create(
+                event_interest=event_interest,
+                game=game,
+                role=role,
+            )
+            return JsonResponse({
+                'status': 'ok',
+                'game_id': game.pk,
+                'game_name': str(game),
+                'game_created': created,
+                'linked': linked,
+                'role_name': role.name,
+            })
+        except EventInterest.DoesNotExist:
+            return JsonResponse({'error': 'EventInterest not found'}, status=404)
+        except EventRole.DoesNotExist:
+            return JsonResponse({'error': 'Role not found'}, status=404)
+        except ValueError:
+            return JsonResponse({'error': f'IGDB game {igdb_id} not found.'}, status=404)
+        except IGDBError as e:
+            log.warning('IGDB sync-and-link failed for igdb_id=%s: %s', igdb_id, e)
+            return JsonResponse({'error': 'IGDB API error - check credentials and try again.'}, status=400)
 
 
 @admin.register(Team)

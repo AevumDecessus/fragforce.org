@@ -511,3 +511,63 @@ class ParseFundraisingUrlTest(TestCase):
         url = 'https://tiltify.com/+fragforce/'
         r = parse_fundraising_url(url)
         self.assertEqual(r.raw_url, url)
+
+
+class EventInterestAdminTest(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from fforg.permissions import seed_permission_groups
+        from eventer.models import Event
+        seed_permission_groups()
+        self.coordinator = User.objects.create_user('coord_ei', 'c@example.com', 'pass', is_staff=True)
+        self.coordinator.groups.add(Group.objects.get(name='Coordinator'))
+        self.client.login(username='coord_ei', password='pass')
+        self.event = Event.objects.create(name='Admin Test Event', slug='admin-test-event', description='')
+        from evtsignup.models import EventInterest, EventAvailabilityInterest
+        self.ei = EventInterest.objects.create(
+            user=self.coordinator, event=self.event,
+            display_name='Test Coord', acknowledged=True,
+            fundraising_url='https://extra-life.org/participant/123'
+        )
+        # Add some availability with roles
+        from datetime import datetime, timezone
+        hour = datetime(2025, 4, 4, 8, tzinfo=timezone.utc)
+        EventAvailabilityInterest.objects.create(
+            event_interest=self.ei, hour=hour,
+            as_streamer=True, as_participant=True
+        )
+
+    def test_list_view_renders(self):
+        response = self.client.get('/admin/evtsignup/eventinterest/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Test Coord')
+
+    def test_list_shows_roles_summary(self):
+        response = self.client.get('/admin/evtsignup/eventinterest/')
+        self.assertContains(response, 'Streamer')
+
+    def test_list_shows_fundraising_boolean(self):
+        response = self.client.get('/admin/evtsignup/eventinterest/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_change_form_renders_with_igdb_context(self):
+        response = self.client.get(f'/admin/evtsignup/eventinterest/{self.ei.pk}/change/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Game selections')
+
+    def test_roles_summary_no_availability(self):
+        from evtsignup.models import EventInterest
+        from eventer.models import Event
+        event2 = Event.objects.create(name='Admin Test 2', slug='admin-test-2', description='')
+        ei2 = EventInterest.objects.create(user=self.coordinator, event=event2, acknowledged=True)
+        from evtsignup.admin import EventInterestAdmin
+        from django.contrib.admin.sites import AdminSite
+        admin = EventInterestAdmin(EventInterest, AdminSite())
+        self.assertEqual(admin.roles_summary(ei2), '—')
+
+    def test_game_count_zero_shows_dash(self):
+        from evtsignup.models import EventInterest
+        from evtsignup.admin import EventInterestAdmin
+        from django.contrib.admin.sites import AdminSite
+        admin = EventInterestAdmin(EventInterest, AdminSite())
+        self.assertEqual(admin.game_count(self.ei), '—')

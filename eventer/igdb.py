@@ -154,7 +154,8 @@ class IGDBClient:
         """
         results = self._request('games', (
             f'fields id,name,slug,url,summary,cover.image_id,'
-            f'first_release_date,category,multiplayer_modes.onlinecoop;'
+            f'first_release_date,category,'
+            f'multiplayer_modes.onlinecoop,multiplayer_modes.onlinecoopmax;'
             f'where id = {igdb_id};'
             f'limit 1;'
         ))
@@ -163,14 +164,14 @@ class IGDBClient:
     def search_games(self, query, limit=10):
         """
         Search IGDB for games by name.
-        Filters to main games and standalone expansions (categories 0 and 4).
-        Returns a list of game dicts.
+        Returns a list of game dicts. Category is included for display but not filtered -
+        IGDB's search endpoint doesn't reliably populate category, so filtering by it
+        would silently drop valid results.
         """
         safe_query = query.replace('\\', '\\\\').replace('"', '\\"')
         return self._request('games', (
             f'fields id,name,slug,url,summary,cover.image_id,first_release_date,category;'
             f'search "{safe_query}";'
-            f'where category = (0,4);'
             f'limit {limit};'
         ))
 
