@@ -1,6 +1,9 @@
+import logging
 import zoneinfo
 
 from django import forms
+
+log = logging.getLogger(__name__)
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -626,7 +629,8 @@ class GameAdmin(admin.ModelAdmin):
                         'already_exists': r['id'] in existing_ids,
                     })
             except IGDBError as e:
-                error = f'IGDB search failed: {e}'
+                log.warning('IGDB search failed: %s', e)
+                error = 'IGDB search failed. Check credentials and try again.'
 
         if request.GET.get('format') == 'json':
             from django.http import JsonResponse
@@ -686,8 +690,11 @@ class GameAdmin(admin.ModelAdmin):
             return JsonResponse({'error': 'EventInterest not found'}, status=404)
         except EventRole.DoesNotExist:
             return JsonResponse({'error': 'Role not found'}, status=404)
-        except (ValueError, IGDBError) as e:
+        except ValueError as e:
             return JsonResponse({'error': str(e)}, status=400)
+        except IGDBError as e:
+            log.warning('IGDB sync-and-link failed for igdb_id=%s: %s', igdb_id, e)
+            return JsonResponse({'error': 'IGDB API error - check credentials and try again.'}, status=400)
 
 
 @admin.register(Team)
