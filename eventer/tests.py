@@ -847,6 +847,42 @@ class IGDBClientTest(TestCase):
             with self.assertRaises(IGDBError):
                 client.credentials_valid()
 
+    def test_rate_limit_retries_and_succeeds(self):
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import IGDBClient
+        client = IGDBClient()
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.headers = {'Retry-After': '0'}
+        success = MagicMock()
+        success.status_code = 200
+        success.ok = True
+        success.json.return_value = [{'id': 1, 'name': 'X'}]
+        with patch.object(client, '_get_token', return_value='token'), \
+             patch.object(client, '_do_request', side_effect=[rate_limited, success]), \
+             patch('eventer.igdb.time.sleep') as mock_sleep, \
+             self.settings(IGDB_RATE_LIMIT_RETRIES=3, IGDB_RATE_LIMIT_RETRY_AFTER=1.0):
+            result = client._request('games', 'fields id,name;')
+        self.assertEqual(result, [{'id': 1, 'name': 'X'}])
+        mock_sleep.assert_called_once_with(0.0)
+
+    def test_rate_limit_raises_after_max_retries(self):
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import IGDBClient, IGDBError
+        client = IGDBClient()
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.ok = False
+        rate_limited.headers = {'Retry-After': '0'}
+        rate_limited.text = 'Too Many Requests'
+        with patch.object(client, '_get_token', return_value='token'), \
+             patch.object(client, '_do_request', return_value=rate_limited), \
+             patch('eventer.igdb.time.sleep'), \
+             self.settings(IGDB_RATE_LIMIT_RETRIES=2, IGDB_RATE_LIMIT_RETRY_AFTER=0):
+            with self.assertRaises(IGDBError) as cm:
+                client._request('games', 'fields id;')
+        self.assertEqual(cm.exception.status_code, 429)
+
 
 class SyncGameFromIgdbTest(TestCase):
     def _mock_data(self):
