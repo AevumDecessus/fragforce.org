@@ -498,7 +498,7 @@ class EventScheduleMultiAssignmentAdmin(_ScheduleAssignmentAdminBase):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['game_name', 'status', 'suggested', 'multiplayer_max', 'igdb_link']
+    list_display = ['game_name', 'status_display', 'suggested', 'multiplayer_max', 'igdb_link']
     actions = ['approve_games', 'mark_suggested']
 
     @admin.action(description='Approve selected games')
@@ -514,6 +514,17 @@ class GameAdmin(admin.ModelAdmin):
     @admin.display(description='Game', ordering='name')
     def game_name(self, obj):
         return str(obj)
+
+    @admin.display(description='Status', ordering='status')
+    def status_display(self, obj):
+        from django.utils.html import format_html
+        icons = {
+            'approved': ('✅', 'var(--body-fg, #333)'),
+            'pending':  ('⏳', 'var(--secondary, #888)'),
+            'rejected': ('🚫', 'var(--error-fg, #ba2121)'),
+        }
+        icon, color = icons.get(obj.status, ('', 'inherit'))
+        return format_html('<span style="color:{}">{} {}</span>', color, icon, obj.get_status_display())
 
     @admin.display(description='IGDB')
     def igdb_link(self, obj):
