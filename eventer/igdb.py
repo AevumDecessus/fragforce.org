@@ -13,6 +13,7 @@ Usage:
     game = client.fetch_game(115555)
 """
 import logging
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -95,11 +96,10 @@ class IGDBClient:
         cache.set(self._token_cache_key, token, ttl)
         return token
 
-    def _request(self, endpoint, body):
-        """POST to an IGDB endpoint. Returns parsed JSON. Retries once on 401."""
-        token = self._get_token()
+    def _do_request(self, endpoint, body, token):
+        """Make a single POST to an IGDB endpoint. Returns the response object."""
         try:
-            resp = requests.post(
+            return requests.post(
                 f'{IGDB_API_BASE}/{endpoint}',
                 headers={
                     'Client-ID': self._client_id,
@@ -113,22 +113,31 @@ class IGDBClient:
         except requests.exceptions.RequestException as e:
             raise IGDBError(f'Network error calling IGDB: {e}')
 
+    def _request(self, endpoint, body):
+        """
+        POST to an IGDB endpoint. Returns parsed JSON.
+        Retries once on 401 (token expiry).
+        Retries up to IGDB_RATE_LIMIT_RETRIES times on 429 with backoff.
+        """
+        token = self._get_token()
+        resp = self._do_request(endpoint, body, token)
+
         if resp.status_code == 401:
             # Token may have expired between cache fetch and request - clear and retry once
             cache.delete(self._token_cache_key)
             token = self._get_token()
-            try:
-                resp = requests.post(
-                    f'{IGDB_API_BASE}/{endpoint}',
-                    headers={
-                        'Client-ID': self._client_id,
-                        'Authorization': f'Bearer {token}',
-                    },
-                    data=body,
-                    timeout=10,
-                )
-            except requests.exceptions.RequestException as e:
-                raise IGDBError(f'Network error calling IGDB (retry): {e}')
+            resp = self._do_request(endpoint, body, token)
+
+        max_retries = getattr(settings, 'IGDB_RATE_LIMIT_RETRIES', 3)
+        default_retry_after = getattr(settings, 'IGDB_RATE_LIMIT_RETRY_AFTER', 1.0)
+        for attempt in range(max_retries):
+            if resp.status_code != 429:
+                break
+            retry_after = float(resp.headers.get('Retry-After', default_retry_after))
+            log.warning('IGDB rate limited on %s - waiting %.1fs (attempt %d/%d)',
+                        endpoint, retry_after, attempt + 1, max_retries)
+            time.sleep(retry_after)
+            resp = self._do_request(endpoint, body, token)
 
         if not resp.ok:
             raise IGDBError(
@@ -157,9 +166,10 @@ class IGDBClient:
         Filters to main games and standalone expansions (categories 0 and 4).
         Returns a list of game dicts.
         """
+        safe_query = query.replace('\\', '\\\\').replace('"', '\\"')
         return self._request('games', (
             f'fields id,name,slug,url,summary,cover.image_id,first_release_date,category;'
-            f'search "{query}";'
+            f'search "{safe_query}";'
             f'where category = (0,4);'
             f'limit {limit};'
         ))
