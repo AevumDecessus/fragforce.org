@@ -1,0 +1,151 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block after_related_objects %}
+{{ block.super }}
+
+{% if igdb_configured and original %}
+<style>
+  .igdb-panel { margin-top: 2em; border: 1px solid var(--border-color, #ccc); border-radius: 4px; }
+  .igdb-panel-header { background: var(--darkened-bg, #f8f8f8); padding: 8px 12px; font-weight: bold; font-size: 0.95em; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0; color: var(--body-fg, #333); border-bottom: 1px solid var(--border-color, #ccc); }
+  .igdb-panel-header:hover { background: var(--selected-bg, #e8e8e8); }
+  .igdb-panel-body { padding: 12px; display: none; }
+  .igdb-panel-body.open { display: block; }
+  .igdb-search-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .igdb-search-row input[type=text] { padding: 5px 8px; font-size: 0.9em; width: 16em; }
+  .igdb-search-row select { padding: 5px 8px; font-size: 0.9em; }
+  .igdb-results-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.75em; }
+  .igdb-result-card { border: 1px solid var(--border-color, #ccc); border-radius: 4px; padding: 6px; text-align: center; background: var(--body-bg, #fff); }
+  .igdb-result-card img { width: 75px; height: 106px; object-fit: cover; display: block; margin: 0 auto 4px; }
+  .igdb-result-card .no-cover { width: 75px; height: 106px; background: var(--darkened-bg, #eee); display: flex; align-items: center; justify-content: center; margin: 0 auto 4px; color: var(--secondary, #888); font-size: 0.7em; }
+  .igdb-result-card .rcard-name { font-size: 0.8em; font-weight: bold; color: var(--body-fg, #333); margin-bottom: 2px; }
+  .igdb-result-card .rcard-meta { font-size: 0.72em; color: var(--secondary, #888); margin-bottom: 4px; }
+  .igdb-result-card .rcard-exists { font-size: 0.7em; color: var(--secondary, #888); font-style: italic; display: block; margin-bottom: 3px; }
+  .igdb-result-card button { font-size: 0.75em; padding: 2px 6px; cursor: pointer; width: 100%; }
+  .igdb-msg { font-size: 0.85em; padding: 4px 0; }
+  .igdb-msg.success { color: var(--success-fg, #388e3c); }
+  .igdb-msg.error { color: var(--error-fg, #ba2121); }
+  #igdb-search-status { font-size: 0.85em; color: var(--secondary, #888); }
+</style>
+
+<div class="igdb-panel" id="igdb-link-panel">
+  <div class="igdb-panel-header" id="igdb-panel-toggle">
+    Search IGDB &amp; link game
+    <span id="igdb-panel-arrow">&#9660;</span>
+  </div>
+  <div class="igdb-panel-body" id="igdb-panel-body">
+    <div class="igdb-search-row">
+      <input type="text" id="igdb-query" placeholder="Search by game name..." autocomplete="off">
+      <select id="igdb-role-select">
+        {% for role in event_roles %}
+        <option value="{{ role.pk }}">{{ role.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" class="button" id="igdb-search-btn">Search</button>
+      <span id="igdb-search-status"></span>
+    </div>
+    <div id="igdb-results-panel" class="igdb-results-panel"></div>
+    <div id="igdb-messages"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var toggle = document.getElementById('igdb-panel-toggle');
+  var body = document.getElementById('igdb-panel-body');
+  var arrow = document.getElementById('igdb-panel-arrow');
+  toggle.addEventListener('click', function() {
+    body.classList.toggle('open');
+    arrow.textContent = body.classList.contains('open') ? '▲' : '▼';
+  });
+
+  var searchBtn = document.getElementById('igdb-search-btn');
+  var queryInput = document.getElementById('igdb-query');
+  var status = document.getElementById('igdb-search-status');
+  var resultsPanel = document.getElementById('igdb-results-panel');
+  var messagesDiv = document.getElementById('igdb-messages');
+  var eventInterestId = '{{ original.pk }}';
+  var searchUrl = '{% url "admin:eventer_game_search_igdb" %}';
+  var syncUrl = '{% url "admin:eventer_game_sync_and_link" %}';
+  var csrfToken = '{{ csrf_token }}';
+
+  queryInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+  });
+  searchBtn.addEventListener('click', doSearch);
+
+  function doSearch() {
+    var q = queryInput.value.trim();
+    if (!q) return;
+    status.textContent = 'Searching…';
+    resultsPanel.innerHTML = '';
+    messagesDiv.innerHTML = '';
+    fetch(searchUrl + '?format=json&q=' + encodeURIComponent(q))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        status.textContent = '';
+        if (data.error) {
+          messagesDiv.innerHTML = '<p class="igdb-msg error">' + data.error + '</p>';
+          return;
+        }
+        if (!data.results.length) {
+          messagesDiv.innerHTML = '<p class="igdb-msg">No results found.</p>';
+          return;
+        }
+        data.results.forEach(function(game) {
+          var card = document.createElement('div');
+          card.className = 'igdb-result-card';
+          var coverHtml = game.cover_url_thumb
+            ? '<img src="' + game.cover_url_thumb + '" alt="">'
+            : '<div class="no-cover">No cover</div>';
+          var existsHtml = game.already_exists ? '<span class="rcard-exists">✓ In library</span>' : '';
+          var btnLabel = game.already_exists ? 'Update &amp; link' : 'Add &amp; link';
+          card.innerHTML = coverHtml
+            + '<div class="rcard-name">' + game.name + '</div>'
+            + '<div class="rcard-meta">' + (game.release_year || '') + '</div>'
+            + existsHtml
+            + '<button type="button" data-igdb-id="' + game.igdb_id + '">' + btnLabel + '</button>';
+          card.querySelector('button').addEventListener('click', function() {
+            syncAndLink(game.igdb_id, this);
+          });
+          resultsPanel.appendChild(card);
+        });
+      })
+      .catch(function() { status.textContent = 'Search failed.'; });
+  }
+
+  function syncAndLink(igdbId, btn) {
+    var roleId = document.getElementById('igdb-role-select').value;
+    btn.disabled = true;
+    btn.textContent = '…';
+    var formData = new FormData();
+    formData.append('igdb_id', igdbId);
+    formData.append('event_interest_id', eventInterestId);
+    formData.append('role_id', roleId);
+    formData.append('csrfmiddlewaretoken', csrfToken);
+    fetch(syncUrl, { method: 'POST', body: formData })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) {
+          btn.disabled = false;
+          btn.textContent = 'Retry';
+          messagesDiv.innerHTML = '<p class="igdb-msg error">' + data.error + '</p>';
+        } else {
+          btn.textContent = '✓ Linked';
+          var action = data.game_created ? 'Added' : 'Updated';
+          var linked = data.linked ? 'linked' : 'already linked';
+          messagesDiv.innerHTML = '<p class="igdb-msg success">'
+            + action + ': ' + data.game_name + ' (' + data.role_name + ') — ' + linked
+            + '. Save the form to confirm.</p>';
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+        messagesDiv.innerHTML = '<p class="igdb-msg error">Request failed.</p>';
+      });
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

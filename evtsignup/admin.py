@@ -23,6 +23,15 @@ class EventInterestAdmin(admin.ModelAdmin):
     raw_id_fields = ['el_participant']
     readonly_fields = ['user', 'event']
     inlines = [GameInterestInline]
+    change_form_template = 'admin/evtsignup/eventinterest/change_form.html'
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        from eventer.models import EventRole
+        from eventer.igdb import IGDBClient
+        extra_context = extra_context or {}
+        extra_context['event_roles'] = EventRole.objects.order_by('name')
+        extra_context['igdb_configured'] = IGDBClient.credentials_configured()
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     @admin.display(description='Signup', ordering='display_name')
     def display_name_or_user(self, obj):

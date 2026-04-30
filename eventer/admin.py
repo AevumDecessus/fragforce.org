@@ -561,6 +561,9 @@ class GameAdmin(admin.ModelAdmin):
             path('search-igdb/',
                  self.admin_site.admin_view(self.search_igdb_view),
                  name='eventer_game_search_igdb'),
+            path('sync-and-link/',
+                 self.admin_site.admin_view(self.sync_and_link_view),
+                 name='eventer_game_sync_and_link'),
         ]
         return custom + super().get_urls()
 
@@ -625,6 +628,10 @@ class GameAdmin(admin.ModelAdmin):
             except IGDBError as e:
                 error = f'IGDB search failed: {e}'
 
+        if request.GET.get('format') == 'json':
+            from django.http import JsonResponse
+            return JsonResponse({'results': results, 'error': error})
+
         context = {
             **self.admin_site.each_context(request),
             'title': 'Search IGDB',
@@ -633,6 +640,51 @@ class GameAdmin(admin.ModelAdmin):
             'error': error,
         }
         return render(request, 'admin/eventer/game/search_igdb.html', context)
+
+    def sync_and_link_view(self, request):
+        """
+        POST-only endpoint: sync a game from IGDB and link it to an EventInterest.
+        Used by the IGDB search panel on the EventInterest change form.
+        Returns JSON.
+        """
+        from django.http import JsonResponse
+        from django.core.exceptions import PermissionDenied
+        if not request.user.has_perm('eventer.search_igdb'):
+            raise PermissionDenied
+        if request.method != 'POST':
+            return JsonResponse({'error': 'POST required'}, status=405)
+
+        from eventer.igdb import IGDBError, sync_game_from_igdb
+        from evtsignup.models import EventInterest, GameInterestUserEvent
+        from eventer.models import EventRole
+
+        igdb_id = request.POST.get('igdb_id', '').strip()
+        event_interest_id = request.POST.get('event_interest_id', '').strip()
+        role_id = request.POST.get('role_id', '').strip()
+
+        try:
+            event_interest = EventInterest.objects.get(pk=int(event_interest_id))
+            role = EventRole.objects.get(pk=int(role_id))
+            game, created = sync_game_from_igdb(int(igdb_id))
+            _, linked = GameInterestUserEvent.objects.get_or_create(
+                event_interest=event_interest,
+                game=game,
+                role=role,
+            )
+            return JsonResponse({
+                'status': 'ok',
+                'game_id': game.pk,
+                'game_name': str(game),
+                'game_created': created,
+                'linked': linked,
+                'role_name': role.name,
+            })
+        except EventInterest.DoesNotExist:
+            return JsonResponse({'error': 'EventInterest not found'}, status=404)
+        except EventRole.DoesNotExist:
+            return JsonResponse({'error': 'Role not found'}, status=404)
+        except (ValueError, IGDBError) as e:
+            return JsonResponse({'error': str(e)}, status=400)
 
 
 @admin.register(Team)
