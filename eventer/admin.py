@@ -690,8 +690,8 @@ class GameAdmin(admin.ModelAdmin):
             return JsonResponse({'error': 'EventInterest not found'}, status=404)
         except EventRole.DoesNotExist:
             return JsonResponse({'error': 'Role not found'}, status=404)
-        except ValueError as e:
-            return JsonResponse({'error': str(e)}, status=400)
+        except ValueError:
+            return JsonResponse({'error': f'IGDB game {igdb_id} not found.'}, status=404)
         except IGDBError as e:
             log.warning('IGDB sync-and-link failed for igdb_id=%s: %s', igdb_id, e)
             return JsonResponse({'error': 'IGDB API error - check credentials and try again.'}, status=400)
