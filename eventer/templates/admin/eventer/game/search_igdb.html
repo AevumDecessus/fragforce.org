@@ -21,12 +21,12 @@
   {% if results %}
   <style>
     .igdb-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1em; }
-    .igdb-card { border: 1px solid #ccc; border-radius: 4px; padding: 8px; text-align: center; background: #fff; }
+    .igdb-card { border: 1px solid var(--border-color, #ccc); border-radius: 4px; padding: 8px; text-align: center; background: var(--darkened-bg, #f8f8f8); }
     .igdb-card img { width: 90px; height: 128px; object-fit: cover; display: block; margin: 0 auto 6px; }
-    .igdb-card .no-cover { width: 90px; height: 128px; background: #eee; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; color: #aaa; font-size: 0.75em; }
-    .igdb-card .game-name { font-weight: bold; font-size: 0.85em; margin-bottom: 4px; }
-    .igdb-card .game-meta { font-size: 0.75em; color: #666; margin-bottom: 6px; }
-    .igdb-card .exists-badge { font-size: 0.75em; color: #333; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 3px; padding: 1px 5px; margin-bottom: 6px; display: inline-block; }
+    .igdb-card .no-cover { width: 90px; height: 128px; background: var(--darkened-bg, #eee); display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; color: var(--secondary, #888); font-size: 0.75em; border: 1px solid var(--border-color, #ccc); }
+    .igdb-card .game-name { font-weight: bold; font-size: 0.85em; margin-bottom: 4px; color: var(--body-fg, #333); }
+    .igdb-card .game-meta { font-size: 0.75em; color: var(--secondary, #666); margin-bottom: 6px; }
+    .igdb-card .exists-badge { font-size: 0.75em; color: var(--body-fg, #333); background: var(--darkened-bg, #e8f5e9); border: 1px solid var(--border-color, #a5d6a7); border-radius: 3px; padding: 1px 5px; margin-bottom: 6px; display: inline-block; }
     .igdb-card form { margin: 0; }
   </style>
   <p class="help">{{ results|length }} result{{ results|length|pluralize }} for &ldquo;{{ query }}&rdquo;</p>
