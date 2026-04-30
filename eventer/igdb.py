@@ -154,7 +154,8 @@ class IGDBClient:
         """
         results = self._request('games', (
             f'fields id,name,slug,url,summary,cover.image_id,'
-            f'first_release_date,category,multiplayer_modes.onlinecoop;'
+            f'first_release_date,category,'
+            f'multiplayer_modes.onlinecoop,multiplayer_modes.onlinecoopmax;'
             f'where id = {igdb_id};'
             f'limit 1;'
         ))
