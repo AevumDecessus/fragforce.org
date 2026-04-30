@@ -802,6 +802,52 @@ class ParseIgdbGameTest(TestCase):
         self.assertIsNone(result['igdb_slug'])
 
 
+class IGDBClientTest(TestCase):
+    def test_credentials_configured_true_when_set(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='abc', IGDB_CLIENT_SECRET='def'):
+            self.assertTrue(IGDBClient.credentials_configured())
+
+    def test_credentials_configured_false_when_empty(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='', IGDB_CLIENT_SECRET=''):
+            self.assertFalse(IGDBClient.credentials_configured())
+
+    def test_credentials_configured_false_when_partial(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='abc', IGDB_CLIENT_SECRET=''):
+            self.assertFalse(IGDBClient.credentials_configured())
+
+    def test_credentials_valid_returns_true_on_success(self):
+        from unittest.mock import patch
+        from eventer.igdb import IGDBClient
+        client = IGDBClient()
+        with patch.object(client, '_get_token', return_value='token'):
+            self.assertTrue(client.credentials_valid())
+
+    def test_credentials_valid_returns_false_on_401(self):
+        from unittest.mock import patch
+        from eventer.igdb import IGDBClient, IGDBError
+        client = IGDBClient()
+        with patch.object(client, '_get_token', side_effect=IGDBError('bad', status_code=401)):
+            self.assertFalse(client.credentials_valid())
+
+    def test_credentials_valid_returns_false_on_403(self):
+        from unittest.mock import patch
+        from eventer.igdb import IGDBClient, IGDBError
+        client = IGDBClient()
+        with patch.object(client, '_get_token', side_effect=IGDBError('forbidden', status_code=403)):
+            self.assertFalse(client.credentials_valid())
+
+    def test_credentials_valid_reraises_non_auth_errors(self):
+        from unittest.mock import patch
+        from eventer.igdb import IGDBClient, IGDBError
+        client = IGDBClient()
+        with patch.object(client, '_get_token', side_effect=IGDBError('timeout')):
+            with self.assertRaises(IGDBError):
+                client.credentials_valid()
+
+
 class SyncGameFromIgdbTest(TestCase):
     def _mock_data(self):
         return {
@@ -816,9 +862,11 @@ class SyncGameFromIgdbTest(TestCase):
         }
 
     def test_creates_game(self):
-        from unittest.mock import patch
-        from eventer.igdb import sync_game_from_igdb
-        with patch('eventer.igdb.fetch_igdb_game', return_value=self._mock_data()):
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import sync_game_from_igdb, IGDBClient
+        mock_client = MagicMock(spec=IGDBClient)
+        mock_client.fetch_game.return_value = self._mock_data()
+        with patch('eventer.igdb.IGDBClient', return_value=mock_client):
             game, created = sync_game_from_igdb(9999)
         self.assertTrue(created)
         self.assertEqual(game.name, 'Mock Game')
@@ -826,19 +874,22 @@ class SyncGameFromIgdbTest(TestCase):
         self.assertEqual(game.igdb_cover_hash, 'mockhash')
 
     def test_updates_existing_game(self):
-        from unittest.mock import patch
-        from eventer.igdb import sync_game_from_igdb
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import sync_game_from_igdb, IGDBClient
         from eventer.models import Game
         Game.objects.create(name='Old Name', igdb_id=9999)
-        updated_data = {**self._mock_data(), 'name': 'Updated Name'}
-        with patch('eventer.igdb.fetch_igdb_game', return_value=updated_data):
+        mock_client = MagicMock(spec=IGDBClient)
+        mock_client.fetch_game.return_value = {**self._mock_data(), 'name': 'Updated Name'}
+        with patch('eventer.igdb.IGDBClient', return_value=mock_client):
             game, created = sync_game_from_igdb(9999)
         self.assertFalse(created)
         self.assertEqual(game.name, 'Updated Name')
 
     def test_raises_on_not_found(self):
-        from unittest.mock import patch
-        from eventer.igdb import sync_game_from_igdb
-        with patch('eventer.igdb.fetch_igdb_game', return_value=None):
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import sync_game_from_igdb, IGDBClient
+        mock_client = MagicMock(spec=IGDBClient)
+        mock_client.fetch_game.return_value = None
+        with patch('eventer.igdb.IGDBClient', return_value=mock_client):
             with self.assertRaises(ValueError):
                 sync_game_from_igdb(9999)
