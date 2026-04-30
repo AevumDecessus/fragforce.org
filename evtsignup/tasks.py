@@ -1,6 +1,8 @@
 import logging
 
+import requests
 from celery import shared_task
+from extralifeapi.participants import Participants
 
 log = logging.getLogger(__name__)
 
@@ -77,7 +79,6 @@ def _is_followable_url(url):
 
 def _follow_redirect(url):
     """Follow HTTP redirects and return the final URL, or None on failure."""
-    import requests
     try:
         resp = requests.get(
             url if '://' in url else f'https://{url}',
@@ -102,7 +103,6 @@ def _resolve_participant(interest, result):
     )
 
     try:
-        from extralifeapi.participants import Participants
         api_participant = Participants.participant(id_or_slug)
     except Exception as e:
         log.warning(
@@ -124,7 +124,7 @@ def _resolve_participant(interest, result):
         return
 
     participant, created = ParticipantModel.objects.get_or_create(
-        participantID=numeric_id,
+        id=numeric_id,
         defaults={'displayName': api_participant.get('displayName', ''), 'tracked': False},
     )
 
