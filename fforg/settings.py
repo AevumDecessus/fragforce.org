@@ -469,6 +469,11 @@ DISCORD_REQUIRED_GUILD_ID = os.environ.get('DISCORD_GUILD_ID', '1641366357626060
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN', '')
 ADD_DISCORD_COMMANDS = os.environ.get('ADD_DISCORD_COMMANDS', 'true').lower() not in ('false', '0', 'no')
 
+IGDB_CLIENT_ID = os.environ.get('IGDB_CLIENT_ID', '')
+IGDB_CLIENT_SECRET = os.environ.get('IGDB_CLIENT_SECRET', '')
+IGDB_RATE_LIMIT_RETRIES = int(os.environ.get('IGDB_RATE_LIMIT_RETRIES', 3))
+IGDB_RATE_LIMIT_RETRY_AFTER = float(os.environ.get('IGDB_RATE_LIMIT_RETRY_AFTER', 1.0))
+
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
     'social_core.pipeline.social_auth.social_uid',

@@ -235,7 +235,7 @@ class SignupViewGameSelectionTest(TestCase):
         self.event = _make_event()
         self.slot = EventSignupSlot.objects.filter(event=self.event).first()
         self.game = Game.objects.create(
-            name='Test Game', slug='test-game', status='approved', suggested=True,
+            name='Test Game', status='approved', suggested=True,
             igdb_id=12345,
         )
 
