@@ -929,3 +929,308 @@ class SyncGameFromIgdbTest(TestCase):
         with patch('eventer.igdb.IGDBClient', return_value=mock_client):
             with self.assertRaises(ValueError):
                 sync_game_from_igdb(9999)
+
+
+class IGDBClientGetTokenTest(TestCase):
+    def _make_client(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='test_id', IGDB_CLIENT_SECRET='test_secret'):
+            return IGDBClient()
+
+    def test_returns_cached_token(self):
+        from unittest.mock import patch
+        client = self._make_client()
+        with patch('eventer.igdb.cache') as mock_cache:
+            mock_cache.get.return_value = 'cached_token'
+            token = client._get_token()
+        self.assertEqual(token, 'cached_token')
+
+    def test_fetches_and_caches_token(self):
+        from unittest.mock import patch, MagicMock
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.json.return_value = {'access_token': 'new_token', 'expires_in': 3600}
+        with patch('eventer.igdb.cache') as mock_cache, \
+             patch('eventer.igdb.requests.post', return_value=mock_resp):
+            mock_cache.get.return_value = None
+            token = client._get_token()
+        self.assertEqual(token, 'new_token')
+        mock_cache.set.assert_called_once()
+        _, args, _ = mock_cache.set.mock_calls[0]
+        self.assertEqual(args[1], 'new_token')
+        self.assertEqual(args[2], 3600 - 60)  # TOKEN_EXPIRY_BUFFER
+
+    def test_raises_on_timeout(self):
+        from unittest.mock import patch
+        import requests as req
+        from eventer.igdb import IGDBError
+        client = self._make_client()
+        with patch('eventer.igdb.cache') as mock_cache, \
+             patch('eventer.igdb.requests.post', side_effect=req.exceptions.Timeout):
+            mock_cache.get.return_value = None
+            with self.assertRaises(IGDBError) as cm:
+                client._get_token()
+        self.assertIn('Timed out', str(cm.exception))
+
+    def test_raises_on_network_error(self):
+        from unittest.mock import patch
+        import requests as req
+        from eventer.igdb import IGDBError
+        client = self._make_client()
+        with patch('eventer.igdb.cache') as mock_cache, \
+             patch('eventer.igdb.requests.post', side_effect=req.exceptions.ConnectionError('refused')):
+            mock_cache.get.return_value = None
+            with self.assertRaises(IGDBError) as cm:
+                client._get_token()
+        self.assertIn('Network error', str(cm.exception))
+
+    def test_raises_on_bad_response(self):
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import IGDBError
+        client = self._make_client()
+        mock_resp = MagicMock()
+        mock_resp.ok = False
+        mock_resp.status_code = 403
+        mock_resp.text = 'Forbidden'
+        with patch('eventer.igdb.cache') as mock_cache, \
+             patch('eventer.igdb.requests.post', return_value=mock_resp):
+            mock_cache.get.return_value = None
+            with self.assertRaises(IGDBError) as cm:
+                client._get_token()
+        self.assertEqual(cm.exception.status_code, 403)
+
+
+class IGDBClientDoRequestTest(TestCase):
+    def _make_client(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='test_id', IGDB_CLIENT_SECRET='test_secret'):
+            return IGDBClient()
+
+    def test_raises_on_timeout(self):
+        from unittest.mock import patch
+        import requests as req
+        from eventer.igdb import IGDBError
+        client = self._make_client()
+        with patch('eventer.igdb.requests.post', side_effect=req.exceptions.Timeout):
+            with self.assertRaises(IGDBError) as cm:
+                client._do_request('games', 'fields id;', 'token')
+        self.assertIn('Timed out', str(cm.exception))
+
+    def test_raises_on_network_error(self):
+        from unittest.mock import patch
+        import requests as req
+        from eventer.igdb import IGDBError
+        client = self._make_client()
+        with patch('eventer.igdb.requests.post', side_effect=req.exceptions.ConnectionError('refused')):
+            with self.assertRaises(IGDBError) as cm:
+                client._do_request('games', 'fields id;', 'token')
+        self.assertIn('Network error', str(cm.exception))
+
+
+class IGDBClientRequestTest(TestCase):
+    def _make_client(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='test_id', IGDB_CLIENT_SECRET='test_secret'):
+            return IGDBClient()
+
+    def _ok_resp(self, data):
+        from unittest.mock import MagicMock
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.ok = True
+        resp.json.return_value = data
+        return resp
+
+    def test_401_clears_cache_and_retries(self):
+        from unittest.mock import patch, MagicMock
+        client = self._make_client()
+        unauth = MagicMock()
+        unauth.status_code = 401
+        unauth.ok = False
+        unauth.text = 'Unauthorized'
+        success = self._ok_resp([{'id': 1}])
+        with patch.object(client, '_get_token', side_effect=['old_token', 'new_token']), \
+             patch.object(client, '_do_request', side_effect=[unauth, success]) as mock_do, \
+             patch('eventer.igdb.cache') as mock_cache:
+            result = client._request('games', 'fields id;')
+        self.assertEqual(result, [{'id': 1}])
+        mock_cache.delete.assert_called_once_with(client._token_cache_key)
+        self.assertEqual(mock_do.call_count, 2)
+
+
+class IGDBClientFetchGameTest(TestCase):
+    def _make_client(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='test_id', IGDB_CLIENT_SECRET='test_secret'):
+            return IGDBClient()
+
+    def test_returns_first_result(self):
+        from unittest.mock import patch
+        client = self._make_client()
+        with patch.object(client, '_request', return_value=[{'id': 1, 'name': 'X'}]):
+            result = client.fetch_game(1)
+        self.assertEqual(result, {'id': 1, 'name': 'X'})
+
+    def test_returns_none_when_not_found(self):
+        from unittest.mock import patch
+        client = self._make_client()
+        with patch.object(client, '_request', return_value=[]):
+            result = client.fetch_game(1)
+        self.assertIsNone(result)
+
+
+class IGDBClientSearchGamesTest(TestCase):
+    def _make_client(self):
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='test_id', IGDB_CLIENT_SECRET='test_secret'):
+            return IGDBClient()
+
+    def test_returns_results(self):
+        from unittest.mock import patch
+        client = self._make_client()
+        games = [{'id': 1, 'name': 'Stardew Valley'}]
+        with patch.object(client, '_request', return_value=games):
+            result = client.search_games('stardew')
+        self.assertEqual(result, games)
+
+    def test_escapes_double_quotes_in_query(self):
+        from unittest.mock import patch
+        client = self._make_client()
+        with patch.object(client, '_request', return_value=[]) as mock_req:
+            client.search_games('test "game"')
+        body = mock_req.call_args[0][1]
+        self.assertIn(r'test \"game\"', body)
+
+    def test_escapes_backslashes_in_query(self):
+        from unittest.mock import patch
+        client = self._make_client()
+        with patch.object(client, '_request', return_value=[]) as mock_req:
+            client.search_games('test\\game')
+        body = mock_req.call_args[0][1]
+        self.assertIn('test\\\\game', body)
+
+
+class ParseIgdbGameMultiplayerTest(TestCase):
+    def test_derives_multiplayer_max_from_onlinecoopmax(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'multiplayer_modes': [
+            {'onlinecoop': True, 'onlinecoopmax': 4},
+        ]}
+        result = parse_igdb_game(data)
+        self.assertEqual(result['multiplayer_max'], 4)
+
+    def test_uses_default_2_when_onlinecoopmax_missing(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'multiplayer_modes': [
+            {'onlinecoop': True},
+        ]}
+        result = parse_igdb_game(data)
+        self.assertEqual(result['multiplayer_max'], 2)
+
+    def test_skips_non_coop_modes(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'multiplayer_modes': [
+            {'onlinecoop': False, 'onlinecoopmax': 4},
+        ]}
+        result = parse_igdb_game(data)
+        self.assertIsNone(result['multiplayer_max'])
+
+    def test_takes_max_across_multiple_modes(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'multiplayer_modes': [
+            {'onlinecoop': True, 'onlinecoopmax': 2},
+            {'onlinecoop': True, 'onlinecoopmax': 8},
+        ]}
+        result = parse_igdb_game(data)
+        self.assertEqual(result['multiplayer_max'], 8)
+
+    def test_multiplayer_max_zero_treated_as_none(self):
+        from eventer.igdb import parse_igdb_game
+        data = {'id': 1, 'name': 'X', 'multiplayer_modes': [
+            {'onlinecoop': True, 'onlinecoopmax': 0},
+        ]}
+        result = parse_igdb_game(data)
+        self.assertIsNone(result['multiplayer_max'])
+
+
+class SyncIgdbGameCommandTest(TestCase):
+    def _call_command(self, *args, **kwargs):
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('sync_igdb_game', *args, stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_errors_when_not_configured(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        with self.settings(IGDB_CLIENT_ID='', IGDB_CLIENT_SECRET=''):
+            with self.assertRaises(CommandError) as cm:
+                call_command('sync_igdb_game', 1)
+        self.assertIn('not configured', str(cm.exception))
+
+    def test_errors_when_credentials_invalid(self):
+        from unittest.mock import patch
+        from django.core.management.base import CommandError
+        from eventer.igdb import IGDBClient
+        with self.settings(IGDB_CLIENT_ID='bad', IGDB_CLIENT_SECRET='bad'):
+            with patch.object(IGDBClient, 'credentials_valid', return_value=False):
+                with self.assertRaises(CommandError) as cm:
+                    self._call_command(1)
+        self.assertIn('invalid', str(cm.exception))
+
+    def _patch_credentials(self):
+        """Context manager that patches credential checks to pass."""
+        from unittest.mock import patch, MagicMock
+        from eventer.igdb import IGDBClient
+        mock_client = MagicMock(spec=IGDBClient)
+        mock_client.credentials_valid.return_value = True
+        return patch('eventer.management.commands.sync_igdb_game.IGDBClient',
+                     credentials_configured=MagicMock(return_value=True),
+                     return_value=mock_client)
+
+    def test_prints_created_on_success(self):
+        from unittest.mock import patch, MagicMock
+        mock_game = MagicMock()
+        mock_game.name = 'Test Game'
+        with self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'), \
+             self._patch_credentials(), \
+             patch('eventer.management.commands.sync_igdb_game.sync_game_from_igdb',
+                   return_value=(mock_game, True)):
+            out = self._call_command(1)
+        self.assertIn('Created', out)
+
+    def test_prints_updated_on_existing(self):
+        from unittest.mock import patch, MagicMock
+        mock_game = MagicMock()
+        mock_game.name = 'Test Game'
+        with self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'), \
+             self._patch_credentials(), \
+             patch('eventer.management.commands.sync_igdb_game.sync_game_from_igdb',
+                   return_value=(mock_game, False)):
+            out = self._call_command(1)
+        self.assertIn('Updated', out)
+
+    def test_raises_command_error_on_igdb_error(self):
+        from unittest.mock import patch
+        from django.core.management.base import CommandError
+        from eventer.igdb import IGDBError
+        with self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'), \
+             self._patch_credentials(), \
+             patch('eventer.management.commands.sync_igdb_game.sync_game_from_igdb',
+                   side_effect=IGDBError('API error')):
+            with self.assertRaises(CommandError) as cm:
+                self._call_command(1)
+        self.assertIn('IGDB API error', str(cm.exception))
+
+    def test_raises_command_error_on_not_found(self):
+        from unittest.mock import patch
+        from django.core.management.base import CommandError
+        with self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'), \
+             self._patch_credentials(), \
+             patch('eventer.management.commands.sync_igdb_game.sync_game_from_igdb',
+                   side_effect=ValueError('not found')):
+            with self.assertRaises(CommandError) as cm:
+                self._call_command(1)
+        self.assertIn('not found', str(cm.exception))
