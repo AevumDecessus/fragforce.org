@@ -501,6 +501,79 @@ class GameAdmin(admin.ModelAdmin):
     list_display = ['name', 'status', 'suggested', 'multiplayer_max']
     list_filter = ['status', 'suggested']
     search_fields = ['name', 'igdb_slug']
+    change_list_template = 'admin/eventer/game/change_list.html'
+
+    def get_urls(self):
+        custom = [
+            path('search-igdb/',
+                 self.admin_site.admin_view(self.search_igdb_view),
+                 name='eventer_game_search_igdb'),
+        ]
+        return custom + super().get_urls()
+
+    def search_igdb_view(self, request):
+        if not request.user.has_perm('eventer.search_igdb'):
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+
+        from eventer.igdb import IGDBClient, IGDBError, sync_game_from_igdb
+        from eventer.models import Game
+
+        # POST: sync a selected game
+        if request.method == 'POST':
+            igdb_id = request.POST.get('igdb_id', '').strip()
+            try:
+                game, created = sync_game_from_igdb(int(igdb_id))
+                action = 'Created' if created else 'Updated'
+                self.message_user(request, f'{action}: {game.name}', messages.SUCCESS)
+                return HttpResponseRedirect(f'../../{game.pk}/change/')
+            except Exception as e:
+                self.message_user(request, f'Error syncing game: {e}', messages.ERROR)
+                return HttpResponseRedirect('.')
+
+        # GET: search
+        query = request.GET.get('q', '').strip()
+        results = []
+        error = None
+
+        if not IGDBClient.credentials_configured():
+            error = 'IGDB credentials are not configured. Set IGDB_CLIENT_ID and IGDB_CLIENT_SECRET.'
+        elif query:
+            try:
+                client = IGDBClient()
+                raw_results = client.search_games(query)
+                existing_ids = set(
+                    Game.objects.filter(
+                        igdb_id__in=[r['id'] for r in raw_results]
+                    ).values_list('igdb_id', flat=True)
+                )
+                for r in raw_results:
+                    cover_hash = (r.get('cover') or {}).get('image_id')
+                    release_year = None
+                    if r.get('first_release_date'):
+                        from datetime import datetime, timezone
+                        release_year = datetime.fromtimestamp(
+                            r['first_release_date'], tz=timezone.utc
+                        ).year
+                    results.append({
+                        'igdb_id': r['id'],
+                        'name': r['name'],
+                        'cover_url_thumb': f'//images.igdb.com/igdb/image/upload/t_thumb/{cover_hash}.jpg' if cover_hash else None,
+                        'release_year': release_year,
+                        'category': r.get('category'),
+                        'already_exists': r['id'] in existing_ids,
+                    })
+            except IGDBError as e:
+                error = f'IGDB search failed: {e}'
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Search IGDB',
+            'query': query,
+            'results': results,
+            'error': error,
+        }
+        return render(request, 'admin/eventer/game/search_igdb.html', context)
 
 
 @admin.register(Team)
