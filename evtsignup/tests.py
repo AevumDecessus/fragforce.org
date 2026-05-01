@@ -571,3 +571,174 @@ class EventInterestAdminTest(TestCase):
         from django.contrib.admin.sites import AdminSite
         admin = EventInterestAdmin(EventInterest, AdminSite())
         self.assertEqual(admin.game_count(self.ei), '—')
+
+
+class IsFollowableUrlTest(TestCase):
+    def test_https_url_is_followable(self):
+        from evtsignup.tasks import _is_followable_url
+        self.assertTrue(_is_followable_url('https://el.0n5.us'))
+
+    def test_http_url_is_followable(self):
+        from evtsignup.tasks import _is_followable_url
+        self.assertTrue(_is_followable_url('http://example.com/path'))
+
+    def test_freetext_is_not_followable(self):
+        from evtsignup.tasks import _is_followable_url
+        self.assertFalse(_is_followable_url('I have not signed up yet'))
+
+    def test_empty_string_is_not_followable(self):
+        from evtsignup.tasks import _is_followable_url
+        self.assertFalse(_is_followable_url(''))
+
+    def test_no_dot_in_netloc_is_not_followable(self):
+        from evtsignup.tasks import _is_followable_url
+        self.assertFalse(_is_followable_url('https://localhost'))
+
+    def test_ftp_is_not_followable(self):
+        from evtsignup.tasks import _is_followable_url
+        self.assertFalse(_is_followable_url('ftp://example.com'))
+
+
+class FollowRedirectTest(TestCase):
+    def test_returns_final_url_on_success(self):
+        from unittest.mock import patch, MagicMock
+        from evtsignup.tasks import _follow_redirect
+        mock_resp = MagicMock()
+        mock_resp.url = 'https://www.extra-life.org/participants/511438'
+        with patch('evtsignup.tasks.requests.get', return_value=mock_resp) as mock_get:
+            result = _follow_redirect('https://el.0n5.us')
+        self.assertEqual(result, 'https://www.extra-life.org/participants/511438')
+        mock_get.assert_called_once()
+
+    def test_returns_none_on_network_error(self):
+        from unittest.mock import patch
+        from evtsignup.tasks import _follow_redirect
+        import requests
+        with patch('evtsignup.tasks.requests.get', side_effect=requests.exceptions.ConnectionError):
+            result = _follow_redirect('https://el.0n5.us')
+        self.assertIsNone(result)
+
+
+class ResolveFundraisingUrlTaskTest(TestCase):
+    def setUp(self):
+        from eventer.models import Event
+        self.user = User.objects.create_user('taskuser', 'tu@example.com', 'pass')
+        self.event = Event.objects.create(name='Task Test Event', slug='task-test-event', description='')
+
+    def _make_interest(self, url):
+        from evtsignup.models import EventInterest
+        return EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True, fundraising_url=url
+        )
+
+    def test_resolves_participant_url(self):
+        from unittest.mock import patch
+        from evtsignup.tasks import resolve_fundraising_url
+        interest = self._make_interest('https://www.extra-life.org/participants/511438')
+        mock_api = {'participantID': 511438, 'displayName': 'AevumDecessus'}
+        with patch('evtsignup.tasks.Participants.participant', return_value=mock_api):
+            resolve_fundraising_url(interest.pk)
+        interest.refresh_from_db()
+        self.assertIsNotNone(interest.el_participant)
+        self.assertEqual(interest.el_participant.id, 511438)
+
+    def test_skips_if_no_url(self):
+        from evtsignup.tasks import resolve_fundraising_url
+        from evtsignup.models import EventInterest
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True
+        )
+        resolve_fundraising_url(interest.pk)  # should not raise
+
+    def test_logs_team_url(self):
+        from evtsignup.tasks import resolve_fundraising_url
+        interest = self._make_interest('https://www.extra-life.org/teams/fragforce')
+        resolve_fundraising_url(interest.pk)  # should not raise or create participant
+        interest.refresh_from_db()
+        self.assertIsNone(interest.el_participant)
+
+    def test_follows_redirect_for_vanity_url(self):
+        from unittest.mock import patch
+        from evtsignup.tasks import resolve_fundraising_url
+        interest = self._make_interest('https://el.0n5.us')
+        mock_api = {'participantID': 511438, 'displayName': 'AevumDecessus'}
+        with patch('evtsignup.tasks._follow_redirect',
+                   return_value='https://www.extra-life.org/participants/511438'), \
+             patch('evtsignup.tasks.Participants.participant', return_value=mock_api):
+            resolve_fundraising_url(interest.pk)
+        interest.refresh_from_db()
+        self.assertIsNotNone(interest.el_participant)
+
+    def test_skips_redirect_for_freetext(self):
+        from unittest.mock import patch
+        from evtsignup.tasks import resolve_fundraising_url
+        interest = self._make_interest('I have not signed up yet')
+        with patch('evtsignup.tasks._follow_redirect') as mock_follow:
+            resolve_fundraising_url(interest.pk)
+        mock_follow.assert_not_called()
+
+    def test_handles_missing_interest(self):
+        from evtsignup.tasks import resolve_fundraising_url
+        resolve_fundraising_url(99999)  # should not raise
+
+
+class SignalQueueTest(TestCase):
+    def setUp(self):
+        from eventer.models import Event
+        self.user = User.objects.create_user('siguser', 'sig@example.com', 'pass')
+        self.event = Event.objects.create(name='Signal Test', slug='signal-test', description='')
+
+    def test_queues_task_when_url_set_on_create(self):
+        from unittest.mock import patch
+        from evtsignup.models import EventInterest
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            mock_task.delay = mock_task
+            EventInterest.objects.create(
+                user=self.user, event=self.event, acknowledged=True,
+                fundraising_url='https://www.extra-life.org/participants/511438'
+            )
+        mock_task.assert_called_once()
+
+    def test_does_not_queue_when_no_url(self):
+        from unittest.mock import patch
+        from evtsignup.models import EventInterest
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            EventInterest.objects.create(
+                user=self.user, event=self.event, acknowledged=True
+            )
+        mock_task.assert_not_called()
+
+    def test_skips_requeue_when_url_unchanged_and_resolved(self):
+        from unittest.mock import patch
+        from evtsignup.models import EventInterest
+        from ffdonations.models import ParticipantModel
+        participant = ParticipantModel.objects.create(
+            id=511438, displayName='Test', tracked=False
+        )
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://www.extra-life.org/participants/511438',
+            el_participant=participant,
+        )
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            interest.display_name = 'Updated'
+            interest.save()
+        mock_task.assert_not_called()
+
+    def test_requeues_when_url_changes(self):
+        from unittest.mock import patch
+        from evtsignup.models import EventInterest
+        from ffdonations.models import ParticipantModel
+        participant = ParticipantModel.objects.create(
+            id=511438, displayName='Test', tracked=False
+        )
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://www.extra-life.org/participants/511438',
+            el_participant=participant,
+        )
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            mock_task.delay = mock_task
+            interest.fundraising_url = 'https://www.extra-life.org/participants/999999'
+            interest.save()
+        mock_task.assert_called_once()
