@@ -22,6 +22,12 @@ class EventInterest(models.Model):
     participant_notes = models.TextField(blank=True)
     streamer_notes = models.TextField(blank=True)
 
+    # URL resolution tracking
+    url_resolution_attempts = models.PositiveSmallIntegerField(
+        default=0,
+        help_text='Number of times fundraising URL resolution has been attempted'
+    )
+
     def __str__(self):
         name = self.display_name or str(self.user)
         return f'{name} - {self.event}'
