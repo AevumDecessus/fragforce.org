@@ -44,10 +44,13 @@ def queue_fundraising_url_resolution(sender, instance, created, update_fields=No
         )
         return
 
-    # Reset attempt counter when URL changes so new URL gets fresh attempts
+    # Reset attempt counter when URL changes so new URL gets fresh attempts.
+    # Use queryset.update() to bypass signals and avoid re-entrant pre_save
+    # corrupting _prev_fundraising_url change-detection state.
     if not created and url_changed and instance.url_resolution_attempts > 0:
-        instance.url_resolution_attempts = 0
-        instance.save(update_fields=['url_resolution_attempts'])
+        from evtsignup.models import EventInterest
+        EventInterest.objects.filter(pk=instance.pk).update(url_resolution_attempts=0)
+        instance.url_resolution_attempts = 0  # keep in-memory state consistent
 
     from evtsignup.tasks import resolve_fundraising_url
     resolve_fundraising_url.delay(instance.pk)
