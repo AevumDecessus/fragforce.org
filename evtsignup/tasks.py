@@ -98,14 +98,19 @@ def _is_followable_url(url):
 def _follow_redirect(url):
     """
     Follow HTTP redirects on a user-provided URL and return the final URL.
-    Only called after _is_followable_url() confirms http/https scheme and valid netloc.
-    The result is always re-parsed through parse_fundraising_url() before any action is taken,
-    so only known Extra Life domains produce side effects.
+    Only scheme + host + path are forwarded - query params, fragments, and credentials
+    are stripped to reduce attack surface. Only called after _is_followable_url() validates
+    the URL. The final URL is always re-parsed through parse_fundraising_url() before any
+    action is taken, so only known Extra Life domains produce side effects.
     """
-    safe_url = url if '://' in url else f'https://{url}'
+    from urllib.parse import urlparse, urlunparse
     try:
+        raw = url if '://' in url else f'https://{url}'
+        parsed = urlparse(raw)
+        # Strip query, params, fragment, and credentials - only follow scheme/host/path
+        clean_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', '', ''))
         resp = requests.get(
-            safe_url,
+            clean_url,
             allow_redirects=True,
             timeout=10,
             headers={'User-Agent': 'Fragforce/1.0'},
