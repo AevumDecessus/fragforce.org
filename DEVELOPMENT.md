@@ -59,7 +59,7 @@ dev/runtests.sh ffdonations.tests.TeamAdminSyncDonationsTest.test_queues_task_fo
 Or use Django directly:
 
 ```bash
-docker compose exec web pipenv run python manage.py test
+docker compose exec web python manage.py test
 ```
 
 ## Useful Commands
