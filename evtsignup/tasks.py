@@ -7,6 +7,11 @@ from extralifeapi.participants import Participants
 log = logging.getLogger(__name__)
 
 
+def _safe_log(value):
+    """Sanitize a user-provided value for logging by stripping newlines (prevents log injection)."""
+    return str(value).replace('\n', ' ').replace('\r', ' ')
+
+
 @shared_task
 def resolve_fundraising_url(event_interest_id):
     """
@@ -47,8 +52,8 @@ def resolve_fundraising_url(event_interest_id):
         _resolve_participant(interest, result)
     elif result.is_team:
         log.info(
-            'resolve_fundraising_url: EventInterest %s has a team URL (%s) - flagged for coordinator review',
-            event_interest_id, interest.fundraising_url,
+            'resolve_fundraising_url: EventInterest %s has a team URL - flagged for coordinator review',
+            event_interest_id,
         )
     else:
         # Try following redirects - may be a vanity link pointing to Extra Life
@@ -58,20 +63,20 @@ def resolve_fundraising_url(event_interest_id):
                 redirected_result = parse_fundraising_url(resolved)
                 if redirected_result.is_participant:
                     log.info(
-                        'resolve_fundraising_url: EventInterest %s resolved via redirect %s → %s',
-                        event_interest_id, interest.fundraising_url, resolved,
+                        'resolve_fundraising_url: EventInterest %s resolved via redirect to participant',
+                        event_interest_id,
                     )
                     _resolve_participant(interest, redirected_result)
                     return
                 elif redirected_result.is_team:
                     log.info(
-                        'resolve_fundraising_url: EventInterest %s redirect resolves to team URL (%s) - flagged for coordinator review',
-                        event_interest_id, resolved,
+                        'resolve_fundraising_url: EventInterest %s redirect resolves to team URL - flagged for coordinator review',
+                        event_interest_id,
                     )
                     return
         log.info(
-            'resolve_fundraising_url: EventInterest %s has unrecognised URL (%s)',
-            event_interest_id, interest.fundraising_url,
+            'resolve_fundraising_url: EventInterest %s has unrecognised URL',
+            event_interest_id,
         )
 
 
@@ -91,17 +96,23 @@ def _is_followable_url(url):
 
 
 def _follow_redirect(url):
-    """Follow HTTP redirects and return the final URL, or None on failure."""
+    """
+    Follow HTTP redirects on a user-provided URL and return the final URL.
+    Only called after _is_followable_url() confirms http/https scheme and valid netloc.
+    The result is always re-parsed through parse_fundraising_url() before any action is taken,
+    so only known Extra Life domains produce side effects.
+    """
+    safe_url = url if '://' in url else f'https://{url}'
     try:
         resp = requests.get(
-            url if '://' in url else f'https://{url}',
+            safe_url,
             allow_redirects=True,
             timeout=10,
             headers={'User-Agent': 'Fragforce/1.0'},
         )
         return resp.url
     except Exception as e:
-        log.debug('_follow_redirect: failed to follow %s: %s', url, e)
+        log.debug('_follow_redirect: request failed: %s', e)
         return None
 
 
@@ -110,9 +121,10 @@ def _resolve_participant(interest, result):
     from ffdonations.models import ParticipantModel
 
     id_or_slug = result.id_or_slug
+    safe_slug = _safe_log(id_or_slug)
     log.info(
         'resolve_fundraising_url: resolving participant %s for EventInterest %s',
-        id_or_slug, interest.pk,
+        safe_slug, interest.pk,
     )
 
     try:
@@ -120,20 +132,20 @@ def _resolve_participant(interest, result):
     except Exception as e:
         log.warning(
             'resolve_fundraising_url: failed to fetch participant %s: %s',
-            id_or_slug, e,
+            safe_slug, e,
         )
         return
 
     if not api_participant:
         log.warning(
             'resolve_fundraising_url: participant %s not found in Extra Life API',
-            id_or_slug,
+            safe_slug,
         )
         return
 
     numeric_id = api_participant.get('participantID')
     if not numeric_id:
-        log.warning('resolve_fundraising_url: no participantID in API response for %s', id_or_slug)
+        log.warning('resolve_fundraising_url: no participantID in API response for %s', safe_slug)
         return
 
     participant, created = ParticipantModel.objects.get_or_create(
