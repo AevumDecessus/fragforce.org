@@ -161,6 +161,28 @@ class IGDBClient:
         ))
         return results[0] if results else None
 
+    def top_games_by_hypes(self, limit=100):
+        """Return top games sorted by hypes (anticipation/popularity) descending."""
+        return self._request('games', (
+            f'fields id,name,slug,url,summary,cover.image_id,'
+            f'first_release_date,category,multiplayer_modes.onlinecoop,multiplayer_modes.onlinecoopmax,'
+            f'hypes;'
+            f'sort hypes desc;'
+            f'where hypes > 0;'
+            f'limit {limit};'
+        ))
+
+    def top_games_by_rating(self, limit=100, min_rating_count=50):
+        """Return top games sorted by total_rating descending, with a minimum rating count."""
+        return self._request('games', (
+            f'fields id,name,slug,url,summary,cover.image_id,'
+            f'first_release_date,category,multiplayer_modes.onlinecoop,multiplayer_modes.onlinecoopmax,'
+            f'total_rating,total_rating_count;'
+            f'sort total_rating desc;'
+            f'where total_rating_count > {min_rating_count};'
+            f'limit {limit};'
+        ))
+
     def search_games(self, query, limit=10):
         """
         Search IGDB for games by name.

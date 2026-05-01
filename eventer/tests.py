@@ -1374,3 +1374,94 @@ class SyncAndLinkViewTest(TestCase):
         self.client.login(username='nocoord2', password='pass')
         response = self.client.post(self._url(), {})
         self.assertEqual(response.status_code, 403)
+
+
+class SyncSingleIgdbGameTaskTest(TestCase):
+    def test_syncs_game(self):
+        from unittest.mock import patch
+        from eventer.tasks import sync_single_igdb_game
+        from eventer.models import Game
+        game = Game.objects.create(name='Test Game', igdb_id=1234)
+        with patch('eventer.igdb.sync_game_from_igdb', return_value=(game, False)):
+            result = sync_single_igdb_game(1234)
+        self.assertEqual(result['igdb_id'], 1234)
+
+    def test_raises_on_igdb_error(self):
+        from unittest.mock import patch
+        from eventer.tasks import sync_single_igdb_game
+        from eventer.igdb import IGDBError
+        with patch('eventer.igdb.sync_game_from_igdb', side_effect=IGDBError('fail')):
+            with self.assertRaises(IGDBError):
+                sync_single_igdb_game(1234)
+
+
+class SyncAllIgdbGamesTaskTest(TestCase):
+    def test_dispatches_tasks_for_each_game(self):
+        from unittest.mock import patch
+        from eventer.models import Game
+        from eventer.tasks import sync_all_igdb_games
+        from eventer.igdb import IGDBClient
+        Game.objects.create(name='Game A', igdb_id=1)
+        Game.objects.create(name='Game B', igdb_id=2)
+        with patch.object(IGDBClient, 'credentials_configured', return_value=True), \
+             patch('eventer.tasks.sync_single_igdb_game') as mock_task:
+            mock_task.delay = mock_task
+            sync_all_igdb_games()
+        self.assertEqual(mock_task.call_count, 2)
+
+    def test_skips_when_not_configured(self):
+        from unittest.mock import patch
+        from eventer.tasks import sync_all_igdb_games
+        from eventer.igdb import IGDBClient
+        with patch.object(IGDBClient, 'credentials_configured', return_value=False), \
+             patch('eventer.tasks.sync_single_igdb_game') as mock_task:
+            sync_all_igdb_games()
+        mock_task.assert_not_called()
+
+
+class FetchTopGamesByHypesTaskTest(TestCase):
+    def test_dispatches_tasks_for_results(self):
+        from unittest.mock import patch
+        from eventer.tasks import fetch_top_games_by_hypes
+        from eventer.igdb import IGDBClient
+        mock_results = [{'id': 1877, 'name': 'Cyberpunk 2077'}, {'id': 52189, 'name': 'GTA VI'}]
+        with patch.object(IGDBClient, 'credentials_configured', return_value=True), \
+             patch.object(IGDBClient, 'top_games_by_hypes', return_value=mock_results), \
+             patch('eventer.tasks.sync_single_igdb_game') as mock_task, \
+             self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'):
+            mock_task.delay = mock_task
+            fetch_top_games_by_hypes(limit=2)
+        self.assertEqual(mock_task.call_count, 2)
+
+    def test_skips_when_not_configured(self):
+        from unittest.mock import patch
+        from eventer.tasks import fetch_top_games_by_hypes
+        from eventer.igdb import IGDBClient
+        with patch.object(IGDBClient, 'credentials_configured', return_value=False), \
+             patch('eventer.tasks.sync_single_igdb_game') as mock_task:
+            fetch_top_games_by_hypes()
+        mock_task.assert_not_called()
+
+
+class FetchTopGamesByRatingTaskTest(TestCase):
+    def test_dispatches_tasks_for_results(self):
+        from unittest.mock import patch
+        from eventer.tasks import fetch_top_games_by_rating
+        from eventer.igdb import IGDBClient
+        mock_results = [{'id': 1103, 'name': 'Super Metroid'}]
+        with patch.object(IGDBClient, 'credentials_configured', return_value=True), \
+             patch.object(IGDBClient, 'top_games_by_rating', return_value=mock_results), \
+             patch('eventer.tasks.sync_single_igdb_game') as mock_task, \
+             self.settings(IGDB_CLIENT_ID='x', IGDB_CLIENT_SECRET='y'):
+            mock_task.delay = mock_task
+            fetch_top_games_by_rating(limit=1)
+        mock_task.assert_called_once_with(1103)
+
+    def test_skips_when_not_configured(self):
+        from unittest.mock import patch
+        from eventer.tasks import fetch_top_games_by_rating
+        from eventer.igdb import IGDBClient
+        with patch.object(IGDBClient, 'credentials_configured', return_value=False), \
+             patch('eventer.tasks.sync_single_igdb_game') as mock_task:
+            fetch_top_games_by_rating()
+        mock_task.assert_not_called()
