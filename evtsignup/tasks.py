@@ -19,6 +19,9 @@ def resolve_fundraising_url(event_interest_id):
     from evtsignup.models import EventInterest
     from evtsignup.utils import parse_fundraising_url
 
+    from django.conf import settings
+    max_attempts = settings.URL_RESOLUTION_MAX_ATTEMPTS
+
     try:
         interest = EventInterest.objects.get(pk=event_interest_id)
     except EventInterest.DoesNotExist:
@@ -27,6 +30,16 @@ def resolve_fundraising_url(event_interest_id):
 
     if not interest.fundraising_url:
         return
+
+    if interest.url_resolution_attempts >= max_attempts:
+        log.info(
+            'resolve_fundraising_url: EventInterest %s has reached max attempts (%d), skipping',
+            event_interest_id, max_attempts,
+        )
+        return
+
+    interest.url_resolution_attempts += 1
+    interest.save(update_fields=['url_resolution_attempts'])
 
     result = parse_fundraising_url(interest.fundraising_url)
 
@@ -134,3 +147,28 @@ def _resolve_participant(interest, result):
         'resolve_fundraising_url: linked EventInterest %s to participant %s (%s)',
         interest.pk, numeric_id, 'created' if created else 'existing',
     )
+
+
+@shared_task
+def retry_pending_url_resolutions():
+    """
+    Re-queue resolve_fundraising_url for any EventInterest records where:
+    - fundraising_url is set
+    - el_participant is not yet resolved
+    This catches cases where the signal fired but the task failed or Celery was down.
+    """
+    from django.conf import settings
+    from evtsignup.models import EventInterest
+    max_attempts = settings.URL_RESOLUTION_MAX_ATTEMPTS
+    pending = EventInterest.objects.filter(
+        fundraising_url__isnull=False,
+        el_participant__isnull=True,
+        url_resolution_attempts__lt=max_attempts,
+    ).exclude(fundraising_url='')
+    count = pending.count()
+    if count == 0:
+        log.info('retry_pending_url_resolutions: nothing to retry')
+        return
+    log.info('retry_pending_url_resolutions: re-queuing %d records', count)
+    for interest in pending:
+        resolve_fundraising_url.delay(interest.pk)
