@@ -1,6 +1,5 @@
 # Base Image
 FROM python:3.10
-RUN pip install pip-tools
 
 # Having an editor is very nice
 RUN apt-get update && apt-get install -y \
@@ -11,7 +10,7 @@ WORKDIR /code
 
 COPY requirements-dev.txt .
 
-RUN pip-sync requirements-dev.txt
+RUN pip install --require-hashes -r requirements-dev.txt
 
 VOLUME /code
 
