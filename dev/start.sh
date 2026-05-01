@@ -31,7 +31,7 @@ fi
 
 echo ""
 echo "Installing dev dependencies (pyflakes, etc.)..."
-docker compose exec -T web pip install --quiet --require-hashes -r requirements-dev.txt
+docker compose exec -T web pip install --quiet --require-hashes --only-binary :all: -r requirements-dev.txt
 
 echo ""
 echo "Waiting for web server at http://localhost:8000/ ..."
