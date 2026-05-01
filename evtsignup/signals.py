@@ -36,12 +36,18 @@ def queue_fundraising_url_resolution(sender, instance, created, update_fields=No
 
     # URL unchanged and already resolved - no need to re-queue
     prev_url = getattr(instance, '_prev_fundraising_url', None)
-    if not created and instance.el_participant_id and prev_url == instance.fundraising_url:
+    url_changed = prev_url != instance.fundraising_url
+    if not created and instance.el_participant_id and not url_changed:
         log.debug(
             'Skipping re-queue for EventInterest %s - URL unchanged and already resolved',
             instance.pk,
         )
         return
+
+    # Reset attempt counter when URL changes so new URL gets fresh attempts
+    if not created and url_changed and instance.url_resolution_attempts > 0:
+        instance.url_resolution_attempts = 0
+        instance.save(update_fields=['url_resolution_attempts'])
 
     from evtsignup.tasks import resolve_fundraising_url
     resolve_fundraising_url.delay(instance.pk)
