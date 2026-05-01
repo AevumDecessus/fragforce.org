@@ -108,3 +108,24 @@ def _sync_game_list(results, delay, source_label):
         if delay > 0:
             time.sleep(delay)
     return added, updated, errors
+
+
+@shared_task
+def close_signups_for_started_events():
+    """
+    Auto-close signups for events that have started.
+    Sets signups_open=False on any Event where the earliest period has started
+    and signups_open is still True.
+    """
+    from django.utils import timezone
+    from eventer.models import Event
+
+    now = timezone.now()
+    closed = 0
+    for event in Event.objects.filter(signups_open=True):
+        if event.start and event.start <= now:
+            event.signups_open = False
+            event.save(update_fields=['signups_open'])
+            log.info('close_signups_for_started_events: closed signups for %s', event.name)
+            closed += 1
+    log.info('close_signups_for_started_events: closed %d events', closed)

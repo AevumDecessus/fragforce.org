@@ -436,6 +436,14 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'eventer.tasks.fetch_top_games_by_rating',
         'schedule': timedelta(days=int(os.environ.get('IGDB_TOP_GAMES_INTERVAL_DAYS', 7))),
     },
+    'close-signups-for-started-events': {
+        'task': 'eventer.tasks.close_signups_for_started_events',
+        'schedule': timedelta(minutes=int(os.environ.get('CLOSE_SIGNUPS_CHECK_MINUTES', 15))),
+    },
+    'retry-pending-url-resolutions': {
+        'task': 'evtsignup.tasks.retry_pending_url_resolutions',
+        'schedule': timedelta(hours=int(os.environ.get('RETRY_URL_RESOLUTION_HOURS', 1))),
+    },
 }
 
 LOGGING = {
@@ -488,6 +496,8 @@ IGDB_CLIENT_SECRET = os.environ.get('IGDB_CLIENT_SECRET', '')
 IGDB_RATE_LIMIT_RETRIES = int(os.environ.get('IGDB_RATE_LIMIT_RETRIES', 3))
 IGDB_RATE_LIMIT_RETRY_AFTER = float(os.environ.get('IGDB_RATE_LIMIT_RETRY_AFTER', 1.0))
 IGDB_BULK_SYNC_DELAY = float(os.environ.get('IGDB_BULK_SYNC_DELAY', 0.5))
+
+URL_RESOLUTION_MAX_ATTEMPTS = int(os.environ.get('URL_RESOLUTION_MAX_ATTEMPTS', 3))
 
 SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
