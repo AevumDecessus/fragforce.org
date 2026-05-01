@@ -115,17 +115,18 @@ def close_signups_for_started_events():
     """
     Auto-close signups for events that have started.
     Sets signups_open=False on any Event where the earliest period has started
-    and signups_open is still True.
+    and signups_open is still True. Uses a single annotated UPDATE to avoid N+1 saves.
     """
+    from django.db.models import Min
     from django.utils import timezone
     from eventer.models import Event
 
     now = timezone.now()
-    closed = 0
-    for event in Event.objects.filter(signups_open=True):
-        if event.start and event.start <= now:
-            event.signups_open = False
-            event.save(update_fields=['signups_open'])
-            log.info('close_signups_for_started_events: closed signups for %s', event.name)
-            closed += 1
+    closed = (
+        Event.objects
+        .filter(signups_open=True)
+        .annotate(first_start=Min('eventperiod__start'))
+        .filter(first_start__lte=now)
+        .update(signups_open=False)
+    )
     log.info('close_signups_for_started_events: closed %d events', closed)

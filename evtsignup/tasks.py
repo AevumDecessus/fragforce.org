@@ -25,7 +25,7 @@ def resolve_fundraising_url(event_interest_id):
     from evtsignup.utils import parse_fundraising_url
 
     from django.conf import settings
-    max_attempts = settings.URL_RESOLUTION_MAX_ATTEMPTS
+    max_attempts = getattr(settings, 'URL_RESOLUTION_MAX_ATTEMPTS', 3)
 
     try:
         interest = EventInterest.objects.get(pk=event_interest_id)
@@ -98,10 +98,11 @@ def _is_followable_url(url):
 def _follow_redirect(url):
     """
     Follow HTTP redirects on a user-provided URL and return the final URL.
-    Only scheme + host + path are forwarded - query params, fragments, and credentials
-    are stripped to reduce attack surface. Only called after _is_followable_url() validates
-    the URL. The final URL is always re-parsed through parse_fundraising_url() before any
-    action is taken, so only known Extra Life domains produce side effects.
+    Query params/fragments are stripped from the *outgoing* request only to reduce attack
+    surface. The returned URL (resp.url) preserves whatever params the server redirected
+    to — parse_fundraising_url() relies on this to extract participant IDs from query strings.
+    Only called after _is_followable_url() validates the URL. The final URL is always
+    re-parsed through parse_fundraising_url() before any action is taken.
     """
     from urllib.parse import urlparse, urlunparse
     try:
@@ -176,7 +177,7 @@ def retry_pending_url_resolutions():
     """
     from django.conf import settings
     from evtsignup.models import EventInterest
-    max_attempts = settings.URL_RESOLUTION_MAX_ATTEMPTS
+    max_attempts = getattr(settings, 'URL_RESOLUTION_MAX_ATTEMPTS', 3)
     pending = EventInterest.objects.filter(
         fundraising_url__isnull=False,
         el_participant__isnull=True,
