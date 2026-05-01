@@ -9,14 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3-lxml py
 
 FROM base AS python-deps
 
-# Install pip-tools and compilation dependencies
-RUN pip install pip-tools
+# Install compilation dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends gcc git python3-dev && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies in /.venv
 COPY requirements.txt .
 
-RUN python -m venv /.venv && /.venv/bin/pip install pip-tools && /.venv/bin/pip-sync requirements.txt
+RUN python -m venv /.venv && /.venv/bin/pip install --require-hashes -r requirements.txt
 
 
 FROM base AS runtime
