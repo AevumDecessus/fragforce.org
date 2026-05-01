@@ -133,7 +133,7 @@ def _resolve_participant(interest, result):
     )
 
     try:
-        api_participant = Participants.participant(id_or_slug)
+        api_participant = Participants().participant(id_or_slug)
     except Exception as e:
         log.warning(
             'resolve_fundraising_url: failed to fetch participant %s: %s',
