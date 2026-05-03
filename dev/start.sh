@@ -24,14 +24,14 @@ if [[ "$FIRST_RUN" = true ]]; then
     docker compose wait init
     echo ""
     echo "Running collectstatic..."
-    docker compose exec -T web pipenv run python manage.py collectstatic --no-input
+    docker compose exec -T web python manage.py collectstatic --no-input
 else
     docker compose up -d
 fi
 
 echo ""
 echo "Installing dev dependencies (pyflakes, etc.)..."
-docker compose exec -T web pipenv install --dev
+docker compose exec -T web pip install --quiet --require-hashes --only-binary :all: --no-binary django-redis-cache,django-memoize -r requirements-dev.txt
 
 echo ""
 echo "Waiting for web server at http://localhost:8000/ ..."

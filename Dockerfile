@@ -1,6 +1,5 @@
 # Base Image
 FROM python:3.10
-RUN pip install pipenv==2026.5.2
 
 # Having an editor is very nice
 RUN apt-get update && apt-get install -y \
@@ -9,10 +8,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /code
 
-COPY Pipfile .
-COPY Pipfile.lock .
+COPY requirements-dev.txt .
 
-RUN pipenv install
+RUN pip install --require-hashes \
+    --only-binary :all: \
+    --no-binary django-redis-cache,django-memoize \
+    -r requirements-dev.txt
 
 VOLUME /code
 

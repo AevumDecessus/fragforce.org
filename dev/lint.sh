@@ -23,4 +23,4 @@ if [[ -z "$FILES" ]]; then
 fi
 
 echo "Running pyflakes on $(echo $FILES | wc -w | tr -d ' ') Python files..."
-docker compose exec -T web pipenv run python -m pyflakes $FILES
+docker compose exec -T web python -m pyflakes $FILES
