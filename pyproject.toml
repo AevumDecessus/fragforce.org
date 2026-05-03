@@ -7,23 +7,16 @@ name = "fragforce-org"
 version = "0.1.0"
 requires-python = "==3.10.*"
 dependencies = [
-    "ipython",
     "psycopg2-binary",
     "gunicorn",
     "requests[security]",
-    "beautifulsoup4",
-    "lxml",
-    "passlib",
     "celery[redis]>=5.2",
     "redis>=2.10.3,<5",
-    "boto",
     "dj-database-url>=3.0",
     "django-redis-cache>=2.1",
     "hiredis",
-    "memoize",
+    "django-memoize",
     "django>=5.2",
-    "protobuf",
-    "six",
     "whitenoise",
     "django-oauth-toolkit>=3.0",
     "django-workflow-engine",
@@ -33,7 +26,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ci = [
+    "coverage",
+    "unittest-xml-reporting",
+]
 dev = [
+    "ipython",
     "pip-tools",
     "pyflakes",
     "coverage",
@@ -46,5 +44,7 @@ strip-extras = false
 
 # To regenerate lockfiles:
 #   pip-compile pyproject.toml -o requirements.txt --generate-hashes --no-upgrade
+#   pip-compile pyproject.toml --extra ci -o requirements-ci.txt --generate-hashes --no-upgrade --allow-unsafe
 #   pip-compile pyproject.toml --extra dev -o requirements-dev.txt --generate-hashes --no-upgrade --allow-unsafe
-# (--allow-unsafe pins pip and setuptools in dev only, not needed in production)
+# (--allow-unsafe pins pip and setuptools in ci/dev only, not needed in production)
+# Note: requires pip>=26 to compile (kombu's setup.py uses use_2to3 which older pip rejects)

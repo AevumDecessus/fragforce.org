@@ -10,7 +10,7 @@ WORKDIR /code
 
 COPY requirements-dev.txt .
 
-RUN pip install --require-hashes --only-binary :all: -r requirements-dev.txt
+RUN pip install --require-hashes --only-binary :all: --no-binary django-redis-cache,django-memoize -r requirements-dev.txt
 
 VOLUME /code
 
