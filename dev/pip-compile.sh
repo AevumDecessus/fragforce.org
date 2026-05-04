@@ -24,7 +24,7 @@ if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
 fi
 
 UPGRADE_FLAG=""
-UPGRADE_PACKAGE=""
+UPGRADE_PACKAGES=()
 TARGET="all"
 
 # Ensure pip>=26 - older pip fails on kombu's setup.py (use_2to3 removed in setuptools 58+)
@@ -33,14 +33,17 @@ docker compose exec -T web pip install --quiet "pip>=26" 2>/dev/null || true
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --upgrade) UPGRADE_FLAG="--upgrade"; shift ;;
-        --upgrade-package) UPGRADE_PACKAGE="$2"; shift 2 ;;
+        --upgrade-package) UPGRADE_PACKAGES+=("$2"); shift 2 ;;
         prod|ci|dev) TARGET="$1"; shift ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
-if [[ -n "$UPGRADE_PACKAGE" ]]; then
-    UPGRADE_OR_NO_UPGRADE="--upgrade-package $UPGRADE_PACKAGE"
+if [[ ${#UPGRADE_PACKAGES[@]} -gt 0 ]]; then
+    UPGRADE_OR_NO_UPGRADE=""
+    for pkg in "${UPGRADE_PACKAGES[@]}"; do
+        UPGRADE_OR_NO_UPGRADE="$UPGRADE_OR_NO_UPGRADE --upgrade-package $pkg"
+    done
 else
     UPGRADE_OR_NO_UPGRADE="${UPGRADE_FLAG:---no-upgrade}"
 fi
