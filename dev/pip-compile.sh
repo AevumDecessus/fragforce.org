@@ -2,11 +2,12 @@
 # Regenerate pip-tools lockfiles inside the dev container.
 #
 # Usage:
-#   dev/pip-compile.sh              # regenerate all three lockfiles
-#   dev/pip-compile.sh prod         # regenerate requirements.txt only
-#   dev/pip-compile.sh ci           # regenerate requirements-ci.txt only
-#   dev/pip-compile.sh dev          # regenerate requirements-dev.txt only
-#   dev/pip-compile.sh --upgrade    # regenerate all and allow upgrades
+#   dev/pip-compile.sh                          # regenerate all three lockfiles
+#   dev/pip-compile.sh prod                     # regenerate requirements.txt only
+#   dev/pip-compile.sh ci                       # regenerate requirements-ci.txt only
+#   dev/pip-compile.sh dev                      # regenerate requirements-dev.txt only
+#   dev/pip-compile.sh --upgrade                # regenerate all and allow upgrades
+#   dev/pip-compile.sh --upgrade-package <pkg>  # upgrade a single package across all files
 #
 # pip>=26 is ensured automatically before compiling.
 
@@ -23,20 +24,26 @@ if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
 fi
 
 UPGRADE_FLAG=""
+UPGRADE_PACKAGE=""
 TARGET="all"
 
 # Ensure pip>=26 - older pip fails on kombu's setup.py (use_2to3 removed in setuptools 58+)
 docker compose exec -T web pip install --quiet "pip>=26" 2>/dev/null || true
 
-for arg in "$@"; do
-    case "$arg" in
-        --upgrade) UPGRADE_FLAG="--upgrade" ;;
-        prod|ci|dev) TARGET="$arg" ;;
-        *) echo "Unknown argument: $arg"; exit 1 ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --upgrade) UPGRADE_FLAG="--upgrade"; shift ;;
+        --upgrade-package) UPGRADE_PACKAGE="$2"; shift 2 ;;
+        prod|ci|dev) TARGET="$1"; shift ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
-UPGRADE_OR_NO_UPGRADE="${UPGRADE_FLAG:---no-upgrade}"
+if [[ -n "$UPGRADE_PACKAGE" ]]; then
+    UPGRADE_OR_NO_UPGRADE="--upgrade-package $UPGRADE_PACKAGE"
+else
+    UPGRADE_OR_NO_UPGRADE="${UPGRADE_FLAG:---no-upgrade}"
+fi
 
 compile_prod() {
     echo "Compiling requirements.txt..."
