@@ -32,8 +32,8 @@ All developer scripts live in `dev/` and can be run from the repo root.
 |--------|-------------|
 | `dev/start.sh` | Start the dev stack. Detects first run and handles setup automatically. |
 | `dev/update.sh` | Pull latest changes, rebuild image if dependencies changed, and run migrations. |
-| `dev/pip-compile.sh [prod\|ci\|dev] [--upgrade]` | Regenerate pip-tools lockfiles inside the dev container. Defaults to all three. `--upgrade` allows version upgrades. |
-| `dev/check-requirements.sh [--quiet]` | Check for version differences between the three lockfiles. Exits 1 if any shared package is at different versions. |
+| `dev/pip-compile.sh [prod\|ci\|dev] [--upgrade] [--upgrade-package pkg]` | Regenerate pip-tools lockfiles inside the dev container. Defaults to all three. `--upgrade` upgrades all packages; `--upgrade-package pkg` upgrades a single package across all files. |
+| `dev/check-requirements.sh [--quiet\|--exclusive]` | Check for version differences between the three lockfiles (`--quiet` for exit-code only). `--exclusive` shows which packages are dev-only, ci+dev-only, or shared across all files - useful for evaluating Dependabot PR scope. |
 | `dev/reset.sh [--clean] [--force]` | Tear down volumes and restart. `--clean` also removes built images forcing a full Docker rebuild. `--force` skips the confirmation prompt. |
 | `dev/shell.sh [bash\|django\|db]` | Open a shell in the web container: `bash` (default), `django` (Django shell), `db` (dbshell). |
 | `dev/lint.sh [dir]` | Run pyflakes across all Python files (or a specific app directory). |
@@ -207,11 +207,19 @@ Dependencies are declared in `pyproject.toml` and locked in three files:
 To regenerate lockfiles after editing `pyproject.toml`:
 
 ```bash
-dev/pip-compile.sh           # regenerate all three
-dev/pip-compile.sh prod      # production only
-dev/pip-compile.sh ci        # CI only
-dev/pip-compile.sh dev       # dev only
-dev/pip-compile.sh --upgrade # upgrade all packages
+dev/pip-compile.sh                        # regenerate all three
+dev/pip-compile.sh prod                   # production only
+dev/pip-compile.sh ci                     # CI only
+dev/pip-compile.sh dev                    # dev only
+dev/pip-compile.sh --upgrade              # upgrade all packages
+dev/pip-compile.sh --upgrade-package django  # upgrade a single package across all files
+```
+
+To check for version skew between lockfiles (e.g. after a Dependabot PR):
+
+```bash
+dev/check-requirements.sh             # check for diffs, exits 1 if found
+dev/check-requirements.sh --exclusive # show which packages are dev/ci-only vs shared
 ```
 
 After regenerating, rebuild containers to pick up changes:

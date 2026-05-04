@@ -3,18 +3,20 @@
 # and requirements-dev.txt. Packages shared across files should be at the same version.
 #
 # Usage:
-#   dev/check-requirements.sh          # check for diffs, exit 1 if found
-#   dev/check-requirements.sh --quiet  # suppress output, only exit code
+#   dev/check-requirements.sh              # check for diffs, exit 1 if found
+#   dev/check-requirements.sh --quiet      # suppress output, only exit code
+#   dev/check-requirements.sh --exclusive  # show which packages are exclusive to each file
+#                                           # (useful for evaluating Dependabot PRs)
 
 cd "$(git rev-parse --show-toplevel)"
 
-QUIET="${1:-}"
+MODE="${1:-}"
 
-python3 - "$QUIET" << 'EOF'
+python3 - "$MODE" << 'EOF'
 import sys
 import re
 
-quiet = sys.argv[1] == '--quiet'
+mode = sys.argv[1]
 
 def parse(path):
     versions = {}
@@ -31,6 +33,39 @@ prod = parse('requirements.txt')
 ci   = parse('requirements-ci.txt')
 dev  = parse('requirements-dev.txt')
 
+if mode == '--exclusive':
+    prod_set = set(prod)
+    ci_set   = set(ci)
+    dev_set  = set(dev)
+
+    dev_only    = sorted(dev_set - prod_set - ci_set)   # dev only
+    ci_dev_only = sorted((ci_set & dev_set) - prod_set)  # ci + dev, not prod
+    ci_only     = sorted(ci_set - prod_set - dev_set)    # ci only (currently none expected)
+
+    print("Dependabot PR scope guide:")
+    print()
+
+    print(f"  All 3 files (prod + ci + dev): everything in requirements.txt")
+    print(f"    → {len(prod_set - ci_set - dev_set) + len(prod_set & ci_set) + len(prod_set & dev_set)} packages shared with prod")
+
+    if ci_dev_only:
+        print(f"\n  ci + dev only ({len(ci_dev_only)}) - PRs should touch requirements-ci.txt and requirements-dev.txt:")
+        for p in ci_dev_only:
+            print(f"    {p}=={ci.get(p) or dev.get(p)}")
+
+    if dev_only:
+        print(f"\n  dev only ({len(dev_only)}) - PRs should touch requirements-dev.txt only:")
+        for p in dev_only:
+            print(f"    {p}=={dev[p]}")
+
+    if ci_only:
+        print(f"\n  ci only ({len(ci_only)}) - PRs should touch requirements-ci.txt only:")
+        for p in ci_only:
+            print(f"    {p}=={ci[p]}")
+
+    sys.exit(0)
+
+# Default: check for version skew
 all_pkgs = sorted(set(prod) | set(ci) | set(dev))
 diffs = []
 for pkg in all_pkgs:
@@ -39,6 +74,7 @@ for pkg in all_pkgs:
     if len(present) >= 2 and len(set(present)) > 1:
         diffs.append((pkg, p or '-', c or '-', d or '-'))
 
+quiet = mode == '--quiet'
 if diffs:
     if not quiet:
         print(f"{'Package':<40}  {'prod':<14}  {'ci':<14}  dev")
