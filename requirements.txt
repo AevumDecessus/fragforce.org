@@ -147,7 +147,9 @@ asgiref==3.11.1 \
 async-timeout==5.0.1 \
     --hash=sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c \
     --hash=sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3
-    # via aiohttp
+    # via
+    #   aiohttp
+    #   redis
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \
     --hash=sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32
@@ -477,6 +479,7 @@ django==5.2.13 \
     #   django-markdownify
     #   django-memoize
     #   django-oauth-toolkit
+    #   django-redis
     #   fragforce-org (/code/pyproject.toml)
     #   social-auth-app-django
 django-markdownify==0.9.6 \
@@ -490,8 +493,9 @@ django-oauth-toolkit==3.2.0 \
     --hash=sha256:bd2cd2719b010231a2f370f927dbcc740454fb1d0dd7e7f4138f36227363dc26 \
     --hash=sha256:c36761ae6810083d95a652e9c820046cde0d45a2e2a5574bbe7202656ec20bb6
     # via fragforce-org (/code/pyproject.toml)
-django-redis-cache==3.0.1 \
-    --hash=sha256:a7fbef101a053d2e430bd3befe6a87e6e730f98e335b516f25f30b17d9fe66e3
+django-redis==6.0.0 \
+    --hash=sha256:20bf0063a8abee567eb5f77f375143c32810c8700c0674ced34737f8de4e36c0 \
+    --hash=sha256:2d9cb12a20424a4c4dde082c6122f486628bae2d9c2bee4c0126a4de7fda00dd
     # via fragforce-org (/code/pyproject.toml)
 django-workflow-engine==0.2.2 \
     --hash=sha256:4bb14dd3d26f15c723f25904e47f212066ebba132c71548093a6cc26551af580 \
@@ -1144,12 +1148,12 @@ pytz==2026.2 \
     --hash=sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126 \
     --hash=sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a
     # via celery
-redis==3.5.3 \
-    --hash=sha256:0e7e0cfca8660dea8b7d5cd8c4f6c5e29e11f31158c0b0ae91a397f00e5a05a2 \
-    --hash=sha256:432b788c4530cfe16d8d943a09d40ca6c16149727e4afe8c2c9d5580c59d9f24
+redis==4.6.0 \
+    --hash=sha256:585dc516b9eb042a619ef0a39c3d7d55fe81bdb4df09a52c9cdde0d07bf1aa7d \
+    --hash=sha256:e2b03db868160ee4591de3cb90d40ebb50a90dd302138775937f6a42b7ed183c
     # via
     #   celery
-    #   django-redis-cache
+    #   django-redis
     #   fragforce-org (/code/pyproject.toml)
 requests[security]==2.33.1 \
     --hash=sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517 \
