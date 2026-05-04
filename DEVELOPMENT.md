@@ -33,6 +33,7 @@ All developer scripts live in `dev/` and can be run from the repo root.
 | `dev/start.sh` | Start the dev stack. Detects first run and handles setup automatically. |
 | `dev/update.sh` | Pull latest changes, rebuild image if dependencies changed, and run migrations. |
 | `dev/pip-compile.sh [prod\|ci\|dev] [--upgrade]` | Regenerate pip-tools lockfiles inside the dev container. Defaults to all three. `--upgrade` allows version upgrades. |
+| `dev/check-requirements.sh [--quiet]` | Check for version differences between the three lockfiles. Exits 1 if any shared package is at different versions. |
 | `dev/reset.sh [--clean] [--force]` | Tear down volumes and restart. `--clean` also removes built images forcing a full Docker rebuild. `--force` skips the confirmation prompt. |
 | `dev/shell.sh [bash\|django\|db]` | Open a shell in the web container: `bash` (default), `django` (Django shell), `db` (dbshell). |
 | `dev/lint.sh [dir]` | Run pyflakes across all Python files (or a specific app directory). |
