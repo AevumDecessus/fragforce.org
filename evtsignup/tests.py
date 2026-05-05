@@ -747,3 +747,91 @@ class SignalQueueTest(TestCase):
             interest.fundraising_url = 'https://www.extra-life.org/participants/999999'
             interest.save()
         mock_task.assert_called_once()
+
+
+class FundraisingUrlSignalTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('sigtest', 'sig@example.com', 'pass')
+        self.event = Event.objects.create(
+            name='Signal Test', slug='signal-test', description='',
+            signups_open=True, edits_open=True,
+        )
+
+    def test_create_with_url_queues_task(self):
+        from unittest.mock import patch
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            EventInterest.objects.create(
+                user=self.user, event=self.event, acknowledged=True,
+                fundraising_url='https://extra-life.org/participants/123',
+            )
+        mock_task.delay.assert_called_once()
+
+    def test_create_without_url_does_not_queue(self):
+        from unittest.mock import patch
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            EventInterest.objects.create(
+                user=self.user, event=self.event, acknowledged=True,
+            )
+        mock_task.delay.assert_not_called()
+
+    def test_update_url_queues_task(self):
+        from unittest.mock import patch
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://extra-life.org/participants/123',
+        )
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            interest.fundraising_url = 'https://extra-life.org/participants/456'
+            interest.save()
+        mock_task.delay.assert_called_once()
+
+    def test_update_other_field_does_not_queue(self):
+        from unittest.mock import patch
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://extra-life.org/participants/123',
+        )
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            interest.display_name = 'New Name'
+            interest.save(update_fields=['display_name'])
+        mock_task.delay.assert_not_called()
+
+    def test_update_unchanged_url_without_el_participant_queues(self):
+        from unittest.mock import patch
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://extra-life.org/participants/123',
+        )
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            interest.save()
+        mock_task.delay.assert_called_once()
+
+    def test_update_unchanged_url_with_el_participant_does_not_queue(self):
+        from unittest.mock import patch
+        from ffdonations.models import ParticipantModel
+        participant = ParticipantModel.objects.create(
+            id=99991, displayName='Test', sumDonations=0,
+            numDonations=0, fundraisingGoal=0,
+        )
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://extra-life.org/participants/99991',
+            el_participant=participant,
+        )
+        with patch('evtsignup.tasks.resolve_fundraising_url') as mock_task:
+            interest.display_name = 'Changed Name'
+            interest.save()
+        mock_task.delay.assert_not_called()
+
+    def test_url_resolution_attempts_reset_on_url_change(self):
+        interest = EventInterest.objects.create(
+            user=self.user, event=self.event, acknowledged=True,
+            fundraising_url='https://extra-life.org/participants/123',
+            url_resolution_attempts=3,
+        )
+        from unittest.mock import patch
+        with patch('evtsignup.tasks.resolve_fundraising_url'):
+            interest.fundraising_url = 'https://extra-life.org/participants/456'
+            interest.save()
+        interest.refresh_from_db()
+        self.assertEqual(interest.url_resolution_attempts, 0)
