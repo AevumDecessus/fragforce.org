@@ -4,7 +4,7 @@ services:
     volumes:
       - .:/code
     env_file: .env
-    command: pipenv run python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8000
     ports:
       - "8000:8000"
     environment:
@@ -32,7 +32,7 @@ services:
     build: .
     volumes:
       - .:/code
-    command: bash -c 'sleep 10 && pipenv run python manage.py migrate'
+    command: bash -c 'sleep 10 && python manage.py migrate'
     environment:
       TZ: "Etc/UTC"
       DOCKER: "True"

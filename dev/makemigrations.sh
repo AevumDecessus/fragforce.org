@@ -13,4 +13,4 @@ if ! docker compose ps -q --status running web 2>/dev/null | grep -q .; then
     dev/start.sh
 fi
 
-docker compose exec -T web pipenv run python manage.py makemigrations "$@"
+docker compose exec -T web python manage.py makemigrations "$@"

@@ -2,7 +2,7 @@
 # Open a shell inside the web container.
 #
 # Usage:
-#   dev/shell.sh            # bash shell with pipenv activated
+#   dev/shell.sh            # bash shell
 #   dev/shell.sh django     # Django manage.py shell
 #   dev/shell.sh db         # Django dbshell (postgres)
 
@@ -16,13 +16,13 @@ fi
 
 case "${1:-bash}" in
     django)
-        docker compose exec web pipenv run python manage.py shell
+        docker compose exec web python manage.py shell
         ;;
     db)
-        docker compose exec web pipenv run python manage.py dbshell
+        docker compose exec web python manage.py dbshell
         ;;
     bash|"")
-        docker compose exec web pipenv shell
+        docker compose exec web bash
         ;;
     *)
         echo "Usage: dev/shell.sh [bash|django|db]"

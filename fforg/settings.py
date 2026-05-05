@@ -195,15 +195,6 @@ if bool(os.environ.get('DOCKER', 'False').lower() == 'true') or bool(
 else:
     SECURE_SSL_REDIRECT = True
 
-# Heroku auto set
-HEROKU_APP_ID = os.environ.get('HEROKU_APP_ID', None)
-HEROKU_APP_NAME = os.environ.get('HEROKU_APP_NAME', None)
-HEROKU_RELEASE_CREATED_AT = os.environ.get('HEROKU_RELEASE_CREATED_AT', None)
-HEROKU_RELEASE_VERSION = os.environ.get('HEROKU_RELEASE_VERSION', 'v1')
-HEROKU_RELEASE_VERSION_NUM = int(HEROKU_RELEASE_VERSION.lstrip('v'))
-HEROKU_SLUG_COMMIT = os.environ.get('HEROKU_SLUG_COMMIT', None)
-HEROKU_SLUG_DESCRIPTION = os.environ.get('HEROKU_SLUG_DESCRIPTION', None)
-
 SINGAPORE_DONATIONS = float(os.environ.get('SINGAPORE_DONATIONS', '0.0'))
 OTHER_DONATIONS = float(os.environ.get('OTHER_DONATIONS', '0.0'))
 TARGET_DONATIONS = float(os.environ.get('TARGET_DONATIONS', '1.0'))
@@ -211,9 +202,6 @@ TARGET_DONATIONS = float(os.environ.get('TARGET_DONATIONS', '1.0'))
 FRAG_BOT_API = os.environ.get('FRAG_BOT_API', 'https://bot.fragforce.org/dbquery')
 FRAG_BOT_KEY = os.environ.get('FRAG_BOT_KEY', '')
 FRAG_BOT_BOT = os.environ.get('FRAG_BOT_BOT', 'misterfragbot')
-
-# Cache version prefix
-VERSION = int(HEROKU_RELEASE_VERSION_NUM)
 
 # Max rows for api to return
 MAX_API_ROWS = int(os.environ.get('MAX_API_ROWS', 1024))
@@ -366,37 +354,26 @@ else:
     # Real config
     CACHES = {
         'default': {
-            'BACKEND': 'redis_cache.cache.RedisCache',
+            'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': REDIS_URL_DJ_CACHE,
             'TIMEOUT': int(os.environ.get('REDIS_DJ_TIMEOUT', 300)),
+            'KEY_FUNCTION': make_key,
             'OPTIONS': {
-                'PARSER_CLASS': 'redis.connection.HiredisParser',
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                # hiredis is used automatically when the hiredis package is installed (redis-py 4+)
                 'SOCKET_TIMEOUT': int(os.environ.get('REDIS_DJ_SOCKET_TIMEOUT', 5)),
                 'SOCKET_CONNECT_TIMEOUT': int(os.environ.get('REDIS_DJ_SOCKET_CONNECT_TIMEOUT', 3)),
                 'CONNECTION_POOL_CLASS': 'redis.BlockingConnectionPool',
-                'CONNECTION_POOL_CLASS_KWARGS': {
+                'CONNECTION_POOL_KWARGS': {
                     'max_connections': int(os.environ.get('REDIS_DJ_POOL_MAX_CONN', 5)),
                     'timeout': int(os.environ.get('REDIS_DJ_POOL_TIMEOUT', 3)),
                 },
-                # 'SERIALIZER_CLASS': 'redis_cache.serializers.JSONSerializer',
-                # 'SERIALIZER_CLASS_KWARGS': {},
-                # Used to auto flush cache when new builds happen :-D
-                'VERSION': HEROKU_RELEASE_VERSION_NUM,
-                'KEY_PREFIX': '_'.join([str(HEROKU_APP_ID), str(HEROKU_APP_NAME)]),
-                'KEY_FUNCTION': make_key,
             },
         },
     }
 
     if os.environ.get('DJANGO_COMPRESS_REDIS', 'false').lower() == 'true':
-        CACHES['default']['OPTIONS']['COMPRESSOR_CLASS'] = 'redis_cache.compressors.ZLibCompressor'
-        CACHES['default']['OPTIONS']['COMPRESSOR_CLASS_KWARGS'] = {
-            # level = 0 - 9
-            # 0 - no compression
-            # 1 - fastest, biggest
-            # 9 - slowest, smallest
-            'level': int(os.environ.get('DJANGO_COMPRESS_REDIS_ZLIB_LEVEL', 1)),
-        }
+        CACHES['default']['OPTIONS']['COMPRESSOR'] = 'django_redis.compressors.zlib.ZlibCompressor'
 
 # Second to last
 CELERY_BEAT_SCHEDULE = {

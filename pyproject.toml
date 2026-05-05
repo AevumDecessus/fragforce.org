@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "fragforce-org"
+version = "0.1.0"
+requires-python = "==3.10.*"
+dependencies = [
+    "psycopg2-binary",
+    "gunicorn",
+    "requests[security]",
+    "celery>=5.5",
+    "redis>=7.0",
+    "dj-database-url>=3.0",
+    "django-redis>=5.0",
+    "hiredis",
+    "django-memoize",
+    "django>=5.2",
+    "whitenoise",
+    "django-oauth-toolkit>=3.0",
+    "django-workflow-engine",
+    "social-auth-app-django>=5.9",
+    "py-cord>=2,<3",
+    "django-markdownify",
+]
+
+[project.optional-dependencies]
+ci = [
+    "coverage",
+    "unittest-xml-reporting",
+]
+dev = [
+    "ipython",
+    "pip-tools",
+    "pyflakes",
+    "coverage",
+    "unittest-xml-reporting",
+]
+
+[tool.pip-tools]
+generate-hashes = true
+strip-extras = false
+
+# To regenerate lockfiles:
+#   pip-compile pyproject.toml -o requirements.txt --generate-hashes --no-upgrade
+#   pip-compile pyproject.toml --extra ci -o requirements-ci.txt --generate-hashes --no-upgrade --allow-unsafe
+#   pip-compile pyproject.toml --extra dev -o requirements-dev.txt --generate-hashes --no-upgrade --allow-unsafe
+# (--allow-unsafe pins pip and setuptools in ci/dev only, not needed in production)
+# Note: requires pip>=26 to compile (kombu's setup.py uses use_2to3 which older pip rejects)

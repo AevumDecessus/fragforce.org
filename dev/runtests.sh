@@ -34,7 +34,7 @@ if [[ "${1:-}" == "--fresh" ]]; then
 fi
 
 # Run tests, capturing all output (Django test runner writes to stderr)
-OUTPUT=$(docker compose exec -T web pipenv run python manage.py test $KEEPDB "$@" 2>&1)
+OUTPUT=$(docker compose exec -T web python manage.py test $KEEPDB "$@" 2>&1)
 EXIT_CODE=$?
 
 # Extract summary lines
