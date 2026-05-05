@@ -401,7 +401,7 @@ class EventSignupSlotConfigAdmin(admin.ModelAdmin):
                 groups = EventSlotGroup.objects.prefetch_related('memberships__role').all()
                 group_summaries = []
                 for group in groups:
-                    memberships = list(group.memberships.select_related('role').all())
+                    memberships = list(group.memberships.all())
                     effective_block = group.block_hours if group.block_hours is not None else config.management_block_hours
                     group_summaries.append({
                         'group': group,
@@ -426,9 +426,13 @@ class EventSlotGroupAdmin(admin.ModelAdmin):
     list_display = ['name', 'use_prime_time', 'block_hours', 'member_count']
     inlines = [EventSlotGroupMembershipInline]
 
+    def get_queryset(self, request):
+        from django.db.models import Count
+        return super().get_queryset(request).annotate(_member_count=Count('memberships'))
+
     @admin.display(description='Members')
     def member_count(self, obj):
-        return obj.memberships.count()
+        return obj._member_count
 
 
 @admin.register(EventSignupSlot)

@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_safe
 
-from eventer.models import Event, EventRole, EventScheduleAssignment
+from eventer.models import Event, EventScheduleAssignment
 from eventer.schedule import build_schedule_grid, generate_twitch_commands
 
 
@@ -168,7 +168,6 @@ def coordinator_schedule_view(request, event_slug):
     grid = build_schedule_grid(event)
 
     # Annotate assigned users with display names
-    from evtsignup.models import EventInterest
     user_ids = {
         a.user_id
         for row in grid['rows']
@@ -182,14 +181,10 @@ def coordinator_schedule_view(request, event_slug):
         if mcell.get('type') == 'slot'
         for a in mcell.get('assigned', [])
     }
-    display_names = {}
-    if user_ids:
-        for row in EventInterest.objects.filter(event=event, user_id__in=user_ids).values('user_id', 'display_name', 'user__username'):
-            display_names[row['user_id']] = row['display_name'] or row['user__username']
+    display_names = _display_name_map(event, user_ids)
 
-    stream_command_slugs = set(
-        EventRole.objects.filter(show_stream_commands=True).values_list('slug', flat=True)
-    )
+    # Derive from already-loaded grid data - no extra DB query needed
+    stream_command_slugs = {r['slug'] for r in grid['role_headers'] if r.get('show_stream_commands')}
 
     for row in grid['rows']:
         for cell in row['cells']:

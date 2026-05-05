@@ -88,10 +88,11 @@ def _save_signup(request, event, roles_with_slots, game_qs_by_slug):
     ])
 
     # Sync game selections - one row per (game, role)
+    roles_by_slug = {r.slug: r for r in roles_with_slots}
     GameInterestUserEvent.objects.filter(event_interest=interest).delete()
     game_rows = []
     for slug, games_qs in game_qs_by_slug.items():
-        role = next((r for r in roles_with_slots if r.slug == slug), None)
+        role = roles_by_slug.get(slug)
         if role:
             for gid in games_qs.filter(pk__in=request.POST.getlist(f'{slug}_games')).values_list('pk', flat=True):
                 game_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=role))
@@ -144,12 +145,14 @@ def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
         for slug, slots in slots_by_slug.items()
     }
 
+    # Fetch all game selections in one query then partition by slug
+    game_selections_by_slug = defaultdict(set)
+    for slug, game_id in existing.gameinterestuserevent_set.filter(
+        role__slug__in=list(game_qs_by_slug.keys())
+    ).values_list('role__slug', 'game_id'):
+        game_selections_by_slug[slug].add(game_id)
     selected_game_ids = {
-        slug: set(
-            existing.gameinterestuserevent_set
-            .filter(role__slug=slug)
-            .values_list('game_id', flat=True)
-        ) & set(games_qs.values_list('pk', flat=True))
+        slug: game_selections_by_slug[slug] & set(games_qs.values_list('pk', flat=True))
         for slug, games_qs in game_qs_by_slug.items()
     }
 
@@ -200,7 +203,8 @@ def signup_view(request, event_slug):
 
     # Only include roles that have slots on this event, preserving display_order
     all_roles = list(EventRole.objects.all())
-    roles_with_slots = [r for r in all_roles if slots.filter(roles=r).exists()]
+    slot_role_ids = set(slots.values_list('roles', flat=True))
+    roles_with_slots = [r for r in all_roles if r.pk in slot_role_ids]
     slots_by_slug = {r.slug: slots.filter(roles=r) for r in roles_with_slots}
 
     # Game querysets for roles that have game selection enabled

@@ -195,43 +195,34 @@ def build_schedule_grid(event):
         {'label': r.name, 'color': r.color, 'slug': r.slug}
         for r in multi_roles
     ]
-    # Attach multi-assignment data to rows for template use
+    # Attach multi-assignment data and compute rowspan in a single pass
+    multi_next_hour = {r.slug: None for r in multi_roles}
+    multi_alt = {r.slug: False for r in multi_roles}
     for row in rows:
-        row['multi_cells'] = {}
+        multi_cells = {}
         for role in multi_roles:
             slug = role.slug
             slot = role_hour_slot.get(slug, {}).get(row['hour'])
             if slot is None:
-                row['multi_cells'][slug] = {'type': 'empty'}
+                multi_cells[slug] = {'type': 'empty'}
+            elif multi_next_hour[slug] is not None and row['hour'] < multi_next_hour[slug]:
+                multi_cells[slug] = {'type': 'skip'}
             else:
                 key = (slot.pk, slug)
-                row['multi_cells'][slug] = {
+                slot_hours = list(_expand_to_hours(slot))
+                multi_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else row['hour'] + timedelta(hours=1)
+                multi_alt[slug] = not multi_alt[slug]
+                multi_cells[slug] = {
                     'type': 'slot',
                     'slot': slot,
                     'role_slug': slug,
                     'role_color': role.color,
+                    'rowspan': len(slot_hours),
+                    'alt': multi_alt[slug],
                     'available': multi_slot_data.get(key, {}).get('available', []),
                     'assigned': multi_slot_data.get(key, {}).get('assigned', []),
                 }
-
-    # Compute rowspan for multi cells and build ordered list matching multi_role_headers
-    multi_next_hour = {r.slug: None for r in multi_roles}
-    multi_alt = {r.slug: False for r in multi_roles}
-    for row in rows:
-        for role in multi_roles:
-            slug = role.slug
-            cell = row['multi_cells'].get(slug, {'type': 'empty'})
-            if cell['type'] != 'empty':
-                slot = cell['slot']
-                if multi_next_hour[slug] is not None and row['hour'] < multi_next_hour[slug]:
-                    row['multi_cells'][slug] = {'type': 'skip'}
-                else:
-                    slot_hours = list(_expand_to_hours(slot))
-                    multi_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else row['hour'] + timedelta(hours=1)
-                    multi_alt[slug] = not multi_alt[slug]
-                    cell['rowspan'] = len(slot_hours)
-                    cell['alt'] = multi_alt[slug]
-        row['multi_cells_list'] = [row['multi_cells'].get(r.slug, {'type': 'empty'}) for r in multi_roles]
+        row['multi_cells_list'] = [multi_cells.get(r.slug, {'type': 'empty'}) for r in multi_roles]
 
     return {
         'rows': rows, 'role_headers': role_headers,
