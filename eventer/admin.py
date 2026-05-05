@@ -75,7 +75,7 @@ class EventRoleAdminForm(forms.ModelForm):
 
     class Meta:
         model = EventRole
-        fields = ['name', 'slug', 'description', 'color', 'multi_assign', 'display_order', 'has_game_selection', 'game_min_players']
+        fields = ['name', 'slug', 'description', 'color', 'multi_assign', 'display_order', 'has_game_selection', 'game_min_players', 'show_fundraising_url']
 
 
 @admin.register(EventRole)

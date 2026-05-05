@@ -84,6 +84,8 @@ class EventRole(models.Model):
                                              help_text="Show a game preference picker for this role on the signup form.")
     game_min_players = models.PositiveSmallIntegerField(null=True, blank=True,
                                                         help_text="Exclude games where max players is less than this value. Leave blank to show all games.")
+    show_fundraising_url = models.BooleanField(default=False,
+                                               help_text="Show the fundraising URL field for this role on the signup form.")
 
     class Meta:
         ordering = ['display_order', 'name']
