@@ -4,10 +4,11 @@ from datetime import datetime, timezone as dt_timezone, timedelta
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from eventer.admin import SUPERSTREAM_ROLES
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, HOUR_SECONDS
-from eventer.schedule import SINGLE_ASSIGNMENT_ROLES, MULTI_ASSIGNMENT_ROLES
-from eventer.slot_generator import _format_label, _variable_block_hours, generate_slots
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventSlotGroup, EventSlotGroupMembership, HOUR_SECONDS
+from eventer.schedule import (
+    _event_all_hours, slot_hour_range, generate_twitch_commands, build_schedule_grid,
+)
+from eventer.slot_generator import _expand_to_hours, _format_label, _variable_block_hours, generate_slots
 
 
 def dt(year, month, day, hour=0, minute=0):
@@ -54,38 +55,6 @@ class EventStartEndTest(TestCase):
 
         self.assertEqual(self.event.end, late_stop)
 
-
-class SeedSuperstreamRolesViewTest(TestCase):
-    def setUp(self):
-        self.superuser = User.objects.create_superuser('admin', 'admin@example.com', 'pass')
-        self.client.login(username='admin', password='pass')
-
-    def _url(self):
-        return '/admin/eventer/eventrole/seed-superstream/'
-
-    def test_creates_all_roles_when_none_exist(self):
-        response = self.client.post(self._url())
-        self.assertRedirects(response, '/admin/eventer/eventrole/', fetch_redirect_response=False)
-        self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
-        slugs = set(EventRole.objects.values_list('slug', flat=True))
-        self.assertEqual(slugs, {r['slug'] for r in SUPERSTREAM_ROLES})
-
-    def test_idempotent_when_roles_already_exist(self):
-        for role in SUPERSTREAM_ROLES:
-            EventRole.objects.create(name=role['name'], slug=role['slug'], description=role['description'])
-        self.client.post(self._url())
-        self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
-
-    def test_creates_only_missing_roles(self):
-        EventRole.objects.create(name='Participant', slug='participant', description='')
-        EventRole.objects.create(name='Streamer', slug='streamer', description='')
-        self.client.post(self._url())
-        self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
-
-    def test_get_also_seeds_and_redirects(self):
-        response = self.client.get(self._url())
-        self.assertRedirects(response, '/admin/eventer/eventrole/', fetch_redirect_response=False)
-        self.assertEqual(EventRole.objects.count(), len(SUPERSTREAM_ROLES))
 
 
 class SetupSuperstreamViewTest(TestCase):
@@ -244,8 +213,9 @@ class GenerateSlotsTest(TestCase):
         with self.assertRaises(ValueError):
             generate_slots(event)
 
-    def test_raises_without_roles(self):
-        EventRole.objects.all().delete()
+    def test_raises_without_groups(self):
+        from eventer.models import EventSlotGroup
+        EventSlotGroup.objects.all().delete()
         with self.assertRaises(ValueError):
             generate_slots(self.event)
 
@@ -253,33 +223,43 @@ class GenerateSlotsTest(TestCase):
         result = generate_slots(self.event)
         self.assertGreater(result['created'], 0)
         self.assertEqual(result['deleted'], 0)
-        # Some skipped is expected when grids share slot boundaries
         self.assertGreaterEqual(result['skipped'], 0)
 
-    def test_participant_and_streamer_share_slots(self):
+    def test_roles_without_offset_in_same_group_share_slots(self):
+        from eventer.models import EventSlotGroup
         generate_slots(self.event)
-        participant = EventRole.objects.get(slug='participant')
-        streamer = EventRole.objects.get(slug='streamer')
-        p_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=participant).values_list('id', flat=True))
-        s_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=streamer).values_list('id', flat=True))
-        self.assertEqual(p_slots, s_slots)
+        # All roles in the prime-time group with no first_block_hours should share identical slot sets
+        prime_group = EventSlotGroup.objects.get(use_prime_time=True)
+        shared_roles = [m.role for m in prime_group.memberships.filter(first_block_hours__isnull=True)]
+        if len(shared_roles) < 2:
+            return
+        first_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=shared_roles[0]).values_list('id', flat=True))
+        for role in shared_roles[1:]:
+            role_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=role).values_list('id', flat=True))
+            self.assertEqual(first_slots, role_slots)
 
-    def test_tech_has_uniform_management_block_size(self):
+    def test_management_group_uses_uniform_block_size(self):
+        from eventer.models import EventSlotGroup
         generate_slots(self.event)
         config = self._config()
-        tech = EventRole.objects.get(slug='tech-manager')
-        slots = list(EventSignupSlot.objects.filter(event=self.event, roles=tech).order_by('start'))
-        for slot in slots[:-1]:  # last slot may be absorbed
-            duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
-            self.assertEqual(duration_hrs, config.management_block_hours, f"Tech slot {slot.label} should be {config.management_block_hours}hr")
+        # Any management group with no block_hours override should use config.management_block_hours
+        mgmt_groups = EventSlotGroup.objects.filter(use_prime_time=False, block_hours__isnull=True)
+        for group in mgmt_groups:
+            for membership in group.memberships.filter(first_block_hours__isnull=True).select_related('role'):
+                slots = list(EventSignupSlot.objects.filter(event=self.event, roles=membership.role).order_by('start'))
+                for slot in slots[:-1]:
+                    duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
+                    self.assertEqual(duration_hrs, config.management_block_hours)
 
-    def test_moderator_first_block_matches_config(self):
+    def test_role_with_first_block_offset_uses_that_value(self):
+        from eventer.models import EventSlotGroupMembership
         generate_slots(self.event)
-        config = self._config()
-        moderator = EventRole.objects.get(slug='moderator')
-        first_slot = EventSignupSlot.objects.filter(event=self.event, roles=moderator).order_by('start').first()
-        duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / HOUR_SECONDS
-        self.assertEqual(duration_hrs, config.mod_first_block_hours)
+        # Any membership with first_block_hours set should have that as the first slot's duration
+        for membership in EventSlotGroupMembership.objects.filter(first_block_hours__isnull=False).select_related('role'):
+            first_slot = EventSignupSlot.objects.filter(event=self.event, roles=membership.role).order_by('start').first()
+            if first_slot:
+                duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / HOUR_SECONDS
+                self.assertEqual(duration_hrs, membership.first_block_hours)
 
     def test_prime_time_slots_use_prime_block_hours(self):
         generate_slots(self.event)
@@ -525,8 +505,8 @@ class EventDetailViewTest(TestCase):
 def _make_schedule_event():
     """
     Create a test event with periods, roles, and signup slots for schedule tests.
-    Returns (event, slot, streamer_role) - uses streamer as the primary test role
-    since participant is a multi-assignment role (EventScheduleMultiAssignment).
+    Returns (event, slot, single_assign_role) - uses the first single-assign role
+    as the primary test role since multi-assign roles use EventScheduleMultiAssignment.
     """
     event = Event.objects.create(
         name='Schedule Test', slug='schedule-test', description='',
@@ -537,19 +517,19 @@ def _make_schedule_event():
         start=dt(2025, 4, 4, 12),
         stop=dt(2025, 4, 4, 18),
     )
-    for slug, name in [('participant', 'Participant'), ('streamer', 'Streamer'),
-                       ('moderator', 'Moderator'), ('tech-manager', 'Tech Manager')]:
-        EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': ''})
-    streamer_role = EventRole.objects.get(slug='streamer')
-    participant_role = EventRole.objects.get(slug='participant')
+    for slug, name, multi in [('participant', 'Participant', True), ('streamer', 'Streamer', False),
+                               ('moderator', 'Moderator', False), ('tech-manager', 'Tech Manager', False)]:
+        EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': '', 'multi_assign': multi})
+    single_role = EventRole.objects.filter(multi_assign=False).order_by('display_order', 'name').first()
+    multi_role = EventRole.objects.filter(multi_assign=True).first()
     slot = EventSignupSlot.objects.create(
         event=event,
         start=dt(2025, 4, 4, 12),
         stop=dt(2025, 4, 4, 15),
         label='Friday 8am - 11am',
     )
-    slot.roles.set([streamer_role, participant_role])
-    return event, slot, streamer_role
+    slot.roles.set([single_role, multi_role])
+    return event, slot, single_role
 
 
 class AvailabilitySummaryViewTest(TestCase):
@@ -577,12 +557,13 @@ class AvailabilitySummaryViewTest(TestCase):
         self.assertEqual(len(response.context['rows']), 6)
 
     def test_role_headers_present(self):
+        from eventer.models import EventRole
         response = self.client.get(self._url())
         labels = [h['label'] for h in response.context['role_headers']]
-        for _, _, label in SINGLE_ASSIGNMENT_ROLES:
-            self.assertIn(label, labels)
-        for _, _, label in MULTI_ASSIGNMENT_ROLES:
-            self.assertNotIn(label, labels)
+        for role in EventRole.objects.filter(multi_assign=False):
+            self.assertIn(role.name, labels)
+        for role in EventRole.objects.filter(multi_assign=True):
+            self.assertNotIn(role.name, labels)
 
 
 class BuildScheduleViewTest(TestCase):
@@ -695,7 +676,7 @@ class AddAvailabilityViewTest(TestCase):
 
     def test_get_renders_form(self):
         response = self.client.get(
-            self._url(), {'slot': self.slot.pk, 'role': 'streamer'}
+            self._url(), {'slot': self.slot.pk, 'role': self.role.slug}
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Friday 8am - 11am')
@@ -710,21 +691,21 @@ class AddAvailabilityViewTest(TestCase):
         self.assertTrue(EventInterest.objects.filter(user=self.user, event=self.event).exists())
 
     def test_post_creates_availability_rows(self):
-        from evtsignup.models import EventAvailabilityInterest, EventInterest
+        from evtsignup.models import EventAvailabilityHour, EventInterest
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
-            'role_slug': 'streamer',
+            'role_slug': self.role.slug,
             'user': self.user.pk,
         })
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        hours = EventAvailabilityInterest.objects.filter(event_interest=interest, as_streamer=True)
+        hours = EventAvailabilityHour.objects.filter(event_interest=interest, role=self.role)
         self.assertEqual(hours.count(), 3)  # 12:00, 13:00, 14:00 UTC
 
     def test_post_creates_schedule_slot(self):
         from eventer.models import EventScheduleAssignment
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
-            'role_slug': 'streamer',
+            'role_slug': self.role.slug,
             'user': self.user.pk,
         })
         self.assertTrue(EventScheduleAssignment.objects.filter(
@@ -1465,3 +1446,231 @@ class FetchTopGamesByRatingTaskTest(TestCase):
              patch('eventer.tasks.sync_single_igdb_game') as mock_task:
             fetch_top_games_by_rating()
         mock_task.assert_not_called()
+
+
+# --- schedule.py ---
+
+class EventAllHoursTest(TestCase):
+    def test_single_hour(self):
+        start = dt(2025, 4, 4, 12)
+        end = dt(2025, 4, 4, 13)
+        hours = _event_all_hours(start, end)
+        self.assertEqual(hours, [dt(2025, 4, 4, 12)])
+
+    def test_multiple_hours(self):
+        start = dt(2025, 4, 4, 12)
+        end = dt(2025, 4, 4, 15)
+        hours = _event_all_hours(start, end)
+        self.assertEqual(len(hours), 3)
+        self.assertEqual(hours[0], dt(2025, 4, 4, 12))
+        self.assertEqual(hours[-1], dt(2025, 4, 4, 14))
+
+    def test_truncates_to_hour(self):
+        start = datetime(2025, 4, 4, 12, 30, tzinfo=dt_timezone.utc)
+        end = datetime(2025, 4, 4, 14, 30, tzinfo=dt_timezone.utc)
+        hours = _event_all_hours(start, end)
+        self.assertEqual(hours[0].minute, 0)
+        self.assertEqual(hours[0].second, 0)
+
+
+class SlotHourRangeTest(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(name='HR Test', slug='hr-test', description='')
+        EventPeriod.objects.create(event=self.event, start=dt(2025, 4, 4, 12), stop=dt(2025, 4, 6, 4))
+        self.slot = EventSignupSlot.objects.create(
+            event=self.event, start=dt(2025, 4, 4, 15), stop=dt(2025, 4, 4, 18), label='Test Slot'
+        )
+
+    def test_start_hour_1_indexed(self):
+        h_start, h_end = slot_hour_range(dt(2025, 4, 4, 12), self.slot)
+        self.assertEqual(h_start, 4)  # 15:00 - 12:00 = 3h + 1 = 4
+        self.assertEqual(h_end, 6)    # 18:00 - 12:00 = 6h
+
+    def test_slot_at_event_start(self):
+        slot = EventSignupSlot.objects.create(
+            event=self.event, start=dt(2025, 4, 4, 12), stop=dt(2025, 4, 4, 15), label='First Slot'
+        )
+        h_start, h_end = slot_hour_range(dt(2025, 4, 4, 12), slot)
+        self.assertEqual(h_start, 1)
+        self.assertEqual(h_end, 3)
+
+
+class GenerateTwitchCommandsTest(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(name='Stream Test', slug='stream-test', description='')
+        EventPeriod.objects.create(event=self.event, start=dt(2025, 4, 4, 12), stop=dt(2025, 4, 6, 4))
+        self.slot = EventSignupSlot.objects.create(
+            event=self.event, start=dt(2025, 4, 4, 12), stop=dt(2025, 4, 4, 15), label='Friday 8am - 11am'
+        )
+
+    def test_commands_with_game_and_streamer(self):
+        title, game, donate = generate_twitch_commands(self.event, self.slot, 'JohnDoe', 'Celeste')
+        self.assertIn('Stream Test', title)
+        self.assertIn('Hours 1-3', title)
+        self.assertEqual(game, '!setgame Celeste')
+        self.assertEqual(donate, '!setteam JohnDoe')
+
+    def test_no_game_empty_game_cmd(self):
+        _, game, _ = generate_twitch_commands(self.event, self.slot, 'JohnDoe', '')
+        self.assertEqual(game, '')
+
+    def test_no_streamer_empty_donate_cmd(self):
+        _, _, donate = generate_twitch_commands(self.event, self.slot, '', 'Celeste')
+        self.assertEqual(donate, '')
+
+    def test_no_event_start_uses_slot_label(self):
+        event = Event.objects.create(name='No Period', slug='no-period-tw', description='')
+        title, _, _ = generate_twitch_commands(event, self.slot, 'JohnDoe', 'Celeste')
+        self.assertIn('Friday 8am - 11am', title)
+
+
+class BuildScheduleGridEmptyTest(TestCase):
+    def test_no_periods_returns_empty_rows(self):
+        event = Event.objects.create(name='Empty Grid', slug='empty-grid', description='')
+        grid = build_schedule_grid(event)
+        self.assertEqual(grid['rows'], [])
+        self.assertEqual(grid['slot_role_available'], {})
+        self.assertEqual(grid['slot_role_assigned'], {})
+
+
+class BuildScheduleGridFullTest(TestCase):
+    def setUp(self):
+        self.event, self.slot, self.role = _make_schedule_event()
+        self.user = User.objects.create_user('griduser', 'g@example.com', 'pass')
+
+    def test_role_headers_contain_single_assign_roles(self):
+        grid = build_schedule_grid(self.event)
+        labels = [h['label'] for h in grid['role_headers']]
+        for role in EventRole.objects.filter(multi_assign=False):
+            self.assertIn(role.name, labels)
+
+    def test_multi_role_headers_contain_multi_assign_roles(self):
+        grid = build_schedule_grid(self.event)
+        labels = [h['label'] for h in grid['multi_role_headers']]
+        for role in EventRole.objects.filter(multi_assign=True):
+            self.assertIn(role.name, labels)
+
+    def test_rows_count_matches_event_hours(self):
+        grid = build_schedule_grid(self.event)
+        expected_hours = int((self.event.end - self.event.start).total_seconds() // 3600)
+        self.assertEqual(len(grid['rows']), expected_hours)
+
+    def test_show_stream_commands_in_role_headers(self):
+        grid = build_schedule_grid(self.event)
+        for header in grid['role_headers']:
+            self.assertIn('show_stream_commands', header)
+
+    def test_availability_shows_in_grid(self):
+        from evtsignup.models import EventInterest, EventAvailabilityHour
+        from eventer.slot_generator import _expand_to_hours
+        interest, _ = EventInterest.objects.get_or_create(
+            user=self.user, event=self.event, defaults={'acknowledged': True}
+        )
+        # Must cover ALL hours of the slot for the user to appear as available
+        for hour in _expand_to_hours(self.slot):
+            EventAvailabilityHour.objects.create(event_interest=interest, hour=hour, role=self.role)
+        grid = build_schedule_grid(self.event)
+        found = False
+        first_hour = self.slot.start.replace(minute=0, second=0, microsecond=0)
+        for row in grid['rows']:
+            if row['hour'] == first_hour:
+                for cell in row['cells']:
+                    if cell['type'] == 'slot' and cell['role_slug'] == self.role.slug:
+                        self.assertIn(self.user, cell['available'])
+                        found = True
+        self.assertTrue(found)
+
+    def test_day_start_flag_set_at_midnight(self):
+        grid = build_schedule_grid(self.event)
+        for row in grid['rows']:
+            if row['hour'].hour == 0:
+                self.assertTrue(row['is_day_start'])
+
+    def test_multi_cells_list_length_matches_multi_role_headers(self):
+        grid = build_schedule_grid(self.event)
+        for row in grid['rows']:
+            self.assertEqual(len(row['multi_cells_list']), len(grid['multi_role_headers']))
+
+
+# --- slot_generator.py ---
+
+class ExpandToHoursTest(TestCase):
+    def test_single_hour_slot(self):
+        slot = EventSignupSlot(
+            start=dt(2025, 4, 4, 12), stop=dt(2025, 4, 4, 13), label='1h'
+        )
+        hours = list(_expand_to_hours(slot))
+        self.assertEqual(hours, [dt(2025, 4, 4, 12)])
+
+    def test_three_hour_slot(self):
+        slot = EventSignupSlot(
+            start=dt(2025, 4, 4, 12), stop=dt(2025, 4, 4, 15), label='3h'
+        )
+        hours = list(_expand_to_hours(slot))
+        self.assertEqual(len(hours), 3)
+        self.assertEqual(hours[-1], dt(2025, 4, 4, 14))
+
+    def test_truncates_to_hour(self):
+        slot = EventSignupSlot(
+            start=datetime(2025, 4, 4, 12, 30, tzinfo=dt_timezone.utc),
+            stop=datetime(2025, 4, 4, 15, 30, tzinfo=dt_timezone.utc),
+            label='test'
+        )
+        hours = list(_expand_to_hours(slot))
+        self.assertEqual(hours[0], dt(2025, 4, 4, 12))
+
+
+class GenerateSlotsGroupTest(TestCase):
+    def setUp(self):
+        self.event = Event.objects.create(
+            name='Group Slot Test', slug='group-slot-test', description='',
+            timezone='America/New_York',
+        )
+        EventPeriod.objects.create(
+            event=self.event,
+            start=dt(2025, 4, 4, 12),
+            stop=dt(2025, 4, 6, 4),
+        )
+        for slug, name, multi in [('participant', 'Participant', True), ('streamer', 'Streamer', False),
+                                   ('moderator', 'Moderator', False), ('tech-manager', 'Tech Manager', False)]:
+            EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': '', 'multi_assign': multi})
+
+    def test_replace_deletes_existing_slots(self):
+        generate_slots(self.event)
+        first_count = EventSignupSlot.objects.filter(event=self.event).count()
+        self.assertGreater(first_count, 0)
+        result = generate_slots(self.event, replace=True)
+        self.assertGreater(result['deleted'], 0)
+        second_count = EventSignupSlot.objects.filter(event=self.event).count()
+        self.assertEqual(first_count, second_count)
+
+    def test_group_with_block_hours_override(self):
+        group = EventSlotGroup.objects.create(name='Custom Block', use_prime_time=False, block_hours=4)
+        role = EventRole.objects.get(slug='moderator')
+        EventSlotGroupMembership.objects.filter(role=role).delete()
+        EventSlotGroupMembership.objects.create(group=group, role=role, first_block_hours=None)
+        generate_slots(self.event, replace=True)
+        slots = list(EventSignupSlot.objects.filter(event=self.event, roles=role).order_by('start'))
+        for slot in slots[:-1]:
+            duration = (slot.stop - slot.start).total_seconds() / 3600
+            self.assertEqual(duration, 4)
+
+    def test_shared_roles_in_group_get_same_slots(self):
+        generate_slots(self.event)
+        participant = EventRole.objects.get(slug='participant')
+        streamer = EventRole.objects.get(slug='streamer')
+        p_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=participant).values_list('id', flat=True))
+        s_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=streamer).values_list('id', flat=True))
+        self.assertEqual(p_slots, s_slots)
+
+    def test_staggered_role_gets_different_first_slot(self):
+        generate_slots(self.event)
+        moderator = EventRole.objects.get(slug='moderator')
+        tech = EventRole.objects.get(slug='tech-manager')
+        mod_membership = EventSlotGroupMembership.objects.filter(role=moderator).first()
+        if mod_membership and mod_membership.first_block_hours:
+            mod_first = EventSignupSlot.objects.filter(event=self.event, roles=moderator).order_by('start').first()
+            tech_first = EventSignupSlot.objects.filter(event=self.event, roles=tech).order_by('start').first()
+            mod_duration = (mod_first.stop - mod_first.start).total_seconds() / 3600
+            tech_duration = (tech_first.stop - tech_first.start).total_seconds() / 3600
+            self.assertNotEqual(mod_duration, tech_duration)

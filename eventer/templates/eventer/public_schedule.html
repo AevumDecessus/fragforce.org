@@ -27,11 +27,11 @@
     {% if my_slots %}
     <div class="card mb-4 border-primary">
       <div class="card-header text-white" style="background-color:#417690"><strong>Your Schedule</strong></div>
-      <div class="card-body">
+      <div class="card-body p-0">
         <ul class="list-unstyled mb-0">
           {% for slot in my_slots %}
-          <li class="py-1">
-            <strong>{{ slot.role.name }}</strong> &mdash; {{ slot.slot.label }}
+          <li class="py-2 px-3" style="border-left: 4px solid {{ slot.role.color }};">
+            <strong style="color:{{ slot.role.color }}">{{ slot.role.name }}</strong> &mdash; {{ slot.slot.label }}
           </li>
           {% endfor %}
         </ul>
@@ -39,15 +39,16 @@
     </div>
     {% endif %}
 
-    <h4>Streamers</h4>
-    {% if streamer_assignments %}
-    <div class="table-responsive">
+    {# Public-facing role sections: only roles with show_stream_commands=True #}
+    {% for role, assignments in stream_sections.items %}
+    <h4 style="color:{{ role.color }}">{{ role.name }}s</h4>
+    <div class="table-responsive mb-4">
       <table class="table table-sm table-bordered">
         <thead class="thead-dark">
-          <tr><th>Slot</th><th>Streamer</th><th>Game</th></tr>
+          <tr><th>Slot</th><th>{{ role.name }}</th><th>Game</th></tr>
         </thead>
         <tbody>
-          {% for assignment in streamer_assignments %}
+          {% for assignment in assignments %}
           <tr>
             <td>{{ assignment.slot.label }}</td>
             <td>{{ assignment.display_name }}</td>
@@ -57,9 +58,9 @@
         </tbody>
       </table>
     </div>
-    {% else %}
-    <p class="text-muted">No streamer assignments yet.</p>
-    {% endif %}
+    {% empty %}
+    <p class="text-muted">No assignments yet.</p>
+    {% endfor %}
 
   </div>
 </div>

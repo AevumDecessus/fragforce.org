@@ -23,7 +23,7 @@
   {% endfor %}
 </select>
 {% endif %}
-{% if cell.role_slug == 'streamer' and approved_games %}
+{% if cell.show_stream_commands and approved_games %}
 <select name="game_{{ cell.slot.pk }}" style="width:100%;font-size:0.85em;margin-top:4px">
   <option value="">-- No game --</option>
   {% for game in approved_games %}

@@ -18,10 +18,6 @@ class EventInterest(models.Model):
         'ffdonations.ParticipantModel', null=True, blank=True, on_delete=models.SET_NULL
     )
 
-    # Write-in game preferences (freeform, not yet resolved to Game records)
-    participant_notes = models.TextField(blank=True)
-    streamer_notes = models.TextField(blank=True)
-
     # URL resolution tracking
     url_resolution_attempts = models.PositiveSmallIntegerField(
         default=0,
@@ -49,20 +45,28 @@ class GameInterestUserEvent(models.Model):
         unique_together = [["event_interest", "game", "role"]]
 
 
-class EventAvailabilityInterest(models.Model):
-    """ One record per available hour per user per event, indicating which roles they're available for.
-    Form checkboxes (e.g. 'Friday 8pm-11pm') expand to one row per hour on save. """
+class EventInterestNote(models.Model):
+    """ Free-text game preference notes per role per signup. One row per (event_interest, role). """
     event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
-    hour = models.DateTimeField(null=False, blank=False)  # UTC, start of the hour
-
-    as_participant = models.BooleanField(default=False)
-    as_streamer = models.BooleanField(default=False)
-    as_moderator = models.BooleanField(default=False)
-    as_tech = models.BooleanField(default=False)
+    role = models.ForeignKey('eventer.EventRole', on_delete=models.CASCADE, blank=False, null=False)
+    notes = models.TextField(blank=True)
 
     def __str__(self):
-        roles = [r for r, v in [('P', self.as_participant), ('S', self.as_streamer), ('M', self.as_moderator), ('T', self.as_tech)] if v]
-        return f'{self.event_interest} @ {self.hour:%Y-%m-%d %H:%M} UTC [{",".join(roles) or "-"}]'
+        return f'{self.event_interest} [{self.role.slug}]'
 
     class Meta:
-        unique_together = [["event_interest", "hour"]]
+        unique_together = [["event_interest", "role"]]
+
+
+class EventAvailabilityHour(models.Model):
+    """ One record per available hour per role per user per event.
+    Form checkboxes (e.g. 'Friday 8pm-11pm') expand to one row per hour per role on save. """
+    event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
+    hour = models.DateTimeField(null=False, blank=False)  # UTC, start of the hour
+    role = models.ForeignKey("eventer.EventRole", on_delete=models.CASCADE, blank=False, null=False)
+
+    def __str__(self):
+        return f'{self.event_interest} @ {self.hour:%Y-%m-%d %H:%M} UTC [{self.role.slug}]'
+
+    class Meta:
+        unique_together = [["event_interest", "hour", "role"]]
