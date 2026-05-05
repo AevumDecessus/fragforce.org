@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, HOUR_SECONDS
-from eventer.schedule import SINGLE_ASSIGNMENT_ROLES, MULTI_ASSIGNMENT_ROLES
 from eventer.slot_generator import _format_label, _variable_block_hours, generate_slots
 
 
@@ -492,8 +491,8 @@ class EventDetailViewTest(TestCase):
 def _make_schedule_event():
     """
     Create a test event with periods, roles, and signup slots for schedule tests.
-    Returns (event, slot, streamer_role) - uses streamer as the primary test role
-    since participant is a multi-assignment role (EventScheduleMultiAssignment).
+    Returns (event, slot, single_assign_role) - uses the first single-assign role
+    as the primary test role since multi-assign roles use EventScheduleMultiAssignment.
     """
     event = Event.objects.create(
         name='Schedule Test', slug='schedule-test', description='',
@@ -504,19 +503,19 @@ def _make_schedule_event():
         start=dt(2025, 4, 4, 12),
         stop=dt(2025, 4, 4, 18),
     )
-    for slug, name in [('participant', 'Participant'), ('streamer', 'Streamer'),
-                       ('moderator', 'Moderator'), ('tech-manager', 'Tech Manager')]:
-        EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': ''})
-    streamer_role = EventRole.objects.get(slug='streamer')
-    participant_role = EventRole.objects.get(slug='participant')
+    for slug, name, multi in [('participant', 'Participant', True), ('streamer', 'Streamer', False),
+                               ('moderator', 'Moderator', False), ('tech-manager', 'Tech Manager', False)]:
+        EventRole.objects.get_or_create(slug=slug, defaults={'name': name, 'description': '', 'multi_assign': multi})
+    single_role = EventRole.objects.filter(multi_assign=False).order_by('display_order', 'name').first()
+    multi_role = EventRole.objects.filter(multi_assign=True).first()
     slot = EventSignupSlot.objects.create(
         event=event,
         start=dt(2025, 4, 4, 12),
         stop=dt(2025, 4, 4, 15),
         label='Friday 8am - 11am',
     )
-    slot.roles.set([streamer_role, participant_role])
-    return event, slot, streamer_role
+    slot.roles.set([single_role, multi_role])
+    return event, slot, single_role
 
 
 class AvailabilitySummaryViewTest(TestCase):
@@ -544,12 +543,13 @@ class AvailabilitySummaryViewTest(TestCase):
         self.assertEqual(len(response.context['rows']), 6)
 
     def test_role_headers_present(self):
+        from eventer.models import EventRole
         response = self.client.get(self._url())
         labels = [h['label'] for h in response.context['role_headers']]
-        for _, _, label in SINGLE_ASSIGNMENT_ROLES:
-            self.assertIn(label, labels)
-        for _, _, label in MULTI_ASSIGNMENT_ROLES:
-            self.assertNotIn(label, labels)
+        for role in EventRole.objects.filter(multi_assign=False):
+            self.assertIn(role.name, labels)
+        for role in EventRole.objects.filter(multi_assign=True):
+            self.assertNotIn(role.name, labels)
 
 
 class BuildScheduleViewTest(TestCase):
@@ -662,7 +662,7 @@ class AddAvailabilityViewTest(TestCase):
 
     def test_get_renders_form(self):
         response = self.client.get(
-            self._url(), {'slot': self.slot.pk, 'role': 'streamer'}
+            self._url(), {'slot': self.slot.pk, 'role': self.role.slug}
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Friday 8am - 11am')
@@ -677,21 +677,21 @@ class AddAvailabilityViewTest(TestCase):
         self.assertTrue(EventInterest.objects.filter(user=self.user, event=self.event).exists())
 
     def test_post_creates_availability_rows(self):
-        from evtsignup.models import EventAvailabilityInterest, EventInterest
+        from evtsignup.models import EventAvailabilityHour, EventInterest
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
-            'role_slug': 'streamer',
+            'role_slug': self.role.slug,
             'user': self.user.pk,
         })
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        hours = EventAvailabilityInterest.objects.filter(event_interest=interest, as_streamer=True)
+        hours = EventAvailabilityHour.objects.filter(event_interest=interest, role=self.role)
         self.assertEqual(hours.count(), 3)  # 12:00, 13:00, 14:00 UTC
 
     def test_post_creates_schedule_slot(self):
         from eventer.models import EventScheduleAssignment
         self.client.post(self._url(), {
             'slot_pk': self.slot.pk,
-            'role_slug': 'streamer',
+            'role_slug': self.role.slug,
             'user': self.user.pk,
         })
         self.assertTrue(EventScheduleAssignment.objects.filter(

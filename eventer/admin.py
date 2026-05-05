@@ -16,30 +16,18 @@ from eventer.slot_generator import generate_slots
 def _save_coordinator_assignment(event, slot, role, user):
     """Create EventInterest, availability rows, and schedule assignment for a coordinator-sourced signup."""
     from datetime import timedelta
-    from evtsignup.models import EventInterest, EventAvailabilityInterest
-
-    FIELD_MAP = {
-        'participant': 'as_participant',
-        'streamer': 'as_streamer',
-        'moderator': 'as_moderator',
-        'tech-manager': 'as_tech',
-    }
+    from evtsignup.models import EventInterest, EventAvailabilityHour
 
     interest, _ = EventInterest.objects.get_or_create(
         user=user, event=event,
         defaults={'acknowledged': True},
     )
-    field = FIELD_MAP.get(role.slug)
-    if field:
-        hour = slot.start.replace(minute=0, second=0, microsecond=0)
-        while hour < slot.stop:
-            avail, _ = EventAvailabilityInterest.objects.get_or_create(
-                event_interest=interest, hour=hour,
-                defaults={f: False for f in FIELD_MAP.values()},
-            )
-            setattr(avail, field, True)
-            avail.save(update_fields=[field])
-            hour += timedelta(hours=1)
+    hour = slot.start.replace(minute=0, second=0, microsecond=0)
+    while hour < slot.stop:
+        EventAvailabilityHour.objects.get_or_create(
+            event_interest=interest, hour=hour, role=role,
+        )
+        hour += timedelta(hours=1)
     EventScheduleAssignment.objects.filter(slot=slot, role=role).delete()
     EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user)
 
@@ -251,8 +239,7 @@ class EventAdmin(admin.ModelAdmin):
         event = get_object_or_404(Event, pk=event_id)
 
         if request.method == 'POST':
-            from eventer.schedule import MULTI_ASSIGNMENT_ROLES
-            multi_slugs = {slug for slug, _, _ in MULTI_ASSIGNMENT_ROLES}
+            multi_slugs = set(EventRole.objects.filter(multi_assign=True).values_list('slug', flat=True))
             with transaction.atomic():
                 EventScheduleAssignment.objects.filter(event=event).delete()
                 EventScheduleMultiAssignment.objects.filter(event=event).delete()

@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from social_core.exceptions import AuthForbidden
 
 from eventer.models import Event, EventPeriod, EventRole, EventSignupSlot
-from evtsignup.models import EventInterest, EventAvailabilityInterest
+from evtsignup.models import EventInterest, EventAvailabilityHour
 from evtsignup.pipeline import require_discord_guild
 from evtsignup.utils import parse_fundraising_url
 
@@ -174,31 +174,32 @@ class SignupViewPostTest(TestCase):
     def test_valid_post_expands_slot_to_hourly_rows(self):
         self._post()
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        # slot is 12:00-15:00 UTC = 3 hours
-        hours = EventAvailabilityInterest.objects.filter(event_interest=interest)
+        # slot is 12:00-15:00 UTC = 3 hours, participant (multi-assign) role only
+        hours = EventAvailabilityHour.objects.filter(event_interest=interest)
         self.assertEqual(hours.count(), 3)
-        self.assertTrue(all(h.as_participant for h in hours))
-        self.assertFalse(any(h.as_streamer for h in hours))
+        self.assertTrue(all(h.role.multi_assign for h in hours))
 
-    def test_valid_post_sets_streamer_flag_on_streamer_slots(self):
-        self._post({'streamer_slots': [str(self.slot.pk)], 'participant_slots': []})
+    def test_valid_post_single_assign_role_creates_hourly_rows(self):
+        single_role = EventRole.objects.filter(multi_assign=False, eventsignupslot__event=self.event).first()
+        self._post({f'{single_role.slug}_slots': [str(self.slot.pk)], 'participant_slots': []})
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        hours = EventAvailabilityInterest.objects.filter(event_interest=interest)
-        self.assertTrue(all(h.as_streamer for h in hours))
-        self.assertFalse(any(h.as_participant for h in hours))
+        hours = EventAvailabilityHour.objects.filter(event_interest=interest)
+        self.assertTrue(all(not h.role.multi_assign for h in hours))
 
-    def test_valid_post_same_slot_both_roles_sets_both_flags(self):
-        self._post({'participant_slots': [str(self.slot.pk)], 'streamer_slots': [str(self.slot.pk)]})
+    def test_valid_post_same_slot_both_role_types_creates_rows_for_each(self):
+        single_role = EventRole.objects.filter(multi_assign=False, eventsignupslot__event=self.event).first()
+        self._post({'participant_slots': [str(self.slot.pk)], f'{single_role.slug}_slots': [str(self.slot.pk)]})
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        hours = EventAvailabilityInterest.objects.filter(event_interest=interest)
-        self.assertTrue(all(h.as_participant for h in hours))
-        self.assertTrue(all(h.as_streamer for h in hours))
+        # 3 hours x 2 roles = 6 rows
+        self.assertEqual(EventAvailabilityHour.objects.filter(event_interest=interest).count(), 6)
+        multi_assign_values = set(EventAvailabilityHour.objects.filter(event_interest=interest).values_list('role__multi_assign', flat=True))
+        self.assertEqual(multi_assign_values, {True, False})
 
     def test_resubmit_replaces_hourly_rows(self):
         self._post()
         self._post({'participant_slots': []})
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        self.assertEqual(EventAvailabilityInterest.objects.filter(event_interest=interest).count(), 0)
+        self.assertEqual(EventAvailabilityHour.objects.filter(event_interest=interest).count(), 0)
 
     def test_invalid_slot_id_ignored(self):
         self.client.post(self._url(), {
@@ -207,7 +208,7 @@ class SignupViewPostTest(TestCase):
             'participant_slots': ['99999'],
         })
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        self.assertEqual(EventAvailabilityInterest.objects.filter(event_interest=interest).count(), 0)
+        self.assertEqual(EventAvailabilityHour.objects.filter(event_interest=interest).count(), 0)
 
     def test_slot_from_different_event_ignored(self):
         other_event = Event.objects.create(
@@ -224,7 +225,7 @@ class SignupViewPostTest(TestCase):
             'participant_slots': [str(other_slot.pk)],
         })
         interest = EventInterest.objects.get(user=self.user, event=self.event)
-        self.assertEqual(EventAvailabilityInterest.objects.filter(event_interest=interest).count(), 0)
+        self.assertEqual(EventAvailabilityHour.objects.filter(event_interest=interest).count(), 0)
 
 
 class SignupViewGameSelectionTest(TestCase):
@@ -285,20 +286,26 @@ class SignupViewPrefillTest(TestCase):
     def _url(self):
         return f'/signup/{self.event.slug}/'
 
+    def _selected_ids_for_slug(self, response, slug):
+        for track in response.context['role_tracks']:
+            if track['slug'] == slug:
+                return track['selected_slot_ids']
+        return set()
+
     def test_reedit_preselects_previously_chosen_slots(self):
-        # Submit with a slot selected
+        multi_role = EventRole.objects.filter(multi_assign=True).first()
         self.client.post(self._url(), {
             'acknowledged': '1',
-            'participant_slots': [str(self.slot.pk)],
+            f'{multi_role.slug}_slots': [str(self.slot.pk)],
         })
-        # Re-open form - slot should be pre-checked
         response = self.client.get(self._url())
-        self.assertIn(self.slot.pk, response.context['selected_slot_ids']['participant'])
+        self.assertIn(self.slot.pk, self._selected_ids_for_slug(response, multi_role.slug))
 
     def test_reedit_does_not_preselect_unselected_slots(self):
+        multi_role = EventRole.objects.filter(multi_assign=True).first()
         self.client.post(self._url(), {'acknowledged': '1'})
         response = self.client.get(self._url())
-        self.assertNotIn(self.slot.pk, response.context['selected_slot_ids']['participant'])
+        self.assertNotIn(self.slot.pk, self._selected_ids_for_slug(response, multi_role.slug))
 
 
 class GroupSlotsByDayTest(TestCase):
@@ -523,19 +530,17 @@ class EventInterestAdminTest(TestCase):
         self.coordinator.groups.add(Group.objects.get(name='Coordinator'))
         self.client.login(username='coord_ei', password='pass')
         self.event = Event.objects.create(name='Admin Test Event', slug='admin-test-event', description='')
-        from evtsignup.models import EventInterest, EventAvailabilityInterest
+        from evtsignup.models import EventInterest, EventAvailabilityHour
         self.ei = EventInterest.objects.create(
             user=self.coordinator, event=self.event,
             display_name='Test Coord', acknowledged=True,
             fundraising_url='https://extra-life.org/participant/123'
         )
-        # Add some availability with roles
         from datetime import datetime, timezone
+        _seed_roles()
         hour = datetime(2025, 4, 4, 8, tzinfo=timezone.utc)
-        EventAvailabilityInterest.objects.create(
-            event_interest=self.ei, hour=hour,
-            as_streamer=True, as_participant=True
-        )
+        self.role = EventRole.objects.filter(show_fundraising_url=True).first()
+        EventAvailabilityHour.objects.create(event_interest=self.ei, hour=hour, role=self.role)
 
     def test_list_view_renders(self):
         response = self.client.get('/admin/evtsignup/eventinterest/')
@@ -544,7 +549,7 @@ class EventInterestAdminTest(TestCase):
 
     def test_list_shows_roles_summary(self):
         response = self.client.get('/admin/evtsignup/eventinterest/')
-        self.assertContains(response, 'Streamer')
+        self.assertContains(response, self.role.name)
 
     def test_list_shows_fundraising_boolean(self):
         response = self.client.get('/admin/evtsignup/eventinterest/')
