@@ -78,6 +78,11 @@ class EventRole(models.Model):
                              help_text="Hex color code for UI display (e.g. #417690)")
     multi_assign = models.BooleanField(default=False,
                                        help_text="Allow multiple users assigned per slot (e.g. Participant). Single-assign roles enforce one user per slot.")
+    display_order = models.PositiveSmallIntegerField(default=100,
+                                                     help_text="Display order — lower numbers appear first. Roles with the same value are sorted alphabetically.")
+
+    class Meta:
+        ordering = ['display_order', 'name']
 
     def __str__(self):
         return self.name
