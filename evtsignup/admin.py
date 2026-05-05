@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from evtsignup.models import EventAvailabilityHour, EventInterest, GameInterestUserEvent
+from evtsignup.models import EventAvailabilityHour, EventInterest, EventInterestNote, GameInterestUserEvent
 
 
 class GameInterestInline(admin.TabularInline):
@@ -65,3 +65,15 @@ class GameInterestUserEventAdmin(admin.ModelAdmin):
 class EventAvailabilityHourAdmin(admin.ModelAdmin):
     list_display = ['event_interest', 'hour', 'role']
     list_filter = ['role', 'event_interest__event']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('role', 'event_interest')
+
+
+@admin.register(EventInterestNote)
+class EventInterestNoteAdmin(admin.ModelAdmin):
+    list_display = ['event_interest', 'role', 'notes']
+    list_filter = ['role', 'event_interest__event']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('role', 'event_interest')

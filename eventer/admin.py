@@ -63,14 +63,27 @@ class EventRoleAdminForm(forms.ModelForm):
 
     class Meta:
         model = EventRole
-        fields = ['name', 'slug', 'description', 'color', 'multi_assign', 'display_order', 'has_game_selection', 'game_min_players', 'show_fundraising_url', 'show_stream_commands']
+        fields = [
+            'name', 'slug', 'description',
+            'color', 'display_order',
+            'multi_assign',
+            'has_game_selection', 'game_min_players',
+            'show_notes', 'show_fundraising_url', 'show_stream_commands',
+        ]
 
 
 @admin.register(EventRole)
 class EventRoleAdmin(admin.ModelAdmin):
     form = EventRoleAdminForm
-    list_display = ['name', 'slug', 'color_swatch', 'display_order', 'multi_assign', 'has_game_selection', 'show_fundraising_url', 'show_stream_commands']
-    list_filter = ['multi_assign', 'has_game_selection', 'show_fundraising_url', 'show_stream_commands']
+    list_display = [
+        'name', 'slug', 'color_swatch', 'display_order',
+        'multi_assign',
+        'has_game_selection', 'show_notes', 'show_fundraising_url', 'show_stream_commands',
+    ]
+    list_filter = [
+        'multi_assign',
+        'has_game_selection', 'show_notes', 'show_fundraising_url', 'show_stream_commands',
+    ]
     ordering = ['display_order', 'name']
     search_fields = ['name', 'slug']
 
@@ -243,32 +256,61 @@ class EventAdmin(admin.ModelAdmin):
 
         if request.method == 'POST':
             multi_slugs = set(EventRole.objects.filter(multi_assign=True).values_list('slug', flat=True))
+            # Batch-load slots, roles, users, and games referenced in POST before the loop
+            slot_ids = set()
+            role_slugs = set()
+            user_ids_post = set()
+            game_ids_post = set()
+            seen_keys = set()
+            for key in request.POST:
+                if not key.startswith('assign_') or key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                try:
+                    _, slot_pk, role_slug = key.split('_', 2)
+                    slot_ids.add(int(slot_pk))
+                    role_slugs.add(role_slug)
+                    for uid in request.POST.getlist(key):
+                        if uid:
+                            user_ids_post.add(int(uid))
+                    gid = request.POST.get(f'game_{slot_pk}')
+                    if gid:
+                        game_ids_post.add(int(gid))
+                except (ValueError, AttributeError):
+                    continue
+
+            slots_by_pk = {s.pk: s for s in EventSignupSlot.objects.filter(pk__in=slot_ids, event=event)}
+            roles_by_slug = {r.slug: r for r in EventRole.objects.filter(slug__in=role_slugs)}
+            users_by_pk = {u.pk: u for u in User.objects.filter(pk__in=user_ids_post)}
+            games_by_pk = {g.pk: g for g in Game.objects.filter(pk__in=game_ids_post)}
+
             with transaction.atomic():
                 EventScheduleAssignment.objects.filter(event=event).delete()
                 EventScheduleMultiAssignment.objects.filter(event=event).delete()
                 created = 0
-                seen_keys = set()
-                for key in request.POST:
-                    if not key.startswith('assign_') or key in seen_keys:
-                        continue
-                    seen_keys.add(key)
-                    _, slot_pk, role_slug = key.split('_', 2)
-                    for user_id in request.POST.getlist(key):
-                        if not user_id:
+                for key in seen_keys:
+                    try:
+                        _, slot_pk, role_slug = key.split('_', 2)
+                        slot = slots_by_pk.get(int(slot_pk))
+                        role = roles_by_slug.get(role_slug)
+                        if not slot or not role:
                             continue
-                        try:
-                            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
-                            role = EventRole.objects.get(slug=role_slug)
-                            user = User.objects.get(pk=int(user_id))
+                        for user_id in request.POST.getlist(key):
+                            if not user_id:
+                                continue
+                            user = users_by_pk.get(int(user_id))
+                            if not user:
+                                continue
                             if role_slug in multi_slugs:
                                 EventScheduleMultiAssignment.objects.create(event=event, slot=slot, role=role, user=user)
                             else:
                                 game_id = request.POST.get(f'game_{slot_pk}') or None
-                                game = Game.objects.get(pk=int(game_id)) if game_id else None
+                                game = games_by_pk.get(int(game_id)) if game_id else None
                                 EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
                             created += 1
-                        except Exception:
-                            continue
+                    except Exception as e:
+                        log.warning('build_schedule_view: skipped key %s - %s', key, e)
+                        continue
             self.message_user(request, f"Schedule saved: {created} assignment(s).", messages.SUCCESS)
             return HttpResponseRedirect(f'../../{event_id}/build-schedule/')
 

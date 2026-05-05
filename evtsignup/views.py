@@ -9,7 +9,7 @@ from django.views.decorators.http import require_http_methods
 
 from eventer.models import Event, EventSignupSlot, EventRole, Game
 from eventer.slot_generator import _expand_to_hours
-from evtsignup.models import EventInterest, EventAvailabilityHour, GameInterestUserEvent
+from evtsignup.models import EventInterest, EventAvailabilityHour, EventInterestNote, GameInterestUserEvent
 
 SIGNUP_TEMPLATE = 'evtsignup/signup.html'
 
@@ -28,10 +28,18 @@ def _group_slots_by_day(slots_qs, tz):
 
 
 def _game_qs_for_role(role):
-    """Return the approved/suggested game queryset for a role, filtered by game_min_players."""
+    """Return the approved/suggested game queryset for a role, filtered by game_min_players.
+    Uses multiplayer_max_override when set (same logic as Game.effective_multiplayer_max)."""
+    from django.db.models.functions import Coalesce
     qs = Game.objects.filter(status='approved', suggested=True)
     if role.game_min_players is not None:
-        qs = qs.exclude(Q(multiplayer_max__lt=role.game_min_players) & Q(multiplayer_max__isnull=False))
+        # Annotate with effective max (override takes precedence over IGDB value)
+        # then exclude games where effective max is known and below the threshold
+        qs = qs.annotate(
+            effective_max=Coalesce('multiplayer_max_override', 'multiplayer_max')
+        ).exclude(
+            Q(effective_max__isnull=False) & Q(effective_max__lt=role.game_min_players)
+        )
     return qs
 
 
@@ -60,8 +68,6 @@ def _save_signup(request, event, roles_with_slots, game_qs_by_slug):
     preferences = request.POST.get('preferences', '').strip()
     acknowledged = bool(request.POST.get('acknowledged'))
     fundraising_url = request.POST.get('fundraising_url', '').strip() or None
-    participant_notes = request.POST.get('participant_notes', '').strip()
-    streamer_notes = request.POST.get('streamer_notes', '').strip()
 
     if not acknowledged:
         return None, None, ["You must acknowledge the Fragforce rules to sign up."]
@@ -74,8 +80,6 @@ def _save_signup(request, event, roles_with_slots, game_qs_by_slug):
             'preferences': preferences,
             'acknowledged': acknowledged,
             'fundraising_url': fundraising_url,
-            'participant_notes': participant_notes,
-            'streamer_notes': streamer_notes,
         },
     )
 
@@ -98,6 +102,19 @@ def _save_signup(request, event, roles_with_slots, game_qs_by_slug):
                 game_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=role))
     GameInterestUserEvent.objects.bulk_create(game_rows, ignore_conflicts=True)
 
+    # Sync notes for roles with show_notes=True
+    for role in roles_with_slots:
+        if not role.show_notes:
+            continue
+        text = request.POST.get(f'{role.slug}_notes', '').strip()
+        if text:
+            EventInterestNote.objects.update_or_create(
+                event_interest=interest, role=role,
+                defaults={'notes': text},
+            )
+        else:
+            EventInterestNote.objects.filter(event_interest=interest, role=role).delete()
+
     return interest, created, []
 
 
@@ -108,8 +125,10 @@ def _prefill_from_post(request, roles_with_slots, game_qs_by_slug):
         'preferences': request.POST.get('preferences', ''),
         'acknowledged': bool(request.POST.get('acknowledged')),
         'fundraising_url': request.POST.get('fundraising_url', ''),
-        'participant_notes': request.POST.get('participant_notes', ''),
-        'streamer_notes': request.POST.get('streamer_notes', ''),
+    }
+    notes_by_slug = {
+        role.slug: request.POST.get(f'{role.slug}_notes', '')
+        for role in roles_with_slots if role.show_notes
     }
     selected_slot_ids = {
         role.slug: {int(x) for x in request.POST.getlist(f'{role.slug}_slots') if x.isdigit()}
@@ -119,7 +138,7 @@ def _prefill_from_post(request, roles_with_slots, game_qs_by_slug):
         slug: {int(x) for x in request.POST.getlist(f'{slug}_games') if x.isdigit()}
         for slug in game_qs_by_slug
     }
-    return prefill, selected_slot_ids, selected_game_ids
+    return prefill, selected_slot_ids, selected_game_ids, notes_by_slug
 
 
 def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
@@ -129,8 +148,11 @@ def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
         'preferences': existing.preferences,
         'acknowledged': existing.acknowledged,
         'fundraising_url': existing.fundraising_url or '',
-        'participant_notes': existing.participant_notes,
-        'streamer_notes': existing.streamer_notes,
+    }
+
+    notes_by_slug = {
+        n.role.slug: n.notes
+        for n in existing.eventinterestnote_set.select_related('role').all()
     }
 
     hours_by_slug = defaultdict(set)
@@ -156,7 +178,7 @@ def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
         for slug, games_qs in game_qs_by_slug.items()
     }
 
-    return prefill, selected_slot_ids, selected_game_ids
+    return prefill, selected_slot_ids, selected_game_ids, notes_by_slug
 
 
 @login_required
@@ -230,19 +252,14 @@ def signup_view(request, event_slug):
             return redirect('evtsignup-signup', event_slug=event_slug)
 
     if errors:
-        prefill, selected_slot_ids, selected_game_ids = _prefill_from_post(request, roles_with_slots, game_qs_by_slug)
+        prefill, selected_slot_ids, selected_game_ids, notes_by_slug = _prefill_from_post(request, roles_with_slots, game_qs_by_slug)
     elif existing:
-        prefill, selected_slot_ids, selected_game_ids = _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug)
+        prefill, selected_slot_ids, selected_game_ids, notes_by_slug = _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug)
     else:
         prefill = {}
         selected_slot_ids = {r.slug: set() for r in roles_with_slots}
         selected_game_ids = {slug: set() for slug in game_qs_by_slug}
-
-    # Notes fields are stored as named columns on EventInterest; map slug -> prefill value
-    notes_by_slug = {
-        'participant': prefill.get('participant_notes', ''),
-        'streamer': prefill.get('streamer_notes', ''),
-    }
+        notes_by_slug = {}
 
     # Build per-role context list for template, preserving display_order
     role_tracks = []

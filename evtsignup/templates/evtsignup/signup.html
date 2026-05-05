@@ -213,7 +213,7 @@
             {% endfor %}
           </div>
           {% endif %}
-          {% if track.role.has_game_selection %}
+          {% if track.role.show_notes %}
           <div class="form-group mt-3">
             <label for="{{ track.slug }}_notes">Other game preferences <small class="text-muted">(optional)</small></label>
             <textarea class="form-control" id="{{ track.slug }}_notes" name="{{ track.slug }}_notes" rows="2">{{ track.notes_prefill|default:'' }}</textarea>

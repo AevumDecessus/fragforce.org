@@ -18,10 +18,6 @@ class EventInterest(models.Model):
         'ffdonations.ParticipantModel', null=True, blank=True, on_delete=models.SET_NULL
     )
 
-    # Write-in game preferences (freeform, not yet resolved to Game records)
-    participant_notes = models.TextField(blank=True)
-    streamer_notes = models.TextField(blank=True)
-
     # URL resolution tracking
     url_resolution_attempts = models.PositiveSmallIntegerField(
         default=0,
@@ -47,6 +43,19 @@ class GameInterestUserEvent(models.Model):
 
     class Meta:
         unique_together = [["event_interest", "game", "role"]]
+
+
+class EventInterestNote(models.Model):
+    """ Free-text game preference notes per role per signup. One row per (event_interest, role). """
+    event_interest = models.ForeignKey("EventInterest", on_delete=models.CASCADE, blank=False, null=False)
+    role = models.ForeignKey('eventer.EventRole', on_delete=models.CASCADE, blank=False, null=False)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f'{self.event_interest} [{self.role.slug}]'
+
+    class Meta:
+        unique_together = [["event_interest", "role"]]
 
 
 class EventAvailabilityHour(models.Model):

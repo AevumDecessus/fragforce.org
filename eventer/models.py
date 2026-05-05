@@ -88,6 +88,8 @@ class EventRole(models.Model):
                                                help_text="Show the fundraising URL field for this role on the signup form.")
     show_stream_commands = models.BooleanField(default=False,
                                                help_text="Show Twitch stream commands (title, game, donate) in the coordinator schedule for this role. Also pins this role's column first.")
+    show_notes = models.BooleanField(default=False,
+                                     help_text="Show an 'Other game preferences' notes textarea for this role on the signup form.")
 
     class Meta:
         ordering = ['display_order', 'name']
