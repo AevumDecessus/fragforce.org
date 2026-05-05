@@ -19,11 +19,14 @@ class EventInterestAdmin(admin.ModelAdmin):
         'game_count', 'has_fundraising_url', 'acknowledged',
     ]
     list_filter = ['event', 'acknowledged']
-    search_fields = ['display_name', 'user__username', 'streamer_notes', 'participant_notes']
+    search_fields = ['display_name', 'user__username', 'eventinterestnote__notes']
     raw_id_fields = ['el_participant']
     readonly_fields = ['user', 'event']
     inlines = [GameInterestInline]
     change_form_template = 'admin/evtsignup/eventinterest/change_form.html'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).distinct()
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         from eventer.models import EventRole

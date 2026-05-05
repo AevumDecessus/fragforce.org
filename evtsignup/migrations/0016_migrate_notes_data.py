@@ -10,6 +10,8 @@ def migrate_notes(apps, schema_editor):
     streamer = EventRole.objects.filter(slug='streamer').first()
 
     rows = []
+    # exclude() with two conditions is an AND - rows where BOTH are empty are skipped.
+    # Rows where only one is set are included, which is correct.
     for interest in EventInterest.objects.exclude(participant_notes='', streamer_notes='').iterator():
         if participant and interest.participant_notes:
             rows.append(EventInterestNote(event_interest=interest, role=participant, notes=interest.participant_notes))
