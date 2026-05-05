@@ -76,6 +76,8 @@ class EventRole(models.Model):
     description = models.TextField(default='', blank=False, null=False)
     color = models.CharField(max_length=7, default='#417690', blank=False, null=False,
                              help_text="Hex color code for UI display (e.g. #417690)")
+    multi_assign = models.BooleanField(default=False,
+                                       help_text="Allow multiple users assigned per slot (e.g. Participant). Single-assign roles enforce one user per slot.")
 
     def __str__(self):
         return self.name
