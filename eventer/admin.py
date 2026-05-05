@@ -69,7 +69,9 @@ class EventRoleAdminForm(forms.ModelForm):
 @admin.register(EventRole)
 class EventRoleAdmin(admin.ModelAdmin):
     form = EventRoleAdminForm
-    list_display = ['name', 'slug', 'color_swatch']
+    list_display = ['name', 'slug', 'color_swatch', 'display_order', 'multi_assign', 'has_game_selection', 'show_fundraising_url', 'show_stream_commands']
+    list_filter = ['multi_assign', 'has_game_selection', 'show_fundraising_url', 'show_stream_commands']
+    ordering = ['display_order', 'name']
     search_fields = ['name', 'slug']
 
     @admin.display(description='Color')
