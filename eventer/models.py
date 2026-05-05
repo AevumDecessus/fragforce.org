@@ -233,18 +233,53 @@ class EventSignupSlotConfig(models.Model):
         help_text="End of prime time (in event timezone) - shorter blocks end here",
     )
 
-    # Management (Moderator/Tech) block sizes
+    # Management block sizes (used by groups with use_prime_time=False that don't set their own block_hours)
     management_block_hours = models.PositiveSmallIntegerField(
         default=6,
-        help_text="Block size in hours for moderator and tech manager slots",
-    )
-    mod_first_block_hours = models.PositiveSmallIntegerField(
-        default=3,
-        help_text="Length of the first moderator block - shorter than standard to stagger mod/tech changeovers",
+        help_text="Default block size in hours for management-style role groups. Individual groups can override this.",
     )
 
     def __str__(self):
         return f'Slot config for {self.event}'
+
+
+class EventSlotGroup(models.Model):
+    """ A named grouping of roles that share slot generation settings. Global and reusable across events. """
+    name = models.CharField(max_length=255, unique=True, blank=False, null=False)
+    use_prime_time = models.BooleanField(
+        default=False,
+        help_text="If true, use variable prime-time block sizing. If false, use this group's block_hours (or the event's management_block_hours if not set).",
+    )
+    block_hours = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Block size in hours for this group. Null falls back to the event's management_block_hours. Ignored when use_prime_time is true.",
+    )
+    roles = models.ManyToManyField(
+        'EventRole',
+        through='EventSlotGroupMembership',
+        related_name='slot_groups',
+        blank=True,
+    )
+
+    def __str__(self):
+        return self.name
+
+
+class EventSlotGroupMembership(models.Model):
+    """ Membership of a role in a slot group, with an optional first-block offset. """
+    group = models.ForeignKey(EventSlotGroup, on_delete=models.CASCADE, related_name='memberships')
+    role = models.ForeignKey('EventRole', on_delete=models.CASCADE, related_name='slot_group_memberships')
+    first_block_hours = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text="Override the first slot's block size for this role to stagger changeovers. Null uses the group's standard block size.",
+    )
+
+    class Meta:
+        unique_together = [['group', 'role']]
+
+    def __str__(self):
+        offset = f' (first={self.first_block_hours}h)' if self.first_block_hours is not None else ''
+        return f'{self.role.name} in {self.group.name}{offset}'
 
 
 class EventSignupSlot(models.Model):

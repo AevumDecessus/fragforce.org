@@ -210,8 +210,9 @@ class GenerateSlotsTest(TestCase):
         with self.assertRaises(ValueError):
             generate_slots(event)
 
-    def test_raises_without_roles(self):
-        EventRole.objects.all().delete()
+    def test_raises_without_groups(self):
+        from eventer.models import EventSlotGroup
+        EventSlotGroup.objects.all().delete()
         with self.assertRaises(ValueError):
             generate_slots(self.event)
 
@@ -219,33 +220,43 @@ class GenerateSlotsTest(TestCase):
         result = generate_slots(self.event)
         self.assertGreater(result['created'], 0)
         self.assertEqual(result['deleted'], 0)
-        # Some skipped is expected when grids share slot boundaries
         self.assertGreaterEqual(result['skipped'], 0)
 
-    def test_participant_and_streamer_share_slots(self):
+    def test_roles_without_offset_in_same_group_share_slots(self):
+        from eventer.models import EventSlotGroup
         generate_slots(self.event)
-        participant = EventRole.objects.get(slug='participant')
-        streamer = EventRole.objects.get(slug='streamer')
-        p_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=participant).values_list('id', flat=True))
-        s_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=streamer).values_list('id', flat=True))
-        self.assertEqual(p_slots, s_slots)
+        # All roles in the prime-time group with no first_block_hours should share identical slot sets
+        prime_group = EventSlotGroup.objects.get(use_prime_time=True)
+        shared_roles = [m.role for m in prime_group.memberships.filter(first_block_hours__isnull=True)]
+        if len(shared_roles) < 2:
+            return
+        first_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=shared_roles[0]).values_list('id', flat=True))
+        for role in shared_roles[1:]:
+            role_slots = set(EventSignupSlot.objects.filter(event=self.event, roles=role).values_list('id', flat=True))
+            self.assertEqual(first_slots, role_slots)
 
-    def test_tech_has_uniform_management_block_size(self):
+    def test_management_group_uses_uniform_block_size(self):
+        from eventer.models import EventSlotGroup
         generate_slots(self.event)
         config = self._config()
-        tech = EventRole.objects.get(slug='tech-manager')
-        slots = list(EventSignupSlot.objects.filter(event=self.event, roles=tech).order_by('start'))
-        for slot in slots[:-1]:  # last slot may be absorbed
-            duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
-            self.assertEqual(duration_hrs, config.management_block_hours, f"Tech slot {slot.label} should be {config.management_block_hours}hr")
+        # Any management group with no block_hours override should use config.management_block_hours
+        mgmt_groups = EventSlotGroup.objects.filter(use_prime_time=False, block_hours__isnull=True)
+        for group in mgmt_groups:
+            for membership in group.memberships.filter(first_block_hours__isnull=True).select_related('role'):
+                slots = list(EventSignupSlot.objects.filter(event=self.event, roles=membership.role).order_by('start'))
+                for slot in slots[:-1]:
+                    duration_hrs = (slot.stop - slot.start).total_seconds() / HOUR_SECONDS
+                    self.assertEqual(duration_hrs, config.management_block_hours)
 
-    def test_moderator_first_block_matches_config(self):
+    def test_role_with_first_block_offset_uses_that_value(self):
+        from eventer.models import EventSlotGroupMembership
         generate_slots(self.event)
-        config = self._config()
-        moderator = EventRole.objects.get(slug='moderator')
-        first_slot = EventSignupSlot.objects.filter(event=self.event, roles=moderator).order_by('start').first()
-        duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / HOUR_SECONDS
-        self.assertEqual(duration_hrs, config.mod_first_block_hours)
+        # Any membership with first_block_hours set should have that as the first slot's duration
+        for membership in EventSlotGroupMembership.objects.filter(first_block_hours__isnull=False).select_related('role'):
+            first_slot = EventSignupSlot.objects.filter(event=self.event, roles=membership.role).order_by('start').first()
+            if first_slot:
+                duration_hrs = (first_slot.stop - first_slot.start).total_seconds() / HOUR_SECONDS
+                self.assertEqual(duration_hrs, membership.first_block_hours)
 
     def test_prime_time_slots_use_prime_block_hours(self):
         generate_slots(self.event)

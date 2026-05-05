@@ -9,7 +9,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleAssignment, EventScheduleMultiAssignment, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleAssignment, EventScheduleMultiAssignment, EventSlotGroup, EventSlotGroupMembership, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
 from eventer.schedule import build_schedule_grid, LOCAL_TIME_FMT
 from eventer.slot_generator import generate_slots
 
@@ -70,6 +70,7 @@ class EventRoleAdminForm(forms.ModelForm):
 class EventRoleAdmin(admin.ModelAdmin):
     form = EventRoleAdminForm
     list_display = ['name', 'slug', 'color_swatch']
+    search_fields = ['name', 'slug']
 
     @admin.display(description='Color')
     def color_swatch(self, obj):
@@ -389,6 +390,23 @@ class EventAdmin(admin.ModelAdmin):
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
     def response_add(self, request, obj, post_url_continue=None):
         return HttpResponseRedirect(f'../../event/{obj.event_id}/setup-superstream/')
+
+
+class EventSlotGroupMembershipInline(admin.TabularInline):
+    model = EventSlotGroupMembership
+    extra = 1
+    fields = ['role', 'first_block_hours']
+    autocomplete_fields = ['role']
+
+
+@admin.register(EventSlotGroup)
+class EventSlotGroupAdmin(admin.ModelAdmin):
+    list_display = ['name', 'use_prime_time', 'block_hours', 'member_count']
+    inlines = [EventSlotGroupMembershipInline]
+
+    @admin.display(description='Members')
+    def member_count(self, obj):
+        return obj.memberships.count()
 
 
 @admin.register(EventSignupSlot)
