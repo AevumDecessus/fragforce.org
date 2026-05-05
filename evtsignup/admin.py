@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from evtsignup.models import EventAvailabilityInterest, EventInterest, GameInterestUserEvent
+from evtsignup.models import EventAvailabilityHour, EventInterest, GameInterestUserEvent
 
 
 class GameInterestInline(admin.TabularInline):
@@ -39,19 +39,9 @@ class EventInterestAdmin(admin.ModelAdmin):
 
     @admin.display(description='Roles')
     def roles_summary(self, obj):
-        avail = obj.eventavailabilityinterest_set.first()
-        if not avail:
-            return '—'
-        roles = []
-        if avail.as_streamer:
-            roles.append('Streamer')
-        if avail.as_participant:
-            roles.append('Participant')
-        if avail.as_moderator:
-            roles.append('Moderator')
-        if avail.as_tech:
-            roles.append('Tech')
-        return ', '.join(roles) if roles else '—'
+        slugs = obj.eventavailabilityhour_set.values_list('role__name', flat=True).distinct()
+        names = sorted(set(slugs))
+        return ', '.join(names) if names else '—'
 
     @admin.display(description='Games', ordering='gameinterestuserevent')
     def game_count(self, obj):
@@ -71,6 +61,7 @@ class GameInterestUserEventAdmin(admin.ModelAdmin):
     autocomplete_fields = ['game']
 
 
-@admin.register(EventAvailabilityInterest)
-class EventAvailabilityInterestAdmin(admin.ModelAdmin):
-    pass
+@admin.register(EventAvailabilityHour)
+class EventAvailabilityHourAdmin(admin.ModelAdmin):
+    list_display = ['event_interest', 'hour', 'role']
+    list_filter = ['role', 'event_interest__event']
