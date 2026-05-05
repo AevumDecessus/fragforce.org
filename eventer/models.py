@@ -80,6 +80,10 @@ class EventRole(models.Model):
                                        help_text="Allow multiple users assigned per slot (e.g. Participant). Single-assign roles enforce one user per slot.")
     display_order = models.PositiveSmallIntegerField(default=100,
                                                      help_text="Display order — lower numbers appear first. Roles with the same value are sorted alphabetically.")
+    has_game_selection = models.BooleanField(default=False,
+                                             help_text="Show a game preference picker for this role on the signup form.")
+    game_min_players = models.PositiveSmallIntegerField(null=True, blank=True,
+                                                        help_text="Exclude games where max players is less than this value. Leave blank to show all games.")
 
     class Meta:
         ordering = ['display_order', 'name']
