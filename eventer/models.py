@@ -86,6 +86,8 @@ class EventRole(models.Model):
                                                         help_text="Exclude games where max players is less than this value. Leave blank to show all games.")
     show_fundraising_url = models.BooleanField(default=False,
                                                help_text="Show the fundraising URL field for this role on the signup form.")
+    show_stream_commands = models.BooleanField(default=False,
+                                               help_text="Show Twitch stream commands (title, game, donate) in the coordinator schedule for this role. Also pins this role's column first.")
 
     class Meta:
         ordering = ['display_order', 'name']

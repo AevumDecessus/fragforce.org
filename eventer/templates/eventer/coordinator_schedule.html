@@ -51,18 +51,18 @@
       <thead>
         <tr>
           <th style="background:#2c4a5a;color:white;">Hour</th>
-          {# Streamer + command columns first #}
-          {% for role in role_headers %}{% if role.label == 'Streamer' %}
+          {# Stream-command roles pinned first, each with their extra columns #}
+          {% for role in stream_command_roles %}
           <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
-          {% endif %}{% endfor %}
-          <th style="background-color:{{ streamer_color }};color:white;">Game</th>
-          <th style="background-color:{{ streamer_color }};color:white;">Title Command</th>
-          <th style="background-color:{{ streamer_color }};color:white;">Game Command</th>
-          <th style="background-color:{{ streamer_color }};color:white;">Donate Command</th>
+          <th style="background-color:{{ role.color }};color:white;">Game</th>
+          <th style="background-color:{{ role.color }};color:white;">Title Command</th>
+          <th style="background-color:{{ role.color }};color:white;">Game Command</th>
+          <th style="background-color:{{ role.color }};color:white;">Donate Command</th>
+          {% endfor %}
           {# Remaining single-assignment role columns #}
-          {% for role in role_headers %}{% if role.label != 'Streamer' %}
+          {% for role in other_single_roles %}
           <th style="background-color:{{ role.color }};color:white;">{{ role.label }}</th>
-          {% endif %}{% endfor %}
+          {% endfor %}
           {# Multi-assignment role columns #}
           {% for role in multi_role_headers %}
           <th style="background-color:{{ role.color }};color:white;border-left:3px solid #fff;">{{ role.label }}</th>
@@ -76,27 +76,18 @@
             {% if row.is_day_start %}<span class="day-label">{{ row.day }}</span>{% endif %}
             {{ row.local }}
           </td>
-          {# Streamer cell #}
-          {% for cell in row.cells %}
-          {% if cell.role_slug == 'streamer' %}
+          {# Stream-command roles first: role cell + 4 command cells each #}
+          {% for cell in row.cells %}{% if cell.show_stream_commands %}
             {% if cell.type == 'skip' %}{# rowspan #}
-            {% elif cell.type == 'empty' %}<td class="empty-cell"></td>
+            {% elif cell.type == 'empty' %}
+            <td class="empty-cell"></td>
+            <td class="empty-cell"></td><td class="empty-cell"></td>
+            <td class="empty-cell"></td><td class="empty-cell"></td>
             {% else %}
             <td class="slot-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
               {% if cell.assigned %}<span class="assigned-name">{{ cell.assigned_display }}</span>
               {% else %}<span class="unassigned">—</span>{% endif %}
             </td>
-            {% endif %}
-          {% endif %}
-          {% endfor %}
-          {# Command cells (follow streamer) #}
-          {% for cell in row.cells %}
-          {% if cell.role_slug == 'streamer' %}
-            {% if cell.type == 'skip' %}{# rowspan #}
-            {% elif cell.type == 'empty' %}
-            <td class="empty-cell"></td><td class="empty-cell"></td>
-            <td class="empty-cell"></td><td class="empty-cell"></td>
-            {% else %}
             <td class="cmd-cell {% if cell.alt %}alt-slot{% endif %}" rowspan="{{ cell.rowspan }}">
               {% if cell.assigned and cell.assigned.game %}{{ cell.assigned.game.name }}
               {% else %}<span class="unassigned">—</span>{% endif %}
@@ -112,11 +103,9 @@
               {% if cell.donate_cmd %}<code class="cmd-text">{{ cell.donate_cmd }}</code>{% endif %}
             </td>
             {% endif %}
-          {% endif %}
-          {% endfor %}
-          {# Non-streamer single-assignment role cells #}
-          {% for cell in row.cells %}
-          {% if cell.role_slug != 'streamer' %}
+          {% endif %}{% endfor %}
+          {# Other single-assignment role cells #}
+          {% for cell in row.cells %}{% if not cell.show_stream_commands %}
             {% if cell.type == 'skip' %}{# rowspan #}
             {% elif cell.type == 'empty' %}<td class="empty-cell"></td>
             {% else %}
@@ -125,8 +114,7 @@
               {% else %}<span class="unassigned">—</span>{% endif %}
             </td>
             {% endif %}
-          {% endif %}
-          {% endfor %}
+          {% endif %}{% endfor %}
           {# Multi-assignment role cells (Participant) #}
           {% for mcell in row.multi_cells_list %}
           {% if mcell.type == 'skip' %}{# rowspan #}

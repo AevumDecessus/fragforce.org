@@ -83,9 +83,9 @@ def _build_grid_rows(all_hours, tz, single_roles, role_hour_slot, role_objects, 
             slug = role.slug
             slot = role_hour_slot[slug].get(hour)
             if slot is None:
-                cells.append({'type': 'empty'})
+                cells.append({'type': 'empty', 'show_stream_commands': role.show_stream_commands})
             elif role_next_hour[slug] is not None and hour < role_next_hour[slug]:
-                cells.append({'type': 'skip'})
+                cells.append({'type': 'skip', 'show_stream_commands': role.show_stream_commands})
             else:
                 slot_hours = list(_expand_to_hours(slot))
                 role_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else hour + timedelta(hours=1)
@@ -95,6 +95,7 @@ def _build_grid_rows(all_hours, tz, single_roles, role_hour_slot, role_objects, 
                     'type': 'slot', 'rowspan': len(slot_hours),
                     'slot': slot, 'role_slug': slug,
                     'role_color': role_obj.color if role_obj else '#417690',
+                    'show_stream_commands': role_obj.show_stream_commands if role_obj else False,
                     'alt': role_alt[slug],
                     'available': slot_role_available.get((slot.pk, slug), []),
                     'assigned': slot_role_assigned.get((slot.pk, slug)),
@@ -169,7 +170,7 @@ def build_schedule_grid(event):
     if not event.start or not event.end:
         return {
             'rows': [],
-            'role_headers': [{'label': r.name, 'color': r.color} for r in single_roles],
+            'role_headers': [{'label': r.name, 'color': r.color, 'slug': r.slug, 'show_stream_commands': r.show_stream_commands} for r in single_roles],
             'multi_role_headers': [{'label': r.name, 'color': r.color, 'slug': r.slug} for r in multi_roles],
             'slot_role_available': {}, 'slot_role_assigned': {},
             'multi_slot_data': {}, 'role_objects': {},
@@ -187,7 +188,7 @@ def build_schedule_grid(event):
     )
     rows = _build_grid_rows(all_hours, tz, single_roles, role_hour_slot, role_objects, slot_role_available, slot_role_assigned)
     role_headers = [
-        {'label': r.name, 'color': r.color}
+        {'label': r.name, 'color': r.color, 'slug': r.slug, 'show_stream_commands': r.show_stream_commands}
         for r in single_roles
     ]
     multi_role_headers = [

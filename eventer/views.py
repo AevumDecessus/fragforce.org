@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_safe
 
-from eventer.models import Event, EventScheduleAssignment
+from eventer.models import Event, EventRole, EventScheduleAssignment
 from eventer.schedule import build_schedule_grid, generate_twitch_commands
 
 
@@ -188,13 +188,17 @@ def coordinator_schedule_view(request, event_slug):
         for row in EventInterest.objects.filter(event=event, user_id__in=user_ids).values('user_id', 'display_name', 'user__username'):
             display_names[row['user_id']] = row['display_name'] or row['user__username']
 
+    stream_command_slugs = set(
+        EventRole.objects.filter(show_stream_commands=True).values_list('slug', flat=True)
+    )
+
     for row in grid['rows']:
         for cell in row['cells']:
             if cell['type'] == 'slot' and cell.get('assigned'):
                 a = cell['assigned']
                 display = display_names.get(a.user_id, a.user.username)
                 cell['assigned_display'] = display
-                if cell['role_slug'] == 'streamer':
+                if cell['role_slug'] in stream_command_slugs:
                     game_name = a.game.name if a.game else ''
                     title_cmd, game_cmd, donate_cmd = generate_twitch_commands(
                         event, cell['slot'], display, game_name
@@ -210,15 +214,16 @@ def coordinator_schedule_view(request, event_slug):
                 for a in mcell['assigned']:
                     a.display_name = display_names.get(a.user_id, a.user.username)
 
-    streamer_color = next(
-        (r['color'] for r in grid['role_headers'] if r['label'] == 'Streamer'),
-        '#417690'
-    )
+    # Roles with stream commands are pinned first in the coordinator schedule
+    stream_command_roles = [r for r in grid['role_headers'] if r.get('show_stream_commands')]
+    other_roles = [r for r in grid['role_headers'] if not r.get('show_stream_commands')]
+
     context = {
         'event': event,
         'rows': grid['rows'],
         'role_headers': grid['role_headers'],
         'multi_role_headers': grid['multi_role_headers'],
-        'streamer_color': streamer_color,
+        'stream_command_roles': stream_command_roles,
+        'other_single_roles': other_roles,
     }
     return render(request, 'eventer/coordinator_schedule.html', context)
