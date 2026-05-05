@@ -3,9 +3,15 @@
 
 {% block title %}Coordinator Schedule - {{ event.name }}{% endblock %}
 
+{% block head %}
+<style>
+  main.container { max-width: 100%; overflow-x: auto; }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="row mt-4">
-  <div class="col-lg-12">
+  <div class="col-lg-12" style="overflow-x: auto;">
 
     <h2>{{ event.name }} - Coordinator Schedule</h2>
     <p>
@@ -46,7 +52,6 @@
       .cmd-text.copied { background: rgba(100,200,100,0.2); border-color: rgba(100,200,100,0.4); }
     </style>
 
-    <div style="overflow-x: auto;">
     <table class="coord-grid">
       <thead>
         <tr>
@@ -132,7 +137,6 @@
         {% endfor %}
       </tbody>
     </table>
-    </div>
 
     {% endif %}
 

@@ -3,6 +3,12 @@
 
 {% block title %}Build Schedule - {{ event.name }}{% endblock %}
 
+{% block extrahead %}{{ block.super }}
+<style>
+  #content-main { overflow-x: auto; float: none; }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Build Schedule for "{{ event.name }}"</h1>
 <p>
