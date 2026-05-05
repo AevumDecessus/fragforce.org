@@ -1,4 +1,3 @@
-import zoneinfo
 from collections import defaultdict
 
 from django.contrib.auth.decorators import login_required, permission_required
@@ -122,20 +121,27 @@ def public_schedule_view(request, event_slug):
     if not event.schedule_published and not is_coordinator:
         return render(request, 'eventer/schedule_not_published.html', {'event': event})
 
-    tz = zoneinfo.ZoneInfo(event.timezone)
-
-    streamer_assignments = list(
+    all_single_assignments = list(
         EventScheduleAssignment.objects
-        .filter(event=event, role__slug='streamer')
+        .filter(event=event)
         .select_related('slot', 'role', 'user', 'game')
-        .order_by('slot__start')
+        .order_by('role__display_order', 'role__name', 'slot__start')
     )
 
     # Build display name map for all assigned users
-    user_ids = {a.user_id for a in streamer_assignments}
+    user_ids = {a.user_id for a in all_single_assignments}
     if request.user.is_authenticated:
         user_ids.add(request.user.pk)
     display_names = _display_name_map(event, user_ids)
+
+    for a in all_single_assignments:
+        a.display_name = display_names.get(a.user_id, a.user.username)
+
+    # Only show stream-command roles publicly; other roles are operational details
+    stream_sections = {}
+    for a in all_single_assignments:
+        if a.role.show_stream_commands:
+            stream_sections.setdefault(a.role, []).append(a)
 
     my_slots = []
     if request.user.is_authenticated:
@@ -146,16 +152,9 @@ def public_schedule_view(request, event_slug):
             .order_by('slot__start')
         )
 
-    # Annotate assignments with display names for the template
-    for a in streamer_assignments:
-        a.display_name = display_names.get(a.user_id, a.user.username)
-    for s in my_slots:
-        s.display_name = display_names.get(s.user_id, s.user.username) if hasattr(s, 'user') else ''
-
     context = {
         'event': event,
-        'tz': tz,
-        'streamer_assignments': streamer_assignments,
+        'stream_sections': stream_sections,
         'my_slots': my_slots,
     }
     return render(request, 'eventer/public_schedule.html', context)
