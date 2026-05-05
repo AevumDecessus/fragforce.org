@@ -388,8 +388,30 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/eventer/eventsignupslotconfig/change_form.html'
+
     def response_add(self, request, obj, post_url_continue=None):
         return HttpResponseRedirect(f'../../event/{obj.event_id}/setup-superstream/')
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        if object_id:
+            try:
+                config = EventSignupSlotConfig.objects.get(pk=object_id)
+                groups = EventSlotGroup.objects.prefetch_related('memberships__role').all()
+                group_summaries = []
+                for group in groups:
+                    memberships = list(group.memberships.select_related('role').all())
+                    effective_block = group.block_hours if group.block_hours is not None else config.management_block_hours
+                    group_summaries.append({
+                        'group': group,
+                        'effective_block_hours': effective_block if not group.use_prime_time else None,
+                        'memberships': memberships,
+                    })
+                extra_context['group_summaries'] = group_summaries
+            except EventSignupSlotConfig.DoesNotExist:
+                pass
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
 
 class EventSlotGroupMembershipInline(admin.TabularInline):

@@ -1,0 +1,60 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+{{ block.super }}
+
+{% if group_summaries %}
+<div style="margin-top:1.5em;">
+  <h2 style="font-size:1.1em;margin-bottom:0.75em;">Slot Group Summary</h2>
+  <p style="color:#999;font-size:0.85em;margin-bottom:1em;">
+    Read-only preview of how <strong>generate_slots</strong> will build slot grids for this event.
+    Edit groups via <a href="{% url 'admin:eventer_eventslotgroup_changelist' %}">Event slot groups</a>.
+  </p>
+  <table style="border-collapse:collapse;width:100%;font-size:0.875em;">
+    <thead>
+      <tr style="background:#1a2228;color:#ccc;">
+        <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #333;">Group</th>
+        <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #333;">Type</th>
+        <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #333;">Block hours</th>
+        <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #333;">Roles</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for summary in group_summaries %}
+      <tr style="border-bottom:1px solid #2a3540;">
+        <td style="padding:6px 10px;font-weight:600;">{{ summary.group.name }}</td>
+        <td style="padding:6px 10px;">
+          {% if summary.group.use_prime_time %}
+            <span style="color:#4CAF50;">Prime time</span>
+          {% else %}
+            <span style="color:#90CAF9;">Management</span>
+          {% endif %}
+        </td>
+        <td style="padding:6px 10px;">
+          {% if summary.group.use_prime_time %}
+            <span style="color:#999;">prime/standard</span>
+          {% elif summary.group.block_hours %}
+            {{ summary.group.block_hours }}h <span style="color:#999;">(override)</span>
+          {% else %}
+            {{ summary.effective_block_hours }}h <span style="color:#999;">(from management default)</span>
+          {% endif %}
+        </td>
+        <td style="padding:6px 10px;">
+          {% for m in summary.memberships %}
+          <span style="display:inline-block;margin-right:8px;margin-bottom:4px;background:#1e2a30;border:1px solid #333;border-radius:3px;padding:2px 8px;">
+            <span style="color:{{ m.role.color }};font-weight:600;">{{ m.role.name }}</span>
+            {% if m.first_block_hours %}
+              <span style="color:#999;font-size:0.85em;">&nbsp;first={{ m.first_block_hours }}h</span>
+            {% endif %}
+          </span>
+          {% empty %}
+          <span style="color:#666;font-style:italic;">no roles</span>
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
