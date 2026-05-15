@@ -1,7 +1,10 @@
+import logging
 import zoneinfo
 from collections import defaultdict
 
 from django.contrib import messages
+
+log = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, render, redirect
@@ -159,6 +162,13 @@ def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
     for hour, slug in existing.eventavailabilityhour_set.values_list('hour', 'role__slug'):
         hours_by_slug[slug].add(hour)
 
+    inactive_role_slugs = set(hours_by_slug.keys()) - set(slots_by_slug.keys())
+    if inactive_role_slugs:
+        log.warning(
+            'signup prefill: user %s has saved availability for roles with no active slots: %s',
+            existing.user_id, sorted(inactive_role_slugs),
+        )
+
     selected_slot_ids = {
         slug: {
             slot.pk for slot in slots
@@ -178,7 +188,7 @@ def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
         for slug, games_qs in game_qs_by_slug.items()
     }
 
-    return prefill, selected_slot_ids, selected_game_ids, notes_by_slug
+    return prefill, selected_slot_ids, selected_game_ids, notes_by_slug, inactive_role_slugs
 
 
 @login_required
@@ -254,7 +264,13 @@ def signup_view(request, event_slug):
     if errors:
         prefill, selected_slot_ids, selected_game_ids, notes_by_slug = _prefill_from_post(request, roles_with_slots, game_qs_by_slug)
     elif existing:
-        prefill, selected_slot_ids, selected_game_ids, notes_by_slug = _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug)
+        prefill, selected_slot_ids, selected_game_ids, notes_by_slug, inactive_role_slugs = _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug)
+        if inactive_role_slugs:
+            messages.warning(
+                request,
+                "Some of your previously saved availability could not be loaded because those roles "
+                "no longer have slots for this event. Please review your availability before saving.",
+            )
     else:
         prefill = {}
         selected_slot_ids = {r.slug: set() for r in roles_with_slots}

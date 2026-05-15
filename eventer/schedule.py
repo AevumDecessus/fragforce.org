@@ -1,11 +1,14 @@
 """
 Shared schedule grid building utilities used by both admin views and public/coordinator views.
 """
+import logging
 import zoneinfo
 from datetime import timedelta
 
 from eventer.models import EventRole, EventScheduleAssignment, EventScheduleMultiAssignment
 from eventer.slot_generator import _expand_to_hours
+
+log = logging.getLogger(__name__)
 
 LOCAL_TIME_FMT = '%a %b %-d %-I%p %Z'
 
@@ -31,8 +34,15 @@ def _build_hour_role_users(event, all_hours, all_roles):
     )
     for interest in interests:
         for avail in interest.eventavailabilityhour_set.all():
-            if avail.hour in hour_role_users and avail.role.slug in hour_role_users[avail.hour]:
-                hour_role_users[avail.hour][avail.role.slug].add(interest.user)
+            if avail.hour not in hour_role_users:
+                continue
+            if avail.role.slug not in hour_role_users[avail.hour]:
+                log.warning(
+                    'schedule: skipping availability for user %s at hour %s — role %r has no active slots for event %s',
+                    interest.user_id, avail.hour, avail.role.slug, event.pk,
+                )
+                continue
+            hour_role_users[avail.hour][avail.role.slug].add(interest.user)
     return hour_role_users
 
 
