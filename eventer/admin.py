@@ -205,30 +205,39 @@ class EventAdmin(admin.ModelAdmin):
         return render(request, 'admin/eventer/event/setup_superstream.html', context)
 
     def generate_slots_view(self, request, event_id):
+        from evtsignup.models import EventInterest
         event = get_object_or_404(Event, pk=event_id)
         errors = None
 
         if request.method == 'POST':
             replace = request.POST.get('replace') == '1'
-            try:
-                result = generate_slots(event, replace=replace)
-                self.message_user(
-                    request,
-                    f"Generated slots: {result['created']} created, "
-                    f"{result['skipped']} already existed, "
-                    f"{result['deleted']} deleted.",
-                    messages.SUCCESS,
+            signup_count = EventInterest.objects.filter(event=event).count()
+            if replace and signup_count > 0 and request.POST.get('confirm_replace_with_signups') != '1':
+                errors = (
+                    f"This event has {signup_count} existing signup(s). Check the confirmation box to proceed with regeneration."
                 )
-                return HttpResponseRedirect(f'../../{event_id}/change/')
-            except ValueError as e:
-                errors = str(e)
+            else:
+                try:
+                    result = generate_slots(event, replace=replace)
+                    self.message_user(
+                        request,
+                        f"Generated slots: {result['created']} created, "
+                        f"{result['skipped']} already existed, "
+                        f"{result['deleted']} deleted.",
+                        messages.SUCCESS,
+                    )
+                    return HttpResponseRedirect(f'../../{event_id}/change/')
+                except ValueError as e:
+                    errors = str(e)
 
         existing_slots = list(event.signup_slots.prefetch_related('roles').order_by('start'))
+        signup_count = EventInterest.objects.filter(event=event).count()
         context = {
             **self.admin_site.each_context(request),
             'event': event,
             'existing_slots': existing_slots,
             'existing_count': len(existing_slots),
+            'signup_count': signup_count,
             'errors': errors,
             'title': f'Generate Signup Slots - {event.name}',
         }

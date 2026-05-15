@@ -35,6 +35,20 @@
         </label>
       </div>
     </div>
+    {% if signup_count %}
+    <div class="form-row">
+      <div class="errornote" style="margin: 0.5em 0;">
+        <p><strong>Warning:</strong> This event has {{ signup_count }} existing signup(s).
+        Regenerating slots may remove roles from existing availability data if the new slot
+        configuration excludes roles that users previously signed up for.
+        That availability data cannot be recovered.</p>
+        <label>
+          <input type="checkbox" name="confirm_replace_with_signups" value="1">
+          I understand that availability data for any removed roles will be permanently lost
+        </label>
+      </div>
+    </div>
+    {% endif %}
     {% else %}
       <input type="hidden" name="replace" value="0">
     {% endif %}
