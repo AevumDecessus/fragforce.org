@@ -226,6 +226,13 @@ class EventAdmin(admin.ModelAdmin):
                         f"{result['deleted']} deleted.",
                         messages.SUCCESS,
                     )
+                    if result.get('empty_groups'):
+                        self.message_user(
+                            request,
+                            f"Warning: the following slot groups have no role memberships and were skipped: "
+                            f"{', '.join(result['empty_groups'])}. Add roles to these groups to generate slots for them.",
+                            messages.WARNING,
+                        )
                     return HttpResponseRedirect(f'../../{event_id}/change/')
                 except ValueError as e:
                     errors = str(e)
