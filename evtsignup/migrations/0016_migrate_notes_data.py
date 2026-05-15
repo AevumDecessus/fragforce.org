@@ -24,7 +24,7 @@ def migrate_notes(apps, schema_editor):
         if interest.streamer_notes:
             rows.append(EventInterestNote(event_interest=interest, role=roles['streamer'], notes=interest.streamer_notes))
 
-    EventInterestNote.objects.bulk_create(rows, ignore_conflicts=True)
+    EventInterestNote.objects.bulk_create(rows, ignore_conflicts=True, batch_size=1000)
 
 
 class Migration(migrations.Migration):

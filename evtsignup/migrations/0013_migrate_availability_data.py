@@ -27,7 +27,7 @@ def migrate_availability_data(apps, schema_editor):
                     hour=old.hour,
                     role=roles[slug],
                 ))
-    EventAvailabilityHour.objects.bulk_create(batch, ignore_conflicts=True)
+    EventAvailabilityHour.objects.bulk_create(batch, ignore_conflicts=True, batch_size=1000)
 
 
 class Migration(migrations.Migration):
