@@ -11,7 +11,9 @@ GAME_SELECTION = {
 def set_game_selection(apps, schema_editor):
     EventRole = apps.get_model('eventer', 'EventRole')
     for slug, values in GAME_SELECTION.items():
-        EventRole.objects.filter(slug=slug).update(**values)
+        updated = EventRole.objects.filter(slug=slug).update(**values)
+        if updated != 1:
+            raise ValueError(f"Expected to update 1 EventRole(slug={slug!r}), got {updated}. Run eventer migration 0024 first.")
 
 
 class Migration(migrations.Migration):
