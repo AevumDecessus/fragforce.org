@@ -300,26 +300,26 @@ class EventAdmin(admin.ModelAdmin):
                 for key in seen_keys:
                     try:
                         _, slot_pk, role_slug = key.split('_', 2)
-                        slot = slots_by_pk.get(int(slot_pk))
-                        role = roles_by_slug.get(role_slug)
-                        if not slot or not role:
-                            continue
-                        for user_id in request.POST.getlist(key):
-                            if not user_id:
-                                continue
-                            user = users_by_pk.get(int(user_id))
-                            if not user:
-                                continue
-                            if role_slug in multi_slugs:
-                                EventScheduleMultiAssignment.objects.create(event=event, slot=slot, role=role, user=user)
-                            else:
-                                game_id = request.POST.get(f'game_{slot_pk}') or None
-                                game = games_by_pk.get(int(game_id)) if game_id else None
-                                EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
-                            created += 1
-                    except Exception as e:
-                        log.warning('build_schedule_view: skipped key %s - %s', key, e)
+                    except (ValueError, AttributeError):
+                        log.warning('build_schedule_view: malformed POST key %r, skipping', key)
                         continue
+                    slot = slots_by_pk.get(int(slot_pk))
+                    role = roles_by_slug.get(role_slug)
+                    if not slot or not role:
+                        continue
+                    for user_id in request.POST.getlist(key):
+                        if not user_id:
+                            continue
+                        user = users_by_pk.get(int(user_id))
+                        if not user:
+                            continue
+                        if role_slug in multi_slugs:
+                            EventScheduleMultiAssignment.objects.create(event=event, slot=slot, role=role, user=user)
+                        else:
+                            game_id = request.POST.get(f'game_{slot_pk}') or None
+                            game = games_by_pk.get(int(game_id)) if game_id else None
+                            EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                        created += 1
             self.message_user(request, f"Schedule saved: {created} assignment(s).", messages.SUCCESS)
             return HttpResponseRedirect(f'../../{event_id}/build-schedule/')
 
