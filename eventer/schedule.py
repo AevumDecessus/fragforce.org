@@ -1,25 +1,16 @@
 """
 Shared schedule grid building utilities used by both admin views and public/coordinator views.
 """
+import logging
 import zoneinfo
 from datetime import timedelta
 
 from eventer.models import EventRole, EventScheduleAssignment, EventScheduleMultiAssignment
 from eventer.slot_generator import _expand_to_hours
 
+log = logging.getLogger(__name__)
+
 LOCAL_TIME_FMT = '%a %b %-d %-I%p %Z'
-
-# Singular roles - enforced one user per (slot, role) via EventScheduleAssignment
-SINGLE_ASSIGNMENT_ROLES = [
-    ('streamer', 'as_streamer', 'Streamer'),
-    ('moderator', 'as_moderator', 'Moderator'),
-    ('tech-manager', 'as_tech', 'Tech'),
-]
-
-# Multi-user roles - multiple users per slot via EventScheduleMultiAssignment
-MULTI_ASSIGNMENT_ROLES = [
-    ('participant', 'as_participant', 'Participant'),
-]
 
 
 def _event_all_hours(event_start, event_end):
@@ -31,28 +22,33 @@ def _event_all_hours(event_start, event_end):
     return hours
 
 
-def _build_hour_role_users(event, all_hours):
+def _build_hour_role_users(event, all_hours, all_roles):
     from evtsignup.models import EventInterest
-    all_roles = SINGLE_ASSIGNMENT_ROLES + MULTI_ASSIGNMENT_ROLES
-    hour_role_users = {h: {slug: set() for slug, _, _ in all_roles} for h in all_hours}
+    all_slugs = [r.slug for r in all_roles]
+    hour_role_users = {h: {slug: set() for slug in all_slugs} for h in all_hours}
     interests = (
         EventInterest.objects
         .filter(event=event)
         .select_related('user')
-        .prefetch_related('eventavailabilityinterest_set')
+        .prefetch_related('eventavailabilityhour_set__role')
     )
     for interest in interests:
-        for avail in interest.eventavailabilityinterest_set.all():
-            if avail.hour in hour_role_users:
-                for slug, field, _ in all_roles:
-                    if getattr(avail, field):
-                        hour_role_users[avail.hour][slug].add(interest.user)
+        for avail in interest.eventavailabilityhour_set.all():
+            if avail.hour not in hour_role_users:
+                continue
+            if avail.role.slug not in hour_role_users[avail.hour]:
+                log.warning(
+                    'schedule: skipping availability for user %s at hour %s — role %r has no active slots for event %s',
+                    interest.user_id, avail.hour, avail.role.slug, event.pk,
+                )
+                continue
+            hour_role_users[avail.hour][avail.role.slug].add(interest.user)
     return hour_role_users
 
 
-def _build_role_hour_slot(event):
-    all_role_slugs = {slug for slug, _, _ in SINGLE_ASSIGNMENT_ROLES} | {slug for slug, _, _ in MULTI_ASSIGNMENT_ROLES}
-    role_hour_slot = {slug: {} for slug in all_role_slugs}
+def _build_role_hour_slot(event, all_roles):
+    all_slugs = {r.slug for r in all_roles}
+    role_hour_slot = {slug: {} for slug in all_slugs}
     for slot in event.signup_slots.prefetch_related('roles').order_by('start'):
         for role in slot.roles.all():
             if role.slug in role_hour_slot:
@@ -61,11 +57,12 @@ def _build_role_hour_slot(event):
     return role_hour_slot
 
 
-def _build_slot_role_data(all_hours, role_hour_slot, hour_role_users, role_objects):
+def _build_slot_role_data(all_hours, single_roles, role_hour_slot, hour_role_users, role_objects):
     slot_role_available = {}
     slot_role_assigned = {}
     seen = set()
-    for slug, _, _ in SINGLE_ASSIGNMENT_ROLES:
+    for role in single_roles:
+        slug = role.slug
         for hour in all_hours:
             slot = role_hour_slot[slug].get(hour)
             if not slot or (slot.pk, slug) in seen:
@@ -84,20 +81,21 @@ def _build_slot_role_data(all_hours, role_hour_slot, hour_role_users, role_objec
     return slot_role_available, slot_role_assigned
 
 
-def _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_available, slot_role_assigned):
-    role_next_hour = {slug: None for slug, _, _ in SINGLE_ASSIGNMENT_ROLES}
-    role_alt = {slug: False for slug, _, _ in SINGLE_ASSIGNMENT_ROLES}
+def _build_grid_rows(all_hours, tz, single_roles, role_hour_slot, role_objects, slot_role_available, slot_role_assigned):
+    role_next_hour = {r.slug: None for r in single_roles}
+    role_alt = {r.slug: False for r in single_roles}
     rows = []
     for hour in all_hours:
         local_hour = hour.astimezone(tz)
         is_day_start = hour == all_hours[0] or local_hour.hour == 0
         cells = []
-        for slug, _, _ in SINGLE_ASSIGNMENT_ROLES:
+        for role in single_roles:
+            slug = role.slug
             slot = role_hour_slot[slug].get(hour)
             if slot is None:
-                cells.append({'type': 'empty'})
+                cells.append({'type': 'empty', 'show_stream_commands': role.show_stream_commands})
             elif role_next_hour[slug] is not None and hour < role_next_hour[slug]:
-                cells.append({'type': 'skip'})
+                cells.append({'type': 'skip', 'show_stream_commands': role.show_stream_commands})
             else:
                 slot_hours = list(_expand_to_hours(slot))
                 role_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else hour + timedelta(hours=1)
@@ -107,6 +105,7 @@ def _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_avai
                     'type': 'slot', 'rowspan': len(slot_hours),
                     'slot': slot, 'role_slug': slug,
                     'role_color': role_obj.color if role_obj else '#417690',
+                    'show_stream_commands': role_obj.show_stream_commands if role_obj else False,
                     'alt': role_alt[slug],
                     'available': slot_role_available.get((slot.pk, slug), []),
                     'assigned': slot_role_assigned.get((slot.pk, slug)),
@@ -121,14 +120,12 @@ def _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_avai
     return rows
 
 
-def _build_multi_slot_data(event, all_hours, role_hour_slot, hour_role_users, role_objects):
-    """
-    Build available/assigned data for multi-assignment roles (e.g. Participant).
-    Returns {(slot.pk, slug): {'available': [...], 'assigned': [...]}}
-    """
+def _build_multi_slot_data(event, all_hours, multi_roles, role_hour_slot, hour_role_users, role_objects):
+    """Build available/assigned data for multi-assignment roles (e.g. Participant)."""
     data = {}
     seen = set()
-    for slug, _, _ in MULTI_ASSIGNMENT_ROLES:
+    for role in multi_roles:
+        slug = role.slug
         for hour in all_hours:
             slot = role_hour_slot.get(slug, {}).get(hour)
             if not slot or (slot.pk, slug) in seen:
@@ -176,73 +173,66 @@ def build_schedule_grid(event):
     Used by admin (availability summary, build schedule) and public coordinator view.
     """
     tz = zoneinfo.ZoneInfo(event.timezone)
+    all_roles = list(EventRole.objects.all())  # ordered by display_order, name
+    single_roles = [r for r in all_roles if not r.multi_assign]
+    multi_roles = [r for r in all_roles if r.multi_assign]
+
     if not event.start or not event.end:
         return {
             'rows': [],
-            'role_headers': [{'label': r[2], 'color': '#417690'} for r in SINGLE_ASSIGNMENT_ROLES],
-            'multi_role_headers': [{'label': r[2], 'color': '#417690', 'slug': r[0]} for r in MULTI_ASSIGNMENT_ROLES],
+            'role_headers': [{'label': r.name, 'color': r.color, 'slug': r.slug, 'show_stream_commands': r.show_stream_commands} for r in single_roles],
+            'multi_role_headers': [{'label': r.name, 'color': r.color, 'slug': r.slug} for r in multi_roles],
             'slot_role_available': {}, 'slot_role_assigned': {},
             'multi_slot_data': {}, 'role_objects': {},
         }
 
     all_hours = _event_all_hours(event.start, event.end)
-    hour_role_users = _build_hour_role_users(event, all_hours)
-    role_hour_slot = _build_role_hour_slot(event)
-    all_slugs = [s for s, _, _ in SINGLE_ASSIGNMENT_ROLES + MULTI_ASSIGNMENT_ROLES]
-    role_objects = {r.slug: r for r in EventRole.objects.filter(slug__in=all_slugs)}
+    role_objects = {r.slug: r for r in all_roles}
+    hour_role_users = _build_hour_role_users(event, all_hours, all_roles)
+    role_hour_slot = _build_role_hour_slot(event, all_roles)
     slot_role_available, slot_role_assigned = _build_slot_role_data(
-        all_hours, role_hour_slot, hour_role_users, role_objects
+        all_hours, single_roles, role_hour_slot, hour_role_users, role_objects
     )
     multi_slot_data = _build_multi_slot_data(
-        event, all_hours, role_hour_slot, hour_role_users, role_objects
+        event, all_hours, multi_roles, role_hour_slot, hour_role_users, role_objects
     )
-    rows = _build_grid_rows(all_hours, tz, role_hour_slot, role_objects, slot_role_available, slot_role_assigned)
+    rows = _build_grid_rows(all_hours, tz, single_roles, role_hour_slot, role_objects, slot_role_available, slot_role_assigned)
     role_headers = [
-        {'label': label, 'color': role_objects[slug].color if slug in role_objects else '#417690'}
-        for slug, _, label in SINGLE_ASSIGNMENT_ROLES
+        {'label': r.name, 'color': r.color, 'slug': r.slug, 'show_stream_commands': r.show_stream_commands}
+        for r in single_roles
     ]
     multi_role_headers = [
-        {'label': label, 'color': role_objects[slug].color if slug in role_objects else '#417690', 'slug': slug}
-        for slug, _, label in MULTI_ASSIGNMENT_ROLES
+        {'label': r.name, 'color': r.color, 'slug': r.slug}
+        for r in multi_roles
     ]
-    # Attach multi-assignment data to rows for template use
+    # Attach multi-assignment data and compute rowspan in a single pass
+    multi_next_hour = {r.slug: None for r in multi_roles}
+    multi_alt = {r.slug: False for r in multi_roles}
     for row in rows:
-        row['multi_cells'] = {}
-        for slug, _, _ in MULTI_ASSIGNMENT_ROLES:
+        multi_cells = {}
+        for role in multi_roles:
+            slug = role.slug
             slot = role_hour_slot.get(slug, {}).get(row['hour'])
             if slot is None:
-                row['multi_cells'][slug] = {'type': 'empty'}
+                multi_cells[slug] = {'type': 'empty'}
+            elif multi_next_hour[slug] is not None and row['hour'] < multi_next_hour[slug]:
+                multi_cells[slug] = {'type': 'skip'}
             else:
                 key = (slot.pk, slug)
-                # Track rowspan for multi cells
-                row['multi_cells'][slug] = {
+                slot_hours = list(_expand_to_hours(slot))
+                multi_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else row['hour'] + timedelta(hours=1)
+                multi_alt[slug] = not multi_alt[slug]
+                multi_cells[slug] = {
                     'type': 'slot',
                     'slot': slot,
                     'role_slug': slug,
-                    'role_color': role_objects[slug].color if slug in role_objects else '#417690',
+                    'role_color': role.color,
+                    'rowspan': len(slot_hours),
+                    'alt': multi_alt[slug],
                     'available': multi_slot_data.get(key, {}).get('available', []),
                     'assigned': multi_slot_data.get(key, {}).get('assigned', []),
                 }
-
-    # Compute rowspan for multi cells and build ordered list matching multi_role_headers
-    multi_next_hour = {slug: None for slug, _, _ in MULTI_ASSIGNMENT_ROLES}
-    multi_alt = {slug: False for slug, _, _ in MULTI_ASSIGNMENT_ROLES}
-    for row in rows:
-        for slug, _, _ in MULTI_ASSIGNMENT_ROLES:
-            cell = row['multi_cells'].get(slug, {'type': 'empty'})
-            if cell['type'] != 'empty':
-                slot = cell['slot']
-                if multi_next_hour[slug] is not None and row['hour'] < multi_next_hour[slug]:
-                    row['multi_cells'][slug] = {'type': 'skip'}
-                else:
-                    slot_hours = list(_expand_to_hours(slot))
-                    from datetime import timedelta
-                    multi_next_hour[slug] = slot_hours[-1] + timedelta(hours=1) if slot_hours else row['hour'] + timedelta(hours=1)
-                    multi_alt[slug] = not multi_alt[slug]
-                    cell['rowspan'] = len(slot_hours)
-                    cell['alt'] = multi_alt[slug]
-        # Build ordered list for template (same order as multi_role_headers)
-        row['multi_cells_list'] = [row['multi_cells'].get(slug, {'type': 'empty'}) for slug, _, _ in MULTI_ASSIGNMENT_ROLES]
+        row['multi_cells_list'] = [multi_cells.get(r.slug, {'type': 'empty'}) for r in multi_roles]
 
     return {
         'rows': rows, 'role_headers': role_headers,

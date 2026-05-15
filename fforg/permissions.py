@@ -32,7 +32,8 @@ COORDINATOR_PERMISSIONS = [
 
     # evtsignup - view signups, no delete
     ('evtsignup', 'eventinterest', ['view']),
-    ('evtsignup', 'eventavailabilityinterest', ['view']),
+    ('evtsignup', 'eventavailabilityhour', ['view']),
+    ('evtsignup', 'eventinterestnote', ['view']),
     ('evtsignup', 'gameinterestuserevent', ['view']),
 
     # auth - view users for autocomplete search in schedule tools

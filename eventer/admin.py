@@ -9,49 +9,30 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path
 
-from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleAssignment, EventScheduleMultiAssignment, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
+from eventer.models import Event, EventPeriod, EventRole, EventSignupSlotConfig, EventSignupSlot, EventScheduleAssignment, EventScheduleMultiAssignment, EventSlotGroup, EventSlotGroupMembership, Game, Team, TeamMember, TeamRole, HOUR_SECONDS
 from eventer.schedule import build_schedule_grid, LOCAL_TIME_FMT
 from eventer.slot_generator import generate_slots
 
 def _save_coordinator_assignment(event, slot, role, user):
     """Create EventInterest, availability rows, and schedule assignment for a coordinator-sourced signup."""
     from datetime import timedelta
-    from evtsignup.models import EventInterest, EventAvailabilityInterest
-
-    FIELD_MAP = {
-        'participant': 'as_participant',
-        'streamer': 'as_streamer',
-        'moderator': 'as_moderator',
-        'tech-manager': 'as_tech',
-    }
+    from evtsignup.models import EventInterest, EventAvailabilityHour
 
     interest, _ = EventInterest.objects.get_or_create(
         user=user, event=event,
         defaults={'acknowledged': True},
     )
-    field = FIELD_MAP.get(role.slug)
-    if field:
-        hour = slot.start.replace(minute=0, second=0, microsecond=0)
-        while hour < slot.stop:
-            avail, _ = EventAvailabilityInterest.objects.get_or_create(
-                event_interest=interest, hour=hour,
-                defaults={f: False for f in FIELD_MAP.values()},
-            )
-            setattr(avail, field, True)
-            avail.save(update_fields=[field])
-            hour += timedelta(hours=1)
+    hour = slot.start.replace(minute=0, second=0, microsecond=0)
+    while hour < slot.stop:
+        EventAvailabilityHour.objects.get_or_create(
+            event_interest=interest, hour=hour, role=role,
+        )
+        hour += timedelta(hours=1)
     EventScheduleAssignment.objects.filter(slot=slot, role=role).delete()
     EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user)
 
 
 
-
-SUPERSTREAM_ROLES = [
-    {'name': 'Participant', 'slug': 'participant', 'description': 'Game participant - plays games with a streamer'},
-    {'name': 'Streamer', 'slug': 'streamer', 'description': 'Streams and leads a time slot'},
-    {'name': 'Moderator', 'slug': 'moderator', 'description': 'Moderates chat and provides streamer backup'},
-    {'name': 'Tech Manager', 'slug': 'tech-manager', 'description': 'Manages stream tech and coordinates handoffs'},
-]
 
 
 @admin.register(EventPeriod)
@@ -82,14 +63,29 @@ class EventRoleAdminForm(forms.ModelForm):
 
     class Meta:
         model = EventRole
-        fields = ['name', 'slug', 'description', 'color']
+        fields = [
+            'name', 'slug', 'description',
+            'color', 'display_order',
+            'multi_assign',
+            'has_game_selection', 'game_min_players',
+            'show_notes', 'show_fundraising_url', 'show_stream_commands',
+        ]
 
 
 @admin.register(EventRole)
 class EventRoleAdmin(admin.ModelAdmin):
-    change_list_template = 'admin/eventer/eventrole/change_list.html'
     form = EventRoleAdminForm
-    list_display = ['name', 'slug', 'color_swatch']
+    list_display = [
+        'name', 'slug', 'color_swatch', 'display_order',
+        'multi_assign',
+        'has_game_selection', 'show_notes', 'show_fundraising_url', 'show_stream_commands',
+    ]
+    list_filter = [
+        'multi_assign',
+        'has_game_selection', 'show_notes', 'show_fundraising_url', 'show_stream_commands',
+    ]
+    ordering = ['display_order', 'name']
+    search_fields = ['name', 'slug']
 
     @admin.display(description='Color')
     def color_swatch(self, obj):
@@ -101,35 +97,6 @@ class EventRoleAdmin(admin.ModelAdmin):
 
     class Media:
         js = ('admin/js/eventrole_color_sync.js',)
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom = [
-            path('seed-superstream/',
-                 self.admin_site.admin_view(self.seed_superstream_view),
-                 name='eventer_eventrole_seed_superstream'),
-        ]
-        return custom + urls
-
-    def seed_superstream_view(self, request):
-        created = []
-        existing = []
-        for role_data in SUPERSTREAM_ROLES:
-            _, was_created = EventRole.objects.get_or_create(
-                slug=role_data['slug'],
-                defaults={'name': role_data['name'], 'description': role_data['description']},
-            )
-            if was_created:
-                created.append(role_data['name'])
-            else:
-                existing.append(role_data['name'])
-
-        if created:
-            self.message_user(request, f"Created roles: {', '.join(created)}", messages.SUCCESS)
-        if existing:
-            self.message_user(request, f"Already existed: {', '.join(existing)}", messages.INFO)
-
-        return HttpResponseRedirect('../')
 
 
 class HasEventPeriodFilter(admin.SimpleListFilter):
@@ -238,30 +205,46 @@ class EventAdmin(admin.ModelAdmin):
         return render(request, 'admin/eventer/event/setup_superstream.html', context)
 
     def generate_slots_view(self, request, event_id):
+        from evtsignup.models import EventInterest
         event = get_object_or_404(Event, pk=event_id)
         errors = None
 
         if request.method == 'POST':
             replace = request.POST.get('replace') == '1'
-            try:
-                result = generate_slots(event, replace=replace)
-                self.message_user(
-                    request,
-                    f"Generated slots: {result['created']} created, "
-                    f"{result['skipped']} already existed, "
-                    f"{result['deleted']} deleted.",
-                    messages.SUCCESS,
+            signup_count = EventInterest.objects.filter(event=event).count()
+            if replace and signup_count > 0 and request.POST.get('confirm_replace_with_signups') != '1':
+                errors = (
+                    f"This event has {signup_count} existing signup(s). Check the confirmation box to proceed with regeneration."
                 )
-                return HttpResponseRedirect(f'../../{event_id}/change/')
-            except ValueError as e:
-                errors = str(e)
+            else:
+                try:
+                    result = generate_slots(event, replace=replace)
+                    self.message_user(
+                        request,
+                        f"Generated slots: {result['created']} created, "
+                        f"{result['skipped']} already existed, "
+                        f"{result['deleted']} deleted.",
+                        messages.SUCCESS,
+                    )
+                    if result.get('empty_groups'):
+                        self.message_user(
+                            request,
+                            f"Warning: the following slot groups have no role memberships and were skipped: "
+                            f"{', '.join(result['empty_groups'])}. Add roles to these groups to generate slots for them.",
+                            messages.WARNING,
+                        )
+                    return HttpResponseRedirect(f'../../{event_id}/change/')
+                except ValueError as e:
+                    errors = str(e)
 
         existing_slots = list(event.signup_slots.prefetch_related('roles').order_by('start'))
+        signup_count = EventInterest.objects.filter(event=event).count()
         context = {
             **self.admin_site.each_context(request),
             'event': event,
             'existing_slots': existing_slots,
             'existing_count': len(existing_slots),
+            'signup_count': signup_count,
             'errors': errors,
             'title': f'Generate Signup Slots - {event.name}',
         }
@@ -288,34 +271,62 @@ class EventAdmin(admin.ModelAdmin):
         event = get_object_or_404(Event, pk=event_id)
 
         if request.method == 'POST':
-            from eventer.schedule import MULTI_ASSIGNMENT_ROLES
-            multi_slugs = {slug for slug, _, _ in MULTI_ASSIGNMENT_ROLES}
+            multi_slugs = set(EventRole.objects.filter(multi_assign=True).values_list('slug', flat=True))
+            # Batch-load slots, roles, users, and games referenced in POST before the loop
+            slot_ids = set()
+            role_slugs = set()
+            user_ids_post = set()
+            game_ids_post = set()
+            seen_keys = set()
+            for key in request.POST:
+                if not key.startswith('assign_') or key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                try:
+                    _, slot_pk, role_slug = key.split('_', 2)
+                    slot_ids.add(int(slot_pk))
+                    role_slugs.add(role_slug)
+                    for uid in request.POST.getlist(key):
+                        if uid:
+                            user_ids_post.add(int(uid))
+                    gid = request.POST.get(f'game_{slot_pk}')
+                    if gid:
+                        game_ids_post.add(int(gid))
+                except (ValueError, AttributeError):
+                    continue
+
+            slots_by_pk = {s.pk: s for s in EventSignupSlot.objects.filter(pk__in=slot_ids, event=event)}
+            roles_by_slug = {r.slug: r for r in EventRole.objects.filter(slug__in=role_slugs)}
+            users_by_pk = {u.pk: u for u in User.objects.filter(pk__in=user_ids_post)}
+            games_by_pk = {g.pk: g for g in Game.objects.filter(pk__in=game_ids_post)}
+
             with transaction.atomic():
                 EventScheduleAssignment.objects.filter(event=event).delete()
                 EventScheduleMultiAssignment.objects.filter(event=event).delete()
                 created = 0
-                seen_keys = set()
-                for key in request.POST:
-                    if not key.startswith('assign_') or key in seen_keys:
+                for key in seen_keys:
+                    try:
+                        _, slot_pk, role_slug = key.split('_', 2)
+                    except (ValueError, AttributeError):
+                        log.warning('build_schedule_view: malformed POST key %r, skipping', key)
                         continue
-                    seen_keys.add(key)
-                    _, slot_pk, role_slug = key.split('_', 2)
+                    slot = slots_by_pk.get(int(slot_pk))
+                    role = roles_by_slug.get(role_slug)
+                    if not slot or not role:
+                        continue
                     for user_id in request.POST.getlist(key):
                         if not user_id:
                             continue
-                        try:
-                            slot = EventSignupSlot.objects.get(pk=int(slot_pk), event=event)
-                            role = EventRole.objects.get(slug=role_slug)
-                            user = User.objects.get(pk=int(user_id))
-                            if role_slug in multi_slugs:
-                                EventScheduleMultiAssignment.objects.create(event=event, slot=slot, role=role, user=user)
-                            else:
-                                game_id = request.POST.get(f'game_{slot_pk}') or None
-                                game = Game.objects.get(pk=int(game_id)) if game_id else None
-                                EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
-                            created += 1
-                        except Exception:
+                        user = users_by_pk.get(int(user_id))
+                        if not user:
                             continue
+                        if role_slug in multi_slugs:
+                            EventScheduleMultiAssignment.objects.create(event=event, slot=slot, role=role, user=user)
+                        else:
+                            game_id = request.POST.get(f'game_{slot_pk}') or None
+                            game = games_by_pk.get(int(game_id)) if game_id else None
+                            EventScheduleAssignment.objects.create(event=event, slot=slot, role=role, user=user, game=game)
+                        created += 1
             self.message_user(request, f"Schedule saved: {created} assignment(s).", messages.SUCCESS)
             return HttpResponseRedirect(f'../../{event_id}/build-schedule/')
 
@@ -437,8 +448,51 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(EventSignupSlotConfig)
 class EventSignupSlotConfigAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/eventer/eventsignupslotconfig/change_form.html'
+
     def response_add(self, request, obj, post_url_continue=None):
         return HttpResponseRedirect(f'../../event/{obj.event_id}/setup-superstream/')
+
+    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        if object_id:
+            try:
+                config = EventSignupSlotConfig.objects.get(pk=object_id)
+                groups = EventSlotGroup.objects.prefetch_related('memberships__role').all()
+                group_summaries = []
+                for group in groups:
+                    memberships = list(group.memberships.all())
+                    effective_block = group.block_hours if group.block_hours is not None else config.management_block_hours
+                    group_summaries.append({
+                        'group': group,
+                        'effective_block_hours': effective_block if not group.use_prime_time else None,
+                        'memberships': memberships,
+                    })
+                extra_context['group_summaries'] = group_summaries
+            except EventSignupSlotConfig.DoesNotExist:
+                pass
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+
+class EventSlotGroupMembershipInline(admin.TabularInline):
+    model = EventSlotGroupMembership
+    extra = 1
+    fields = ['role', 'first_block_hours']
+    autocomplete_fields = ['role']
+
+
+@admin.register(EventSlotGroup)
+class EventSlotGroupAdmin(admin.ModelAdmin):
+    list_display = ['name', 'use_prime_time', 'block_hours', 'member_count']
+    inlines = [EventSlotGroupMembershipInline]
+
+    def get_queryset(self, request):
+        from django.db.models import Count
+        return super().get_queryset(request).annotate(_member_count=Count('memberships'))
+
+    @admin.display(description='Members')
+    def member_count(self, obj):
+        return obj._member_count
 
 
 @admin.register(EventSignupSlot)

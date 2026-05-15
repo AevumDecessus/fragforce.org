@@ -1,14 +1,18 @@
+import logging
 import zoneinfo
 from collections import defaultdict
 
 from django.contrib import messages
+
+log = logging.getLogger(__name__)
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, render, redirect
 from django.views.decorators.http import require_http_methods
 
 from eventer.models import Event, EventSignupSlot, EventRole, Game
 from eventer.slot_generator import _expand_to_hours
-from evtsignup.models import EventInterest, EventAvailabilityInterest, GameInterestUserEvent
+from evtsignup.models import EventInterest, EventAvailabilityHour, EventInterestNote, GameInterestUserEvent
 
 SIGNUP_TEMPLATE = 'evtsignup/signup.html'
 
@@ -26,52 +30,39 @@ def _group_slots_by_day(slots_qs, tz):
     return [(day.strftime('%A, %B %-d'), groups[day]) for day in order]
 
 
-def _load_roles():
-    """Return (participant, streamer, moderator, tech) roles or None for each if missing."""
-    try:
-        return (
-            EventRole.objects.get(slug='participant'),
-            EventRole.objects.get(slug='streamer'),
-            EventRole.objects.get(slug='moderator'),
-            EventRole.objects.get(slug='tech-manager'),
+def _game_qs_for_role(role):
+    """Return the approved/suggested game queryset for a role, filtered by game_min_players.
+    Uses multiplayer_max_override when set (same logic as Game.effective_multiplayer_max)."""
+    from django.db.models.functions import Coalesce
+    qs = Game.objects.filter(status='approved', suggested=True)
+    if role.game_min_players is not None:
+        # Annotate with effective max (override takes precedence over IGDB value)
+        # then exclude games where effective max is known and below the threshold
+        qs = qs.annotate(
+            effective_max=Coalesce('multiplayer_max_override', 'multiplayer_max')
+        ).exclude(
+            Q(effective_max__isnull=False) & Q(effective_max__lt=role.game_min_players)
         )
-    except EventRole.DoesNotExist:
-        return None, None, None, None
+    return qs
 
 
-def _slot_qs_for_role(slots, role):
-    if role is None:
-        return slots.none()
-    return slots.filter(roles=role)
-
-
-def _build_hour_map(event, slot_field_pairs):
-    """
-    Build a dict of {hour: {as_participant, as_streamer, as_moderator, as_tech}}
-    from a list of (selected_slot_id_strings, field_name) pairs.
-    """
-    hour_map = {}
+def _build_hour_role_set(event, roles_with_slots, post_data):
+    """Build a set of (hour, role) tuples from POST data. Field per role is '{slug}_slots'."""
+    result = set()
     slot_cache = {s.pk: s for s in EventSignupSlot.objects.filter(event=event)}
-    for slot_ids, field in slot_field_pairs:
-        for slot_id_str in slot_ids:
+    for role in roles_with_slots:
+        for slot_id_str in post_data.getlist(f'{role.slug}_slots'):
             if not slot_id_str.isdigit():
                 continue
             slot = slot_cache.get(int(slot_id_str))
             if slot is None:
                 continue
             for hour in _expand_to_hours(slot):
-                if hour not in hour_map:
-                    hour_map[hour] = {
-                        'as_participant': False,
-                        'as_streamer': False,
-                        'as_moderator': False,
-                        'as_tech': False,
-                    }
-                hour_map[hour][field] = True
-    return hour_map
+                result.add((hour, role))
+    return result
 
 
-def _save_signup(request, event, participant_games, streamer_games, participant_role, streamer_role):
+def _save_signup(request, event, roles_with_slots, game_qs_by_slug):
     """
     Validate and save a POST submission.
     Returns (interest, created, errors). On errors, interest/created are None.
@@ -80,8 +71,6 @@ def _save_signup(request, event, participant_games, streamer_games, participant_
     preferences = request.POST.get('preferences', '').strip()
     acknowledged = bool(request.POST.get('acknowledged'))
     fundraising_url = request.POST.get('fundraising_url', '').strip() or None
-    participant_notes = request.POST.get('participant_notes', '').strip()
-    streamer_notes = request.POST.get('streamer_notes', '').strip()
 
     if not acknowledged:
         return None, None, ["You must acknowledge the Fragforce rules to sign up."]
@@ -94,107 +83,112 @@ def _save_signup(request, event, participant_games, streamer_games, participant_
             'preferences': preferences,
             'acknowledged': acknowledged,
             'fundraising_url': fundraising_url,
-            'participant_notes': participant_notes,
-            'streamer_notes': streamer_notes,
         },
     )
 
     # Rebuild hourly availability
-    interest.eventavailabilityinterest_set.all().delete()
-    hour_map = _build_hour_map(event, [
-        (request.POST.getlist('participant_slots'), 'as_participant'),
-        (request.POST.getlist('streamer_slots'), 'as_streamer'),
-        (request.POST.getlist('moderator_slots'), 'as_moderator'),
-        (request.POST.getlist('tech_slots'), 'as_tech'),
-    ])
-    EventAvailabilityInterest.objects.bulk_create([
-        EventAvailabilityInterest(event_interest=interest, hour=hour, **flags)
-        for hour, flags in sorted(hour_map.items())
+    interest.eventavailabilityhour_set.all().delete()
+    hour_role_pairs = _build_hour_role_set(event, roles_with_slots, request.POST)
+    EventAvailabilityHour.objects.bulk_create([
+        EventAvailabilityHour(event_interest=interest, hour=hour, role=role)
+        for hour, role in sorted(hour_role_pairs, key=lambda x: (x[0], x[1].slug))
     ])
 
     # Sync game selections - one row per (game, role)
+    roles_by_slug = {r.slug: r for r in roles_with_slots}
     GameInterestUserEvent.objects.filter(event_interest=interest).delete()
-    game_role_rows = []
-    if participant_role:
-        for gid in participant_games.filter(pk__in=request.POST.getlist('participant_games')).values_list('pk', flat=True):
-            game_role_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=participant_role))
-    if streamer_role:
-        for gid in streamer_games.filter(pk__in=request.POST.getlist('streamer_games')).values_list('pk', flat=True):
-            game_role_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=streamer_role))
-    GameInterestUserEvent.objects.bulk_create(game_role_rows, ignore_conflicts=True)
+    game_rows = []
+    for slug, games_qs in game_qs_by_slug.items():
+        role = roles_by_slug.get(slug)
+        if role:
+            for gid in games_qs.filter(pk__in=request.POST.getlist(f'{slug}_games')).values_list('pk', flat=True):
+                game_rows.append(GameInterestUserEvent(event_interest=interest, game_id=gid, role=role))
+    GameInterestUserEvent.objects.bulk_create(game_rows, ignore_conflicts=True)
+
+    # Sync notes for roles with show_notes=True
+    for role in roles_with_slots:
+        if not role.show_notes:
+            continue
+        text = request.POST.get(f'{role.slug}_notes', '').strip()
+        if text:
+            EventInterestNote.objects.update_or_create(
+                event_interest=interest, role=role,
+                defaults={'notes': text},
+            )
+        else:
+            EventInterestNote.objects.filter(event_interest=interest, role=role).delete()
 
     return interest, created, []
 
 
-def _prefill_from_post(request):
+def _prefill_from_post(request, roles_with_slots, game_qs_by_slug):
     """Build prefill and selected dicts from a POST request (used after validation failure)."""
     prefill = {
         'display_name': request.POST.get('display_name', ''),
         'preferences': request.POST.get('preferences', ''),
         'acknowledged': bool(request.POST.get('acknowledged')),
         'fundraising_url': request.POST.get('fundraising_url', ''),
-        'participant_notes': request.POST.get('participant_notes', ''),
-        'streamer_notes': request.POST.get('streamer_notes', ''),
+    }
+    notes_by_slug = {
+        role.slug: request.POST.get(f'{role.slug}_notes', '')
+        for role in roles_with_slots if role.show_notes
     }
     selected_slot_ids = {
-        'participant': {int(x) for x in request.POST.getlist('participant_slots') if x.isdigit()},
-        'streamer': {int(x) for x in request.POST.getlist('streamer_slots') if x.isdigit()},
-        'moderator': {int(x) for x in request.POST.getlist('moderator_slots') if x.isdigit()},
-        'tech': {int(x) for x in request.POST.getlist('tech_slots') if x.isdigit()},
+        role.slug: {int(x) for x in request.POST.getlist(f'{role.slug}_slots') if x.isdigit()}
+        for role in roles_with_slots
     }
     selected_game_ids = {
-        'participant': {int(x) for x in request.POST.getlist('participant_games') if x.isdigit()},
-        'streamer': {int(x) for x in request.POST.getlist('streamer_games') if x.isdigit()},
+        slug: {int(x) for x in request.POST.getlist(f'{slug}_games') if x.isdigit()}
+        for slug in game_qs_by_slug
     }
-    return prefill, selected_slot_ids, selected_game_ids
+    return prefill, selected_slot_ids, selected_game_ids, notes_by_slug
 
 
-def _prefill_from_existing(existing, slot_qs_by_track, participant_games, streamer_games):
+def _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug):
     """Build prefill and selected dicts from a saved EventInterest."""
     prefill = {
         'display_name': existing.display_name,
         'preferences': existing.preferences,
         'acknowledged': existing.acknowledged,
         'fundraising_url': existing.fundraising_url or '',
-        'participant_notes': existing.participant_notes,
-        'streamer_notes': existing.streamer_notes,
     }
 
-    existing_hours = set(
-        existing.eventavailabilityinterest_set.values_list(
-            'hour', 'as_participant', 'as_streamer', 'as_moderator', 'as_tech'
+    notes_by_slug = {
+        n.role.slug: n.notes
+        for n in existing.eventinterestnote_set.select_related('role').all()
+    }
+
+    hours_by_slug = defaultdict(set)
+    for hour, slug in existing.eventavailabilityhour_set.values_list('hour', 'role__slug'):
+        hours_by_slug[slug].add(hour)
+
+    inactive_role_slugs = set(hours_by_slug.keys()) - set(slots_by_slug.keys())
+    if inactive_role_slugs:
+        log.warning(
+            'signup prefill: user %s has saved availability for roles with no active slots: %s',
+            existing.user_id, sorted(inactive_role_slugs),
         )
-    )
-    hours_by_track = {
-        'participant': {h for h, p, s, m, t in existing_hours if p},
-        'streamer': {h for h, p, s, m, t in existing_hours if s},
-        'moderator': {h for h, p, s, m, t in existing_hours if m},
-        'tech': {h for h, p, s, m, t in existing_hours if t},
+
+    selected_slot_ids = {
+        slug: {
+            slot.pk for slot in slots
+            if all(h in hours_by_slug.get(slug, set()) for h in _expand_to_hours(slot))
+        }
+        for slug, slots in slots_by_slug.items()
     }
 
-    selected_slot_ids = {track: set() for track in hours_by_track}
-    for track, slots in slot_qs_by_track.items():
-        track_hours = hours_by_track[track]
-        for slot in slots:
-            if all(h in track_hours for h in _expand_to_hours(slot)):
-                selected_slot_ids[track].add(slot.pk)
-
-    participant_game_ids = set(
-        existing.gameinterestuserevent_set
-        .filter(role__slug='participant')
-        .values_list('game_id', flat=True)
-    )
-    streamer_game_ids = set(
-        existing.gameinterestuserevent_set
-        .filter(role__slug='streamer')
-        .values_list('game_id', flat=True)
-    )
+    # Fetch all game selections in one query then partition by slug
+    game_selections_by_slug = defaultdict(set)
+    for slug, game_id in existing.gameinterestuserevent_set.filter(
+        role__slug__in=list(game_qs_by_slug.keys())
+    ).values_list('role__slug', 'game_id'):
+        game_selections_by_slug[slug].add(game_id)
     selected_game_ids = {
-        'participant': participant_game_ids & set(participant_games.values_list('pk', flat=True)),
-        'streamer': streamer_game_ids & set(streamer_games.values_list('pk', flat=True)),
+        slug: game_selections_by_slug[slug] & set(games_qs.values_list('pk', flat=True))
+        for slug, games_qs in game_qs_by_slug.items()
     }
 
-    return prefill, selected_slot_ids, selected_game_ids
+    return prefill, selected_slot_ids, selected_game_ids, notes_by_slug, inactive_role_slugs
 
 
 @login_required
@@ -208,7 +202,6 @@ def signup_view(request, event_slug):
     can_edit = event.edits_open and not is_locked
 
     if existing and (is_locked or not can_edit):
-        # Allow editing display name and fundraising URL even when full edits are disabled
         if request.method == 'POST':
             existing.display_name = request.POST.get('display_name', '').strip()
             existing.fundraising_url = request.POST.get('fundraising_url', '').strip() or None
@@ -239,37 +232,28 @@ def signup_view(request, event_slug):
         })
 
     tz = zoneinfo.ZoneInfo(event.timezone)
-    participant_role, streamer_role, moderator_role, tech_role = _load_roles()
-    participant_slots = _slot_qs_for_role(slots, participant_role)
-    streamer_slots = _slot_qs_for_role(slots, streamer_role)
-    moderator_slots = _slot_qs_for_role(slots, moderator_role)
-    tech_slots = _slot_qs_for_role(slots, tech_role)
 
-    participant_games = Game.objects.filter(status='approved', suggested=True).exclude(multiplayer_max=1)
-    streamer_games = Game.objects.filter(status='approved', suggested=True)
+    # Only include roles that have slots on this event, preserving display_order
+    all_roles = list(EventRole.objects.all())
+    slot_role_ids = set(slots.values_list('roles', flat=True))
+    roles_with_slots = [r for r in all_roles if r.pk in slot_role_ids]
+    slots_by_slug = {r.slug: slots.filter(roles=r) for r in roles_with_slots}
 
-    # Include any coordinator-linked games already on this signup even if not suggested
-    if existing:
-        linked_participant_ids = existing.gameinterestuserevent_set.filter(
-            role=participant_role
-        ).values_list('game_id', flat=True)
-        linked_streamer_ids = existing.gameinterestuserevent_set.filter(
-            role=streamer_role
-        ).values_list('game_id', flat=True)
-        participant_games = (participant_games | Game.objects.filter(
-            pk__in=linked_participant_ids
-        ).exclude(status='rejected')).distinct()
-        streamer_games = (streamer_games | Game.objects.filter(
-            pk__in=linked_streamer_ids
-        ).exclude(status='rejected')).distinct()
-
-    participant_games = participant_games.order_by('name')
-    streamer_games = streamer_games.order_by('name')
+    # Game querysets for roles that have game selection enabled
+    game_qs_by_slug = {}
+    for role in roles_with_slots:
+        if not role.has_game_selection:
+            continue
+        qs = _game_qs_for_role(role)
+        if existing:
+            linked_ids = existing.gameinterestuserevent_set.filter(role=role).values_list('game_id', flat=True)
+            qs = (qs | Game.objects.filter(pk__in=linked_ids).exclude(status='rejected')).distinct()
+        game_qs_by_slug[role.slug] = qs.order_by('name')
 
     errors = []
 
     if request.method == 'POST':
-        _, created, errors = _save_signup(request, event, participant_games, streamer_games, participant_role, streamer_role)
+        _, created, errors = _save_signup(request, event, roles_with_slots, game_qs_by_slug)
         if not errors:
             if created:
                 messages.success(request, "Your signup has been received!")
@@ -277,49 +261,47 @@ def signup_view(request, event_slug):
                 messages.success(request, "Your signup has been updated.")
             return redirect('evtsignup-signup', event_slug=event_slug)
 
-    slot_qs_by_track = {
-        'participant': participant_slots,
-        'streamer': streamer_slots,
-        'moderator': moderator_slots,
-        'tech': tech_slots,
-    }
-
     if errors:
-        prefill, selected_slot_ids, selected_game_ids = _prefill_from_post(request)
+        prefill, selected_slot_ids, selected_game_ids, notes_by_slug = _prefill_from_post(request, roles_with_slots, game_qs_by_slug)
     elif existing:
-        prefill, selected_slot_ids, selected_game_ids = _prefill_from_existing(
-            existing, slot_qs_by_track, participant_games, streamer_games
-        )
+        prefill, selected_slot_ids, selected_game_ids, notes_by_slug, inactive_role_slugs = _prefill_from_existing(existing, slots_by_slug, game_qs_by_slug)
+        if inactive_role_slugs:
+            messages.warning(
+                request,
+                "Some of your previously saved availability could not be loaded because those roles "
+                "no longer have slots for this event. Please review your availability before saving.",
+            )
     else:
         prefill = {}
-        selected_slot_ids = {track: set() for track in slot_qs_by_track}
-        selected_game_ids = {'participant': set(), 'streamer': set()}
+        selected_slot_ids = {r.slug: set() for r in roles_with_slots}
+        selected_game_ids = {slug: set() for slug in game_qs_by_slug}
+        notes_by_slug = {}
 
-    role_colors = {
-        'participant': participant_role.color if participant_role else '#417690',
-        'streamer': streamer_role.color if streamer_role else '#417690',
-        'moderator': moderator_role.color if moderator_role else '#417690',
-        'tech': tech_role.color if tech_role else '#417690',
-    }
+    # Build per-role context list for template, preserving display_order
+    role_tracks = []
+    for role in roles_with_slots:
+        slug = role.slug
+        role_tracks.append({
+            'role': role,
+            'slug': slug,
+            'slot_days': _group_slots_by_day(slots_by_slug[slug], tz),
+            'slots': slots_by_slug[slug],
+            'selected_slot_ids': selected_slot_ids.get(slug, set()),
+            'games': game_qs_by_slug.get(slug),
+            'selected_game_ids': selected_game_ids.get(slug, set()),
+            'notes_prefill': notes_by_slug.get(slug, ''),
+            'is_active': bool(
+                selected_slot_ids.get(slug) or
+                selected_game_ids.get(slug) or
+                (role.show_fundraising_url and prefill.get('fundraising_url'))
+            ),
+        })
 
     context = {
         'event': event,
         'existing': existing,
         'errors': errors,
         'prefill': prefill,
-        'participant_slot_days': _group_slots_by_day(participant_slots, tz),
-        'streamer_slot_days': _group_slots_by_day(streamer_slots, tz),
-        'moderator_slot_days': _group_slots_by_day(moderator_slots, tz),
-        'tech_slot_days': _group_slots_by_day(tech_slots, tz),
-        # flat lists still needed for track visibility checks
-        'participant_slots': participant_slots,
-        'streamer_slots': streamer_slots,
-        'moderator_slots': moderator_slots,
-        'tech_slots': tech_slots,
-        'participant_games': participant_games,
-        'streamer_games': streamer_games,
-        'selected_slot_ids': selected_slot_ids,
-        'selected_game_ids': selected_game_ids,
-        'role_colors': role_colors,
+        'role_tracks': role_tracks,
     }
     return render(request, SIGNUP_TEMPLATE, context)

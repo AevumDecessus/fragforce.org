@@ -1,4 +1,3 @@
-import zoneinfo
 from collections import defaultdict
 
 from django.contrib.auth.decorators import login_required, permission_required
@@ -122,20 +121,27 @@ def public_schedule_view(request, event_slug):
     if not event.schedule_published and not is_coordinator:
         return render(request, 'eventer/schedule_not_published.html', {'event': event})
 
-    tz = zoneinfo.ZoneInfo(event.timezone)
-
-    streamer_assignments = list(
+    all_single_assignments = list(
         EventScheduleAssignment.objects
-        .filter(event=event, role__slug='streamer')
+        .filter(event=event)
         .select_related('slot', 'role', 'user', 'game')
-        .order_by('slot__start')
+        .order_by('role__display_order', 'role__name', 'slot__start')
     )
 
     # Build display name map for all assigned users
-    user_ids = {a.user_id for a in streamer_assignments}
+    user_ids = {a.user_id for a in all_single_assignments}
     if request.user.is_authenticated:
         user_ids.add(request.user.pk)
     display_names = _display_name_map(event, user_ids)
+
+    for a in all_single_assignments:
+        a.display_name = display_names.get(a.user_id, a.user.username)
+
+    # Only show stream-command roles publicly; other roles are operational details
+    stream_sections = {}
+    for a in all_single_assignments:
+        if a.role.show_stream_commands:
+            stream_sections.setdefault(a.role, []).append(a)
 
     my_slots = []
     if request.user.is_authenticated:
@@ -146,16 +152,9 @@ def public_schedule_view(request, event_slug):
             .order_by('slot__start')
         )
 
-    # Annotate assignments with display names for the template
-    for a in streamer_assignments:
-        a.display_name = display_names.get(a.user_id, a.user.username)
-    for s in my_slots:
-        s.display_name = display_names.get(s.user_id, s.user.username) if hasattr(s, 'user') else ''
-
     context = {
         'event': event,
-        'tz': tz,
-        'streamer_assignments': streamer_assignments,
+        'stream_sections': stream_sections,
         'my_slots': my_slots,
     }
     return render(request, 'eventer/public_schedule.html', context)
@@ -169,7 +168,6 @@ def coordinator_schedule_view(request, event_slug):
     grid = build_schedule_grid(event)
 
     # Annotate assigned users with display names
-    from evtsignup.models import EventInterest
     user_ids = {
         a.user_id
         for row in grid['rows']
@@ -183,10 +181,10 @@ def coordinator_schedule_view(request, event_slug):
         if mcell.get('type') == 'slot'
         for a in mcell.get('assigned', [])
     }
-    display_names = {}
-    if user_ids:
-        for row in EventInterest.objects.filter(event=event, user_id__in=user_ids).values('user_id', 'display_name', 'user__username'):
-            display_names[row['user_id']] = row['display_name'] or row['user__username']
+    display_names = _display_name_map(event, user_ids)
+
+    # Derive from already-loaded grid data - no extra DB query needed
+    stream_command_slugs = {r['slug'] for r in grid['role_headers'] if r.get('show_stream_commands')}
 
     for row in grid['rows']:
         for cell in row['cells']:
@@ -194,7 +192,7 @@ def coordinator_schedule_view(request, event_slug):
                 a = cell['assigned']
                 display = display_names.get(a.user_id, a.user.username)
                 cell['assigned_display'] = display
-                if cell['role_slug'] == 'streamer':
+                if cell['role_slug'] in stream_command_slugs:
                     game_name = a.game.name if a.game else ''
                     title_cmd, game_cmd, donate_cmd = generate_twitch_commands(
                         event, cell['slot'], display, game_name
@@ -210,15 +208,16 @@ def coordinator_schedule_view(request, event_slug):
                 for a in mcell['assigned']:
                     a.display_name = display_names.get(a.user_id, a.user.username)
 
-    streamer_color = next(
-        (r['color'] for r in grid['role_headers'] if r['label'] == 'Streamer'),
-        '#417690'
-    )
+    # Roles with stream commands are pinned first in the coordinator schedule
+    stream_command_roles = [r for r in grid['role_headers'] if r.get('show_stream_commands')]
+    other_roles = [r for r in grid['role_headers'] if not r.get('show_stream_commands')]
+
     context = {
         'event': event,
         'rows': grid['rows'],
         'role_headers': grid['role_headers'],
         'multi_role_headers': grid['multi_role_headers'],
-        'streamer_color': streamer_color,
+        'stream_command_roles': stream_command_roles,
+        'other_single_roles': other_roles,
     }
     return render(request, 'eventer/coordinator_schedule.html', context)

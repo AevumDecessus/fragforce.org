@@ -3,6 +3,12 @@
 
 {% block title %}Availability Summary - {{ event.name }}{% endblock %}
 
+{% block extrahead %}{{ block.super }}
+<style>
+  #content-main { overflow-x: scroll; float: none; }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Availability Summary for "{{ event.name }}"</h1>
 <p><a href="{% url 'admin:eventer_event_change' event.pk %}">&larr; Back to event</a></p>

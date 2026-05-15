@@ -48,13 +48,8 @@
     border-color: var(--role-color, #6c757d);
     color: #fff;
   }
-  .slot-btn label:hover {
-    opacity: 0.85;
-  }
-  .slot-btn input[type="checkbox"]:checked + label:hover {
-    opacity: 0.9;
-  }
-
+  .slot-btn label:hover { opacity: 0.85; }
+  .slot-btn input[type="checkbox"]:checked + label:hover { opacity: 0.9; }
 </style>
 {% endblock %}
 
@@ -66,25 +61,17 @@
 
     <div class="card mb-4">
       <div class="card-body">
-        {% if event.description %}
-        {{ event.description|markdownify }}
-        {% endif %}
-        {% if event.start %}
-        <p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>
-        {% endif %}
-        {% if event.end %}
-        <p class="mb-0"><strong>Ends:</strong> {{ event.end|date:"Y-m-d H:i:s"|localtime_short }}</p>
-        {% endif %}
+        {% if event.description %}{{ event.description|markdownify }}{% endif %}
+        {% if event.start %}<p class="mb-1"><strong>Starts:</strong> {{ event.start|date:"Y-m-d H:i:s"|localtime_short }}</p>{% endif %}
+        {% if event.end %}<p class="mb-0"><strong>Ends:</strong> {{ event.end|date:"Y-m-d H:i:s"|localtime_short }}</p>{% endif %}
       </div>
     </div>
 
     {% if profile_only %}
 
-    {% if messages %}
-    {% for message in messages %}
+    {% if messages %}{% for message in messages %}
     <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
-    {% endfor %}
-    {% endif %}
+    {% endfor %}{% endif %}
 
     <div class="alert alert-info">
       {% if locked %}Signups for this event are locked.{% else %}The window for editing signups has closed.{% endif %}
@@ -98,44 +85,32 @@
         <div class="card-body">
           <div class="form-group">
             <label for="display_name">Display name <small class="text-muted">(shown on schedule and stream ads)</small></label>
-            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255"
-                   value="{{ prefill.display_name|default:'' }}">
+            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255" value="{{ prefill.display_name|default:'' }}">
           </div>
           <div class="form-group">
             <label for="fundraising_url">Fundraising page URL <small class="text-muted">(Extra Life or hospital charity page)</small></label>
             <input type="url" class="form-control" id="fundraising_url" name="fundraising_url"
-                   value="{{ prefill.fundraising_url|default:'' }}"
-                   placeholder="https://www.extra-life.org/participants/...">
+                   value="{{ prefill.fundraising_url|default:'' }}" placeholder="https://www.extra-life.org/participants/...">
           </div>
-          <button type="submit" class="btn btn-lg text-white" style="background-color:#417690;border-color:#417690;">
-            Update profile
-          </button>
+          <button type="submit" class="btn btn-lg text-white" style="background-color:#417690;border-color:#417690;">Update profile</button>
         </div>
       </div>
     </form>
 
     {% elif locked %}
-    <div class="alert alert-secondary">
-      Signups for this event are currently locked. Please check back later.
-    </div>
+    <div class="alert alert-secondary">Signups for this event are currently locked. Please check back later.</div>
 
     {% elif signups_closed %}
-    <div class="alert alert-warning">
-      Signups for this event are currently closed.
-    </div>
+    <div class="alert alert-warning">Signups for this event are currently closed.</div>
 
     {% else %}
 
-    {% if messages %}
-    {% for message in messages %}
+    {% if messages %}{% for message in messages %}
     <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
-    {% endfor %}
-    {% endif %}
+    {% endfor %}{% endif %}
 
     {% if existing and not messages %}
-    <div class="alert alert-info">
-      You have already signed up. You can update your signup below.
-    </div>
+    <div class="alert alert-info">You have already signed up. You can update your signup below.</div>
     {% endif %}
 
     {% if errors %}
@@ -153,20 +128,15 @@
       <div class="card mb-4">
         <div class="card-header"><strong>Basic Info</strong></div>
         <div class="card-body">
-
           <div class="form-group">
             <label for="display_name">Display name <small class="text-muted">(shown on schedule and stream ads)</small></label>
-            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255"
-                   value="{{ prefill.display_name|default:'' }}">
+            <input type="text" class="form-control" id="display_name" name="display_name" maxlength="255" value="{{ prefill.display_name|default:'' }}">
           </div>
-
           <div class="form-group">
             <label for="preferences">Pronouns / preferences <small class="text-muted">(optional)</small></label>
             <input type="text" class="form-control" id="preferences" name="preferences"
-                   value="{{ prefill.preferences|default:'' }}"
-                   placeholder="e.g. he/him, she/her, they/them">
+                   value="{{ prefill.preferences|default:'' }}" placeholder="e.g. he/him, she/her, they/them">
           </div>
-
           <div class="form-check">
             <input class="form-check-input" type="checkbox" id="acknowledged" name="acknowledged" value="1"
                    {% if prefill.acknowledged %}checked{% endif %}>
@@ -175,204 +145,84 @@
               and understand that signing up does not guarantee a specific slot, game, or role.
             </label>
           </div>
-
         </div>
       </div>
 
-      {# --- Track selection --- #}
-      {% if participant_slots or streamer_slots or moderator_slots or tech_slots %}
+      {# --- Role selection buttons --- #}
+      {% if role_tracks %}
       <div class="card mb-4">
         <div class="card-header"><strong>Which roles are you interested in?</strong> <small class="text-muted">Select all that apply</small></div>
         <div class="card-body">
           <div class="row">
-            {% if participant_slots %}
+            {% for track in role_tracks %}
             <div class="col-6 mb-2">
-              <button type="button" class="role-btn btn-block
-                  {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}"
-                  data-track="participant"
-                  data-color="{{ role_colors.participant|default:'#417690' }}">
-                Participant
+              <button type="button" class="role-btn btn-block {% if track.is_active %}active{% endif %}"
+                  data-track="{{ track.slug }}" data-color="{{ track.role.color }}">
+                {{ track.role.name }}
               </button>
             </div>
-            {% endif %}
-            {% if streamer_slots %}
-            <div class="col-6 mb-2">
-              <button type="button" class="role-btn btn-block
-                  {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}"
-                  data-track="streamer"
-                  data-color="{{ role_colors.streamer|default:'#417690' }}">
-                Streamer
-              </button>
-            </div>
-            {% endif %}
-            {% if moderator_slots %}
-            <div class="col-6 mb-2">
-              <button type="button" class="role-btn btn-block
-                  {% if selected_slot_ids.moderator %}active{% endif %}"
-                  data-track="moderator"
-                  data-color="{{ role_colors.moderator|default:'#417690' }}">
-                Moderator
-              </button>
-            </div>
-            {% endif %}
-            {% if tech_slots %}
-            <div class="col-6 mb-2">
-              <button type="button" class="role-btn btn-block
-                  {% if selected_slot_ids.tech %}active{% endif %}"
-                  data-track="tech"
-                  data-color="{{ role_colors.tech|default:'#417690' }}">
-                Tech Manager
-              </button>
-            </div>
-            {% endif %}
+            {% endfor %}
           </div>
           <small class="text-muted d-block mt-2">Click a role to expand its availability section below.</small>
         </div>
       </div>
       {% endif %}
 
-      {# --- Track: Participant --- #}
-      {% if participant_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.participant or selected_game_ids.participant %}active{% endif %}" id="section-participant" style="--role-color:{{ role_colors.participant }}">
-        <div class="card-header text-white" style="background-color:{{ role_colors.participant }}"><strong>Participant</strong> - Play games with a streamer</div>
-        <div class="card-body">
-
-          <h6>Availability</h6>
-          {% for day_label, day_slots in participant_slot_days %}
-          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="slot-btn-group">
-            {% for slot in day_slots %}
-            <div class="slot-btn">
-              <input type="checkbox" name="participant_slots"
-                     id="pslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                     {% if slot.pk in selected_slot_ids.participant %}checked{% endif %}>
-              <label for="pslot_{{ slot.pk }}">{{ slot.label }}</label>
-            </div>
-            {% endfor %}
-          </div>
-          {% endfor %}
-
-          {% if participant_games %}
-          <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to play)</small></h6>
-          <div class="slot-btn-group">
-            {% for game in participant_games %}
-            <div class="slot-btn">
-              <input type="checkbox" name="participant_games"
-                     id="pgame_{{ game.pk }}" value="{{ game.pk }}"
-                     {% if game.pk in selected_game_ids.participant %}checked{% endif %}>
-              <label for="pgame_{{ game.pk }}">{{ game.name }}</label>
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-          <div class="form-group mt-3">
-            <label for="participant_notes">Other game preferences <small class="text-muted">(optional)</small></label>
-            <textarea class="form-control" id="participant_notes" name="participant_notes" rows="2">{{ prefill.participant_notes|default:'' }}</textarea>
-          </div>
-
+      {# --- Per-role track sections --- #}
+      {% for track in role_tracks %}
+      <div class="card mb-4 track-section {% if track.is_active %}active{% endif %}"
+           id="section-{{ track.slug }}" style="--role-color:{{ track.role.color }}">
+        <div class="card-header text-white" style="background-color:{{ track.role.color }}">
+          <strong>{{ track.role.name }}</strong>{% if track.role.description %} - {{ track.role.description }}{% endif %}
         </div>
-      </div>
-      {% endif %}
-
-      {# --- Track: Streamer --- #}
-      {% if streamer_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.streamer or selected_game_ids.streamer or prefill.fundraising_url %}active{% endif %}" id="section-streamer" style="--role-color:{{ role_colors.streamer }}">
-        <div class="card-header text-white" style="background-color:{{ role_colors.streamer }}"><strong>Streamer</strong> - Lead a time slot on stream</div>
         <div class="card-body">
 
+          {% if track.role.show_fundraising_url %}
           <div class="form-group">
             <label for="fundraising_url">Fundraising page URL <small class="text-muted">(Extra Life or hospital charity page - required for streamers)</small></label>
             <input type="url" class="form-control" id="fundraising_url" name="fundraising_url"
-                   value="{{ prefill.fundraising_url|default:'' }}"
-                   placeholder="https://www.extra-life.org/participants/...">
+                   value="{{ prefill.fundraising_url|default:'' }}" placeholder="https://www.extra-life.org/participants/...">
           </div>
+          {% endif %}
 
           <h6>Availability</h6>
-          {% for day_label, day_slots in streamer_slot_days %}
+          {% for day_label, day_slots in track.slot_days %}
           <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
           <div class="slot-btn-group">
             {% for slot in day_slots %}
             <div class="slot-btn">
-              <input type="checkbox" name="streamer_slots"
-                     id="sslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                     {% if slot.pk in selected_slot_ids.streamer %}checked{% endif %}>
-              <label for="sslot_{{ slot.pk }}">{{ slot.label }}</label>
+              <input type="checkbox" name="{{ track.slug }}_slots"
+                     id="slot_{{ track.slug }}_{{ slot.pk }}" value="{{ slot.pk }}"
+                     {% if slot.pk in track.selected_slot_ids %}checked{% endif %}>
+              <label for="slot_{{ track.slug }}_{{ slot.pk }}">{{ slot.label }}</label>
             </div>
             {% endfor %}
           </div>
           {% endfor %}
 
-          {% if streamer_games %}
-          <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to stream)</small></h6>
+          {% if track.games %}
+          <h6 class="mt-3">Game preferences <small class="text-muted">(check all you're happy to play)</small></h6>
           <div class="slot-btn-group">
-            {% for game in streamer_games %}
+            {% for game in track.games %}
             <div class="slot-btn">
-              <input type="checkbox" name="streamer_games"
-                     id="sgame_{{ game.pk }}" value="{{ game.pk }}"
-                     {% if game.pk in selected_game_ids.streamer %}checked{% endif %}>
-              <label for="sgame_{{ game.pk }}">{{ game.name }}</label>
+              <input type="checkbox" name="{{ track.slug }}_games"
+                     id="game_{{ track.slug }}_{{ game.pk }}" value="{{ game.pk }}"
+                     {% if game.pk in track.selected_game_ids %}checked{% endif %}>
+              <label for="game_{{ track.slug }}_{{ game.pk }}">{{ game.name }}</label>
             </div>
             {% endfor %}
           </div>
           {% endif %}
+          {% if track.role.show_notes %}
           <div class="form-group mt-3">
-            <label for="streamer_notes">Other game preferences <small class="text-muted">(optional)</small></label>
-            <textarea class="form-control" id="streamer_notes" name="streamer_notes" rows="2">{{ prefill.streamer_notes|default:'' }}</textarea>
+            <label for="{{ track.slug }}_notes">Other game preferences <small class="text-muted">(optional)</small></label>
+            <textarea class="form-control" id="{{ track.slug }}_notes" name="{{ track.slug }}_notes" rows="2">{{ track.notes_prefill|default:'' }}</textarea>
           </div>
+          {% endif %}
 
         </div>
       </div>
-      {% endif %}
-
-      {# --- Track: Moderator --- #}
-      {% if moderator_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.moderator %}active{% endif %}" id="section-moderator" style="--role-color:{{ role_colors.moderator }}">
-        <div class="card-header text-white" style="background-color:{{ role_colors.moderator }}"><strong>Moderator</strong> - Moderate chat and support the streamer</div>
-        <div class="card-body">
-
-          <h6>Availability</h6>
-          {% for day_label, day_slots in moderator_slot_days %}
-          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="slot-btn-group">
-            {% for slot in day_slots %}
-            <div class="slot-btn">
-              <input type="checkbox" name="moderator_slots"
-                     id="mslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                     {% if slot.pk in selected_slot_ids.moderator %}checked{% endif %}>
-              <label for="mslot_{{ slot.pk }}">{{ slot.label }}</label>
-            </div>
-            {% endfor %}
-          </div>
-          {% endfor %}
-
-        </div>
-      </div>
-      {% endif %}
-
-      {# --- Track: Tech Manager --- #}
-      {% if tech_slots %}
-      <div class="card mb-4 track-section {% if selected_slot_ids.tech %}active{% endif %}" id="section-tech" style="--role-color:{{ role_colors.tech }}">
-        <div class="card-header text-white" style="background-color:{{ role_colors.tech }}"><strong>Tech Manager</strong> - Manage stream tech and coordinate handoffs</div>
-        <div class="card-body">
-
-          <h6>Availability</h6>
-          {% for day_label, day_slots in tech_slot_days %}
-          <p class="mb-1 mt-2"><strong>{{ day_label }}</strong></p>
-          <div class="slot-btn-group">
-            {% for slot in day_slots %}
-            <div class="slot-btn">
-              <input type="checkbox" name="tech_slots"
-                     id="tslot_{{ slot.pk }}" value="{{ slot.pk }}"
-                     {% if slot.pk in selected_slot_ids.tech %}checked{% endif %}>
-              <label for="tslot_{{ slot.pk }}">{{ slot.label }}</label>
-            </div>
-            {% endfor %}
-          </div>
-          {% endfor %}
-
-        </div>
-      </div>
-      {% endif %}
+      {% endfor %}
 
       <button type="submit" class="btn btn-primary btn-lg mb-4">
         {% if existing %}Update my signup{% else %}Submit signup{% endif %}
@@ -407,9 +257,7 @@
 
   function uncheckSlotsInSection(section) {
     if (!section) return;
-    section.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
-      cb.checked = false;
-    });
+    section.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
   }
 
   document.querySelectorAll('[data-track]').forEach(function(btn) {
@@ -423,10 +271,7 @@
         var confirmed = window.confirm(
           'You have slots selected for this role. Deselecting it will clear all those selections. Continue?'
         );
-        if (!confirmed) {
-          this.blur();
-          return;
-        }
+        if (!confirmed) { this.blur(); return; }
         uncheckSlotsInSection(section);
       }
 
