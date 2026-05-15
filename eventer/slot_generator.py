@@ -5,10 +5,13 @@ Generates EventSignupSlot records from an event's EventPeriod and EventSignupSlo
 Slot groupings and per-role first-block offsets are defined via EventSlotGroup and
 EventSlotGroupMembership - no role slugs are hardcoded here.
 """
+import logging
 import zoneinfo
 from datetime import timedelta
 
 from eventer.models import Event, EventSlotGroup, EventSignupSlotConfig, EventSignupSlot
+
+log = logging.getLogger(__name__)
 
 
 def _expand_to_hours(slot):
@@ -135,13 +138,19 @@ def generate_slots(event: Event, replace: bool = False) -> dict:
         deleted, _ = EventSignupSlot.objects.filter(event=event).delete()
 
     total_created = total_skipped = 0
+    empty_groups = []
 
     for group in groups:
         memberships = list(group.memberships.select_related('role').all())
         if not memberships:
+            log.warning('generate_slots: slot group %r has no role memberships, skipping', group.name)
+            empty_groups.append(group.name)
             continue
         c, s = _generate_grid(event, tz, event_start, event_stop, config, group, memberships)
         total_created += c
         total_skipped += s
 
-    return {'created': total_created, 'skipped': total_skipped, 'deleted': deleted}
+    result = {'created': total_created, 'skipped': total_skipped, 'deleted': deleted}
+    if empty_groups:
+        result['empty_groups'] = empty_groups
+    return result

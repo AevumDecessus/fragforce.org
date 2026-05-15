@@ -382,7 +382,6 @@ class EventAdminCreateFlowTest(TestCase):
             'prime_time_start': '14:00:00',
             'prime_time_end': '21:00:00',
             'management_block_hours': 6,
-            'mod_first_block_hours': 3,
         })
         self.assertEqual(response.status_code, 302)
         self.assertIn(f'event/{event.pk}/setup-superstream/', response['Location'])

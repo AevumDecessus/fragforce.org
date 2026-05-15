@@ -4,6 +4,19 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def assert_mod_first_block_hours_default(apps, schema_editor):
+    EventSignupSlotConfig = apps.get_model('eventer', 'EventSignupSlotConfig')
+    non_default = list(
+        EventSignupSlotConfig.objects.exclude(mod_first_block_hours=3)
+        .values_list('event_id', 'mod_first_block_hours')
+    )
+    if non_default:
+        raise ValueError(
+            f"Cannot drop mod_first_block_hours: non-default values found in EventSignupSlotConfig: {non_default}. "
+            "Migrate these values to EventSlotGroupMembership.first_block_hours first."
+        )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,6 +24,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(assert_mod_first_block_hours_default, migrations.RunPython.noop),
         migrations.CreateModel(
             name='EventSlotGroup',
             fields=[

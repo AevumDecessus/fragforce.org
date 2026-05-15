@@ -6,19 +6,25 @@ def migrate_notes(apps, schema_editor):
     EventInterestNote = apps.get_model('evtsignup', 'EventInterestNote')
     EventRole = apps.get_model('eventer', 'EventRole')
 
-    participant = EventRole.objects.filter(slug='participant').first()
-    streamer = EventRole.objects.filter(slug='streamer').first()
+    slugs = ('participant', 'streamer')
+    roles = {slug: EventRole.objects.filter(slug=slug).first() for slug in slugs}
+    missing = [slug for slug, role in roles.items() if role is None]
+    if missing:
+        raise ValueError(
+            f"Cannot migrate notes data: EventRole rows missing for slugs: {missing}. "
+            "Run eventer migrations first."
+        )
 
     rows = []
     # exclude() with two conditions is an AND - rows where BOTH are empty are skipped.
     # Rows where only one is set are included, which is correct.
     for interest in EventInterest.objects.exclude(participant_notes='', streamer_notes='').iterator():
-        if participant and interest.participant_notes:
-            rows.append(EventInterestNote(event_interest=interest, role=participant, notes=interest.participant_notes))
-        if streamer and interest.streamer_notes:
-            rows.append(EventInterestNote(event_interest=interest, role=streamer, notes=interest.streamer_notes))
+        if interest.participant_notes:
+            rows.append(EventInterestNote(event_interest=interest, role=roles['participant'], notes=interest.participant_notes))
+        if interest.streamer_notes:
+            rows.append(EventInterestNote(event_interest=interest, role=roles['streamer'], notes=interest.streamer_notes))
 
-    EventInterestNote.objects.bulk_create(rows, ignore_conflicts=True)
+    EventInterestNote.objects.bulk_create(rows, ignore_conflicts=True, batch_size=1000)
 
 
 class Migration(migrations.Migration):

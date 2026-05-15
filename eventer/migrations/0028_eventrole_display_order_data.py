@@ -11,7 +11,9 @@ DISPLAY_ORDERS = {
 def set_display_orders(apps, schema_editor):
     EventRole = apps.get_model('eventer', 'EventRole')
     for slug, order in DISPLAY_ORDERS.items():
-        EventRole.objects.filter(slug=slug).update(display_order=order)
+        updated = EventRole.objects.filter(slug=slug).update(display_order=order)
+        if updated != 1:
+            raise ValueError(f"Expected to update 1 EventRole(slug={slug!r}), got {updated}. Run eventer migration 0024 first.")
 
 
 class Migration(migrations.Migration):
