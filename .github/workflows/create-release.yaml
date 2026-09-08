@@ -59,12 +59,20 @@ jobs:
             echo "has_changelog=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Set release date in changelog
+        if: steps.tag-check.outputs.exists == 'false' && steps.changelog-file-check.outputs.has_changelog == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          RELEASE_DATE=$(date +%Y-%m-%d)
+          sed -i "s|^## \[$VERSION\] .*|## [$VERSION] - $RELEASE_DATE|" CHANGELOG.md
+
       - name: Extract changelog
         if: steps.tag-check.outputs.exists == 'false' && steps.changelog-file-check.outputs.has_changelog == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > changelog.txt
+          awk "/^## \[$VERSION\]/ {flag=1} /^## /{flag=0} flag" CHANGELOG.md > changelog.txt
 
           echo "### Release Notes for $VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
